@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
+import Projects from './pages/Projects'
 
 export default function App() {
   return (
@@ -12,7 +13,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route element={<Layout />}>
           <Route path="/"           element={<Dashboard />} />
-          <Route path="/projects"   element={<Placeholder title="Projects" />} />
+          <Route path="/projects"   element={<Projects />} />
           <Route path="/hr"         element={<Placeholder title="HR" />} />
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Placeholder title="Finance" />} />
