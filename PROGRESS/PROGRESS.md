@@ -1,7 +1,7 @@
 # 1OS — Project Progress Log
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-05-28
 
 ---
 
@@ -72,19 +72,43 @@ Set up a clean Django monolith at `/opt/astronic/` following the architecture de
 
 ---
 
-### 5. Dev Environment
+### 5. React Frontend — Live
 
-- Server running at `http://192.168.1.71:8000`
-- Django Admin at `http://192.168.1.71:8000/admin/`
-- Test superuser: `admin@astronic.com` / `Admin.1234`
+- React + Vite scaffold at `frontend/`
+- Login page with JWT auth
+- Dashboard with 4 stat cards
+- Sidebar: Dashboard, Projects, HR, Operations, Finance, Compliance, Files
+- Projects page: create/list projects with inline task lists and tasks
+- Files page: embedded FileBrowser (https://files.sim-eng.com/files/)
+- Sidebar shows tenant company name + user name/role from `/api/auth/me/`
+
+---
+
+### 6. Cloudflare Tunnel — Live
+
+- Tunnel ID: `afb68fe8-2a42-4fdc-ae55-22aa402382fd`
+- Frontend: `https://ast1.sim-eng.com` → Vite dev server (port 5173)
+- SSH access: `ssh.ast1.sim-eng.com` → port 22
+- Admin: access via SSH tunnel (`ssh -L 8000:localhost:8000 lucus@192.168.1.71`) then `http://localhost:8000/admin/`
+
+---
+
+### 7. Dev Environment
+
+- Server: `http://192.168.1.71:8000` (Django), `http://192.168.1.71:5173` (Vite)
+- Public URL: `https://ast1.sim-eng.com`
+- Django Admin: `http://192.168.1.71:8000/admin/`
+- Users: `admin@astronic.com` / `Astronic.2468`, `lucus@astronic.com.sg` / `Astronic.2468`
 - PostgreSQL: `astronic` database, all migrations applied
+- GitHub: `https://github.com/Limply/1os` (private)
+- Settings split: `dev.py` / `prod.py` / `base.py`, secrets via `.env`
 
 ---
 
 ## What's Next (Priority Order)
 
 ### Backend (Do First)
-- [ ] Register all models in `admin.py` per service
+- [x] Register all models in `admin.py` per service
 - [ ] Write `api-contract.yml` per service
 - [ ] Add business logic to each service:
   - [ ] Leave approval workflow (HR)
@@ -106,10 +130,12 @@ Set up a clean Django monolith at `/opt/astronic/` following the architecture de
 - [ ] Set up `.env` from `.env.template`
 
 ### Frontend (After Backend Contracts Are Stable)
-- [ ] React + Vite scaffold
-- [ ] Auth flow (login, token refresh)
-- [ ] Dashboard layout
-- [ ] Per-module pages
+- [x] React + Vite scaffold
+- [x] Auth flow (login, token refresh, logout)
+- [x] Dashboard layout with sidebar
+- [x] Projects + TaskList + Task management pages
+- [x] Files page (FileBrowser embed)
+- [ ] HR, Operations, Finance, Compliance pages (placeholders only)
 
 ---
 

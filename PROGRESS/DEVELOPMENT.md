@@ -1,7 +1,7 @@
 # 1OS — Development Tracker
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-05-28 (session 2)
+**Last Updated:** 2026-05-28 (session 3)
 
 ---
 
@@ -10,16 +10,20 @@
 | Area | Status | Notes |
 |---|---|---|
 | Project structure | ✅ Done | `/opt/1os/` — correct location |
-| DB models (28) | ✅ Done | All migrated |
+| DB models (31) | ✅ Done | All migrated — includes Project, TaskList, Task |
 | API routes | ✅ Done | All services routed |
 | JWT auth | ✅ Done | 8h access / 7d refresh |
 | Tenant scoping (middleware) | ✅ Done | Reads JWT, resolves user → tenant, sets `request.tenant` |
 | Django Admin | ✅ Done | All models registered with search, filter, inline items |
+| Split settings | ✅ Done | `base.py` / `dev.py` / `prod.py`, secrets via `.env` |
+| GitHub repo | ✅ Done | `github.com/Limply/1os` (private) |
+| Frontend (React) | ✅ Done | Login, Dashboard, Projects, Files — live at `https://ast1.sim-eng.com` |
+| Cloudflare Tunnel | ✅ Done | `ast1.sim-eng.com` → Vite; SSH tunnel at `ssh.ast1.sim-eng.com` |
 | Business logic | ❌ Not started | See task list below |
-| API contracts | ❌ Not started | Needed before frontend |
+| API contracts | ❌ Not started | Needed before more frontend work |
 | Tests | ❌ Not started | |
-| Docker | ❌ Not started | `gateway/` and `frontend/` folders are empty |
-| Frontend (React) | ❌ Not started | Blocked until API contracts done |
+| Docker | ❌ Not started | Needed for production deployment |
+| HR / Ops / Finance / Compliance pages | ❌ Not started | Placeholders only |
 
 ---
 
@@ -108,11 +112,15 @@
 
 | Item | Value |
 |---|---|
-| Server | `http://192.168.1.71:8000` |
-| Admin | `http://192.168.1.71:8000/admin/` |
-| Superuser | `admin@astronic.com` / `Admin.1234` |
+| Server (Django) | `http://192.168.1.71:8000` |
+| Server (Vite) | `http://192.168.1.71:5173` |
+| Public URL | `https://ast1.sim-eng.com` |
+| Admin (local) | `http://192.168.1.71:8000/admin/` |
+| Admin (remote) | SSH tunnel: `ssh -L 8000:localhost:8000 lucus@192.168.1.71` then `http://localhost:8000/admin/` |
+| Users | `admin@astronic.com` / `Astronic.2468` · `lucus@astronic.com.sg` / `Astronic.2468` |
 | DB | PostgreSQL — database `astronic`, user `astronic_user` |
 | Code | `/opt/1os/` |
+| GitHub | `https://github.com/Limply/1os` (private) |
 
 ---
 
