@@ -149,11 +149,13 @@ export default function ProjectDetail({ projectId, onBack }) {
                     {task.priority}
                   </span>
                   <div className="relative">
-                    <label className="cursor-pointer text-xs text-gray-400 hover:text-blue-500" title="Attach photo"
+                    <label
+                      className={`cursor-pointer text-sm font-bold ${task.photo ? 'text-blue-500' : 'text-gray-300 hover:text-gray-500'}`}
+                      title={task.photo ? 'Photo attached — hover to preview, click to replace' : 'Attach photo'}
                       onMouseEnter={task.photo ? e => setPhotoPopup({ url: task.photo, x: e.clientX, y: e.clientY }) : undefined}
                       onMouseLeave={() => setPhotoPopup(null)}
                     >
-                      📎
+                      📎{task.photo && <span className="text-green-500 text-xs">●</span>}
                       <input type="file" accept="image/*" className="hidden"
                         onChange={e => handleTaskPhotoUpload(task.id, e.target.files[0])} />
                     </label>
