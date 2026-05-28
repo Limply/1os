@@ -154,8 +154,8 @@ export default function ProjectDetail({ projectId, onBack }) {
                         onChange={e => handleTaskPhotoUpload(task.id, e.target.files[0])} />
                     </label>
                     {task.photo && (
-                      <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50 shadow-xl rounded-lg overflow-hidden border border-gray-200">
-                        <img src={task.photo} alt="" className="w-48 h-48 object-cover" />
+                      <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50 shadow-xl rounded-lg overflow-hidden border border-gray-200 bg-white">
+                        <img src={task.photo} alt="" style={{ width: '200px', height: 'auto', display: 'block' }} />
                       </div>
                     )}
                   </div>
