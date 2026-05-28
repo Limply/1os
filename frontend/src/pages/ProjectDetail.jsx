@@ -105,7 +105,7 @@ export default function ProjectDetail({ projectId, onBack }) {
       {/* Task Groups */}
       <div className="space-y-6">
         {project.task_groups.map(grp => (
-          <div key={grp.group} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div key={grp.group} className="bg-white rounded-xl border border-gray-200">
             {/* Group header */}
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-3">
