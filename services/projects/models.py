@@ -36,7 +36,6 @@ class Project(BaseModel):
     )
     members = models.JSONField(default=list, blank=True)
     progress = models.IntegerField(default=0)
-    photo = models.ImageField(upload_to='projects/', null=True, blank=True)
 
     ref_type = models.CharField(max_length=50, blank=True, null=True)
     ref_id = models.UUIDField(null=True, blank=True)
@@ -80,6 +79,7 @@ class Task(BaseModel):
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     due_date = models.DateField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    photo = models.ImageField(upload_to='tasks/', null=True, blank=True)
 
     class Meta:
         ordering = ['group', 'priority', 'due_date']

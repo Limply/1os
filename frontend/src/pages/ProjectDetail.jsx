@@ -69,12 +69,11 @@ export default function ProjectDetail({ projectId, onBack }) {
     fetchProject()
   }
 
-  async function handlePhotoUpload(e) {
-    const file = e.target.files[0]
+  async function handleTaskPhotoUpload(taskId, file) {
     if (!file) return
     const form = new FormData()
     form.append('photo', file)
-    await api.patch(`/projects/projects/${projectId}/`, form, {
+    await api.patch(`/projects/tasks/${taskId}/`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     fetchProject()
@@ -96,19 +95,6 @@ export default function ProjectDetail({ projectId, onBack }) {
             <span className="ml-2 font-semibold text-blue-600">{project.progress}% complete</span>
           </p>
         </div>
-      </div>
-
-      {/* Photo */}
-      <div className="mb-4 flex items-center gap-4">
-        {project.photo ? (
-          <img src={project.photo} alt="Project" className="w-24 h-24 object-cover rounded-xl border border-gray-200" />
-        ) : (
-          <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs">No photo</div>
-        )}
-        <label className="cursor-pointer text-sm text-blue-600 hover:underline">
-          {project.photo ? 'Change photo' : 'Upload photo'}
-          <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-        </label>
       </div>
 
       {/* Progress bar */}
@@ -161,6 +147,13 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
                     {task.priority}
                   </span>
+                  <label className="cursor-pointer text-xs text-gray-400 hover:text-blue-500" title="Attach photo">
+                    {task.photo
+                      ? <img src={task.photo} alt="" className="w-7 h-7 object-cover rounded border border-gray-200" />
+                      : '📎'}
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => handleTaskPhotoUpload(task.id, e.target.files[0])} />
+                  </label>
                 </div>
               ))}
             </div>

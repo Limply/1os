@@ -12,7 +12,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'project', 'group', 'title', 'description',
             'assigned_to', 'assigned_to_name',
             'status', 'priority', 'due_date', 'completed_at',
-            'created_at', 'updated_at',
+            'photo', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'completed_at', 'created_at', 'updated_at']
 
@@ -52,7 +52,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             'id', 'tenant', 'name', 'type', 'status', 'priority',
             'description', 'client_name', 'start_date', 'end_date',
             'manager', 'manager_name', 'members', 'progress', 'ref_type', 'ref_id',
-            'photo', 'task_count', 'task_groups', 'created_at', 'updated_at',
+            'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'tenant', 'progress', 'created_at', 'updated_at']
 
