@@ -52,7 +52,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             'id', 'tenant', 'name', 'type', 'status', 'priority',
             'description', 'client_name', 'start_date', 'end_date',
             'manager', 'manager_name', 'members', 'progress', 'ref_type', 'ref_id',
-            'task_count', 'task_groups', 'created_at', 'updated_at',
+            'photo', 'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'tenant', 'progress', 'created_at', 'updated_at']
 

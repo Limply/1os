@@ -69,6 +69,17 @@ export default function ProjectDetail({ projectId, onBack }) {
     fetchProject()
   }
 
+  async function handlePhotoUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const form = new FormData()
+    form.append('photo', file)
+    await api.patch(`/projects/projects/${projectId}/`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    fetchProject()
+  }
+
   if (loading) return <p className="text-gray-400 text-sm">Loading...</p>
   if (!project) return null
 
@@ -85,6 +96,19 @@ export default function ProjectDetail({ projectId, onBack }) {
             <span className="ml-2 font-semibold text-blue-600">{project.progress}% complete</span>
           </p>
         </div>
+      </div>
+
+      {/* Photo */}
+      <div className="mb-4 flex items-center gap-4">
+        {project.photo ? (
+          <img src={project.photo} alt="Project" className="w-24 h-24 object-cover rounded-xl border border-gray-200" />
+        ) : (
+          <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs">No photo</div>
+        )}
+        <label className="cursor-pointer text-sm text-blue-600 hover:underline">
+          {project.photo ? 'Change photo' : 'Upload photo'}
+          <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+        </label>
       </div>
 
       {/* Progress bar */}

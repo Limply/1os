@@ -36,6 +36,7 @@ class Project(BaseModel):
     )
     members = models.JSONField(default=list, blank=True)
     progress = models.IntegerField(default=0)
+    photo = models.ImageField(upload_to='projects/', null=True, blank=True)
 
     ref_type = models.CharField(max_length=50, blank=True, null=True)
     ref_id = models.UUIDField(null=True, blank=True)
