@@ -1,0 +1,41 @@
+from rest_framework import viewsets, permissions
+from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment
+from .serializers import (
+    QuotationSerializer, QuotationItemSerializer,
+    InvoiceSerializer, InvoiceItemSerializer, PaymentSerializer,
+)
+
+
+class TenantScopedMixin:
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(tenant=self.request.user.tenant, is_active=True)
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.user.tenant)
+
+
+class QuotationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Quotation.objects.prefetch_related('items')
+    serializer_class = QuotationSerializer
+
+
+class QuotationItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = QuotationItem.objects.select_related('quotation')
+    serializer_class = QuotationItemSerializer
+
+
+class InvoiceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Invoice.objects.prefetch_related('items', 'payments')
+    serializer_class = InvoiceSerializer
+
+
+class InvoiceItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = InvoiceItem.objects.select_related('invoice')
+    serializer_class = InvoiceItemSerializer
+
+
+class PaymentViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Payment.objects.select_related('invoice')
+    serializer_class = PaymentSerializer
