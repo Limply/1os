@@ -11,4 +11,5 @@ urlpatterns = [
     path('api/compliance/', include('services.compliance.urls')),
     path('api/notify/', include('services.notifications.urls')),
     path('api/dashboard/', include('services.dashboard.urls')),
+    path('api/projects/', include('services.projects.urls')),
 ]
