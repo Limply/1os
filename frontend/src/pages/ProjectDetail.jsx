@@ -147,13 +147,18 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
                     {task.priority}
                   </span>
-                  <label className="cursor-pointer text-xs text-gray-400 hover:text-blue-500" title="Attach photo">
-                    {task.photo
-                      ? <img src={task.photo} alt="" className="w-7 h-7 object-cover rounded border border-gray-200" />
-                      : '📎'}
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={e => handleTaskPhotoUpload(task.id, e.target.files[0])} />
-                  </label>
+                  <div className="relative group">
+                    <label className="cursor-pointer text-xs text-gray-400 hover:text-blue-500" title="Attach photo">
+                      📎
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => handleTaskPhotoUpload(task.id, e.target.files[0])} />
+                    </label>
+                    {task.photo && (
+                      <div className="absolute bottom-6 right-0 hidden group-hover:block z-10 shadow-xl rounded-lg overflow-hidden border border-gray-200">
+                        <img src={task.photo} alt="" className="w-48 h-48 object-cover" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
