@@ -13,6 +13,7 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [addingGroup, setAddingGroup] = useState(false)
   const [newTask, setNewTask] = useState({})
   const [addingTaskTo, setAddingTaskTo] = useState(null)
+  const [photoPopup, setPhotoPopup] = useState(null) // { url, x, y }
 
   useEffect(() => {
     fetchProject()
@@ -147,17 +148,15 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
                     {task.priority}
                   </span>
-                  <div className="relative group">
-                    <label className="cursor-pointer text-xs text-gray-400 hover:text-blue-500" title="Attach photo">
+                  <div className="relative">
+                    <label className="cursor-pointer text-xs text-gray-400 hover:text-blue-500" title="Attach photo"
+                      onMouseEnter={task.photo ? e => setPhotoPopup({ url: task.photo, x: e.clientX, y: e.clientY }) : undefined}
+                      onMouseLeave={() => setPhotoPopup(null)}
+                    >
                       📎
                       <input type="file" accept="image/*" className="hidden"
                         onChange={e => handleTaskPhotoUpload(task.id, e.target.files[0])} />
                     </label>
-                    {task.photo && (
-                      <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50 shadow-xl rounded-lg overflow-hidden border border-gray-200 bg-white">
-                        <img src={task.photo} alt="" style={{ width: '200px', height: 'auto', display: 'block' }} />
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -241,6 +240,13 @@ export default function ProjectDetail({ projectId, onBack }) {
           </button>
         )}
       </div>
+
+      {photoPopup && (
+        <div className="fixed z-50 shadow-xl rounded-lg overflow-hidden border border-gray-200 bg-white pointer-events-none"
+          style={{ top: photoPopup.y - 220, left: photoPopup.x - 100 }}>
+          <img src={photoPopup.url} alt="" style={{ width: '200px', height: 'auto', display: 'block' }} />
+        </div>
+      )}
     </div>
   )
 }
