@@ -4,7 +4,7 @@ from decouple import config
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-production')
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.71', 'ast.1os.sim-eng.com']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.71', 'ast1.sim-eng.com']
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -25,5 +25,9 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-    'https://ast.1os.sim-eng.com',
+    'https://ast1.sim-eng.com',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://ast1.sim-eng.com',
 ]
