@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { logout } from '../api/auth'
+import { logout, getUser } from '../api/auth'
 
 const links = [
   { to: '/',           label: 'Dashboard' },
@@ -13,6 +13,7 @@ const links = [
 
 export default function Sidebar() {
   const navigate = useNavigate()
+  const user = getUser()
 
   function handleLogout() {
     logout()
@@ -23,7 +24,7 @@ export default function Sidebar() {
     <aside className="w-56 bg-gray-900 min-h-screen flex flex-col">
       <div className="px-6 py-5 border-b border-gray-700">
         <span className="text-white font-bold text-lg">1OS</span>
-        <p className="text-gray-400 text-xs mt-0.5">Simply Engineering</p>
+        <p className="text-gray-400 text-xs mt-0.5">{user.tenant_name || '—'}</p>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
@@ -46,6 +47,10 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-3 py-4 border-t border-gray-700">
+        <div className="px-3 py-2 mb-1">
+          <p className="text-sm text-white font-medium truncate">{user.first_name} {user.last_name}</p>
+          <p className="text-xs text-gray-400 truncate">{user.role}</p>
+        </div>
         <button
           onClick={handleLogout}
           className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition"

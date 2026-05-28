@@ -10,13 +10,15 @@ class TenantSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+
     class Meta:
         model = User
         fields = [
-            'id', 'tenant_id', 'email', 'first_name', 'last_name',
+            'id', 'tenant_id', 'tenant_name', 'email', 'first_name', 'last_name',
             'role', 'is_active', 'mfa_enabled', 'avatar', 'created_at',
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'tenant_name', 'created_at']
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
