@@ -9,8 +9,8 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
-  const [newList, setNewList] = useState('')
-  const [addingList, setAddingList] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [addingGroup, setAddingGroup] = useState(false)
   const [newTask, setNewTask] = useState({})
   const [addingTaskTo, setAddingTaskTo] = useState(null)
 
@@ -30,29 +30,37 @@ export default function ProjectDetail({ projectId, onBack }) {
     setUsers(res.data.results || res.data)
   }
 
-  async function handleAddList(e) {
+  async function handleAddTask(e, group) {
     e.preventDefault()
-    if (!newList.trim()) return
-    await api.post('/projects/task-lists/', { project: projectId, name: newList, order: project.task_lists.length })
-    setNewList('')
-    setAddingList(false)
-    fetchProject()
-  }
-
-  async function handleAddTask(e, taskListId) {
-    e.preventDefault()
-    const t = newTask[taskListId]
+    const t = newTask[group]
     if (!t?.title?.trim()) return
     await api.post('/projects/tasks/', {
-      task_list: taskListId,
+      project: projectId,
+      group: group,
       title: t.title,
       assigned_to: t.assigned_to || null,
       priority: t.priority || 'medium',
       due_date: t.due_date || null,
       status: 'todo',
     })
-    setNewTask({ ...newTask, [taskListId]: {} })
+    setNewTask({ ...newTask, [group]: {} })
     setAddingTaskTo(null)
+    fetchProject()
+  }
+
+  async function handleAddGroup(e) {
+    e.preventDefault()
+    if (!newGroupName.trim()) return
+    // Create a placeholder task to establish the group
+    await api.post('/projects/tasks/', {
+      project: projectId,
+      group: newGroupName.trim(),
+      title: '(New task)',
+      status: 'todo',
+      priority: 'medium',
+    })
+    setNewGroupName('')
+    setAddingGroup(false)
     fetchProject()
   }
 
@@ -84,27 +92,27 @@ export default function ProjectDetail({ projectId, onBack }) {
         <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${project.progress}%` }} />
       </div>
 
-      {/* Task Lists */}
+      {/* Task Groups */}
       <div className="space-y-6">
-        {project.task_lists.map(list => (
-          <div key={list.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* List header */}
+        {project.task_groups.map(grp => (
+          <div key={grp.group} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {/* Group header */}
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-3">
-                <span className="font-semibold text-gray-700">{list.name}</span>
-                <span className="text-xs text-gray-400">{list.done_count}/{list.task_count} done</span>
+                <span className="font-semibold text-gray-700">{grp.group || 'General'}</span>
+                <span className="text-xs text-gray-400">{grp.done_count}/{grp.task_count} done</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                  <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${list.completion}%` }} />
+                  <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${grp.completion}%` }} />
                 </div>
-                <span className="text-xs text-gray-400">{list.completion}%</span>
+                <span className="text-xs text-gray-400">{grp.completion}%</span>
               </div>
             </div>
 
             {/* Tasks */}
             <div className="divide-y divide-gray-100">
-              {list.tasks.map(task => (
+              {grp.tasks.map(task => (
                 <div key={task.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition">
                   <select
                     value={task.status}
@@ -134,20 +142,20 @@ export default function ProjectDetail({ projectId, onBack }) {
             </div>
 
             {/* Add task */}
-            {addingTaskTo === list.id ? (
-              <form onSubmit={e => handleAddTask(e, list.id)} className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+            {addingTaskTo === grp.group ? (
+              <form onSubmit={e => handleAddTask(e, grp.group)} className="px-4 py-3 border-t border-gray-100 bg-gray-50">
                 <div className="flex gap-2 mb-2">
                   <input
                     autoFocus
                     required
                     placeholder="Task title"
-                    value={newTask[list.id]?.title || ''}
-                    onChange={e => setNewTask({ ...newTask, [list.id]: { ...newTask[list.id], title: e.target.value } })}
+                    value={newTask[grp.group]?.title || ''}
+                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], title: e.target.value } })}
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <select
-                    value={newTask[list.id]?.priority || 'medium'}
-                    onChange={e => setNewTask({ ...newTask, [list.id]: { ...newTask[list.id], priority: e.target.value } })}
+                    value={newTask[grp.group]?.priority || 'medium'}
+                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], priority: e.target.value } })}
                     className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
                   >
                     <option value="low">Low</option>
@@ -158,8 +166,8 @@ export default function ProjectDetail({ projectId, onBack }) {
                 </div>
                 <div className="flex gap-2">
                   <select
-                    value={newTask[list.id]?.assigned_to || ''}
-                    onChange={e => setNewTask({ ...newTask, [list.id]: { ...newTask[list.id], assigned_to: e.target.value } })}
+                    value={newTask[grp.group]?.assigned_to || ''}
+                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], assigned_to: e.target.value } })}
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
                   >
                     <option value="">Unassigned</option>
@@ -167,8 +175,8 @@ export default function ProjectDetail({ projectId, onBack }) {
                   </select>
                   <input
                     type="date"
-                    value={newTask[list.id]?.due_date || ''}
-                    onChange={e => setNewTask({ ...newTask, [list.id]: { ...newTask[list.id], due_date: e.target.value } })}
+                    value={newTask[grp.group]?.due_date || ''}
+                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], due_date: e.target.value } })}
                     className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
                   />
                   <button type="submit" className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700">Add</button>
@@ -177,7 +185,7 @@ export default function ProjectDetail({ projectId, onBack }) {
               </form>
             ) : (
               <button
-                onClick={() => setAddingTaskTo(list.id)}
+                onClick={() => setAddingTaskTo(grp.group)}
                 className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:text-blue-600 hover:bg-gray-50 transition border-t border-gray-100"
               >
                 + Add task
@@ -186,28 +194,28 @@ export default function ProjectDetail({ projectId, onBack }) {
           </div>
         ))}
 
-        {/* Add task list */}
-        {addingList ? (
-          <form onSubmit={handleAddList} className="flex gap-2">
+        {/* Add group */}
+        {addingGroup ? (
+          <form onSubmit={handleAddGroup} className="flex gap-2">
             <input
               autoFocus
               required
-              placeholder="Task list name, e.g. Phase 1 - Survey"
-              value={newList}
-              onChange={e => setNewList(e.target.value)}
+              placeholder="Group name, e.g. Phase 1 - Survey"
+              value={newGroupName}
+              onChange={e => setNewGroupName(e.target.value)}
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              Add List
+              Add Group
             </button>
-            <button type="button" onClick={() => setAddingList(false)} className="text-gray-400 text-sm px-2">Cancel</button>
+            <button type="button" onClick={() => setAddingGroup(false)} className="text-gray-400 text-sm px-2">Cancel</button>
           </form>
         ) : (
           <button
-            onClick={() => setAddingList(true)}
+            onClick={() => setAddingGroup(true)}
             className="w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 transition"
           >
-            + Add Task List
+            + Add Group
           </button>
         )}
       </div>

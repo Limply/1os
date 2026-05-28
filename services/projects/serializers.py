@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Project, TaskList, Task
+from collections import defaultdict
+from .models import Project, Task
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -8,8 +9,10 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = [
-            'id', 'task_list', 'title', 'description', 'assigned_to', 'assigned_to_name',
-            'status', 'priority', 'due_date', 'completed_at', 'created_at', 'updated_at',
+            'id', 'project', 'group', 'title', 'description',
+            'assigned_to', 'assigned_to_name',
+            'status', 'priority', 'due_date', 'completed_at',
+            'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'completed_at', 'created_at', 'updated_at']
 
@@ -17,28 +20,6 @@ class TaskSerializer(serializers.ModelSerializer):
         if obj.assigned_to:
             return obj.assigned_to.full_name
         return None
-
-
-class TaskListSerializer(serializers.ModelSerializer):
-    tasks = TaskSerializer(many=True, read_only=True)
-    completion = serializers.IntegerField(read_only=True)
-    task_count = serializers.SerializerMethodField()
-    done_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = TaskList
-        fields = [
-            'id', 'project', 'name', 'order',
-            'completion', 'task_count', 'done_count',
-            'tasks', 'created_at',
-        ]
-        read_only_fields = ['id', 'created_at']
-
-    def get_task_count(self, obj):
-        return obj.tasks.count()
-
-    def get_done_count(self, obj):
-        return obj.tasks.filter(status='done').count()
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
@@ -54,14 +35,14 @@ class ProjectListSerializer(serializers.ModelSerializer):
         ]
 
     def get_task_count(self, obj):
-        return Task.objects.filter(task_list__project=obj).count()
+        return obj.tasks.count()
 
     def get_manager_name(self, obj):
         return obj.manager.full_name if obj.manager else None
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    task_lists = TaskListSerializer(many=True, read_only=True)
+    task_groups = serializers.SerializerMethodField()
     task_count = serializers.SerializerMethodField()
     manager_name = serializers.SerializerMethodField()
 
@@ -71,12 +52,29 @@ class ProjectSerializer(serializers.ModelSerializer):
             'id', 'tenant', 'name', 'type', 'status', 'priority',
             'description', 'client_name', 'start_date', 'end_date',
             'manager', 'manager_name', 'members', 'progress', 'ref_type', 'ref_id',
-            'task_count', 'task_lists', 'created_at', 'updated_at',
+            'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'tenant', 'progress', 'created_at', 'updated_at']
 
     def get_task_count(self, obj):
-        return Task.objects.filter(task_list__project=obj).count()
+        return obj.tasks.count()
 
     def get_manager_name(self, obj):
         return obj.manager.full_name if obj.manager else None
+
+    def get_task_groups(self, obj):
+        groups = defaultdict(list)
+        for task in obj.tasks.all():
+            groups[task.group].append(TaskSerializer(task).data)
+        result = []
+        for group_name, tasks in groups.items():
+            done = sum(1 for t in tasks if t['status'] == 'done')
+            total = len(tasks)
+            result.append({
+                'group': group_name,
+                'task_count': total,
+                'done_count': done,
+                'completion': round((done / total) * 100) if total else 0,
+                'tasks': tasks,
+            })
+        return result

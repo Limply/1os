@@ -4,7 +4,6 @@ from shared.models import BaseModel
 
 
 class Project(BaseModel):
-    """A client or internal project managed within the tenant."""
     TYPE_CHOICES = [
         ('client', 'Client Project'),
         ('internal', 'Internal Project'),
@@ -35,8 +34,8 @@ class Project(BaseModel):
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='managed_projects'
     )
-    members = models.JSONField(default=list, blank=True, help_text='List of User UUIDs')
-    progress = models.IntegerField(default=0, help_text='Auto-calculated from task completion')
+    members = models.JSONField(default=list, blank=True)
+    progress = models.IntegerField(default=0)
 
     ref_type = models.CharField(max_length=50, blank=True, null=True)
     ref_id = models.UUIDField(null=True, blank=True)
@@ -45,37 +44,16 @@ class Project(BaseModel):
         return self.name
 
     def recalculate_progress(self):
-        total = Task.objects.filter(task_list__project=self).count()
+        total = self.tasks.count()
         if total == 0:
             self.progress = 0
         else:
-            done = Task.objects.filter(task_list__project=self, status='done').count()
+            done = self.tasks.filter(status='done').count()
             self.progress = round((done / total) * 100)
         self.save(update_fields=['progress'])
 
 
-class TaskList(BaseModel):
-    """A named group of tasks within a project (e.g. Phase 1, Installation)."""
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='task_lists')
-    name = models.CharField(max_length=255)
-    order = models.IntegerField(default=0)
-
-    class Meta:
-        ordering = ['order', 'created_at']
-
-    def __str__(self):
-        return f"{self.project.name} — {self.name}"
-
-    @property
-    def completion(self):
-        total = self.tasks.count()
-        if total == 0:
-            return 0
-        return round((self.tasks.filter(status='done').count() / total) * 100)
-
-
 class Task(BaseModel):
-    """An individual work item assigned to a worker within a task list."""
     STATUS_CHOICES = [
         ('todo', 'To Do'),
         ('in_progress', 'In Progress'),
@@ -89,7 +67,8 @@ class Task(BaseModel):
         ('urgent', 'Urgent'),
     ]
 
-    task_list = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
+    group = models.CharField(max_length=255, blank=True, default='')
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     assigned_to = models.ForeignKey(
@@ -102,10 +81,10 @@ class Task(BaseModel):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['priority', 'due_date']
+        ordering = ['group', 'priority', 'due_date']
 
     def __str__(self):
-        return f"{self.task_list.name} — {self.title}"
+        return f"{self.project.name} — {self.title}"
 
     def save(self, *args, **kwargs):
         if self.status == 'done' and not self.completed_at:
@@ -113,4 +92,4 @@ class Task(BaseModel):
         elif self.status != 'done':
             self.completed_at = None
         super().save(*args, **kwargs)
-        self.task_list.project.recalculate_progress()
+        self.project.recalculate_progress()
