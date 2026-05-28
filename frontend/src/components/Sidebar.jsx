@@ -8,6 +8,7 @@ const links = [
   { to: '/operations', label: 'Operations' },
   { to: '/finance',    label: 'Finance' },
   { to: '/compliance', label: 'Compliance' },
+  { to: '/files',      label: 'Files' },
 ]
 
 export default function Sidebar() {

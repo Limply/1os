@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
+import Files from './pages/Files'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Placeholder title="Finance" />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />
+          <Route path="/files"      element={<Files />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
