@@ -12,7 +12,7 @@ const links = [
   { to: '/calendar',   label: 'Calendar' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ onCollapse }) {
   const navigate = useNavigate()
   const user = getUser()
 
@@ -24,7 +24,7 @@ export default function Sidebar() {
   return (
     <aside className="w-56 bg-gray-900 min-h-screen flex flex-col">
       <div className="px-6 py-5 border-b border-gray-700">
-        <span className="text-white font-bold text-lg">1OS</span>
+        <button onClick={onCollapse} className="text-white font-bold text-lg hover:text-gray-300 transition">1OS</button>
         <p className="text-gray-400 text-xs mt-0.5">{user.tenant_name || '—'}</p>
       </div>
 
