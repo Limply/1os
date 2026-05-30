@@ -11,15 +11,21 @@ const USER_COLORS = [
 ]
 
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
-const STATUS_COLORS = { todo: 'bg-gray-200 text-gray-700', in_progress: 'bg-blue-100 text-blue-700', review: 'bg-yellow-100 text-yellow-700', done: 'bg-green-100 text-green-700' }
+const STATUS_COLORS = {
+  todo: 'bg-gray-200 text-gray-700',
+  in_progress: 'bg-blue-100 text-blue-700',
+  review: 'bg-yellow-100 text-yellow-700',
+  done: 'bg-green-100 text-green-700',
+}
 const PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' }
+const DEPT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#ec4899']
 
 export default function Calendar() {
   const [tasks, setTasks] = useState([])
   const [projects, setProjects] = useState([])
-  const [users, setUsers] = useState([])
-  const [selectedUsers, setSelectedUsers] = useState(new Set())
-  const [selectedEvent, setSelectedEvent] = useState(null) // { type: 'task'|'project', data }
+  const [employees, setEmployees] = useState([])
+  const [selectedDepts, setSelectedDepts] = useState(new Set())
+  const [selectedEvent, setSelectedEvent] = useState(null)
   const [loading, setLoading] = useState(true)
   const calendarRef = useRef(null)
 
@@ -27,23 +33,39 @@ export default function Calendar() {
     Promise.all([
       api.get('/projects/tasks/'),
       api.get('/projects/projects/'),
-      api.get('/auth/users/'),
-    ]).then(([taskRes, projectRes, userRes]) => {
-      const allUsers = userRes.data.results || userRes.data
-      setUsers(allUsers)
-      setSelectedUsers(new Set(allUsers.map(u => u.id)))
+      api.get('/hr/employees/'),
+    ]).then(([taskRes, projectRes, empRes]) => {
+      const allEmployees = empRes.data.results || empRes.data
+      setEmployees(allEmployees)
+
+      // collect unique department names and select all by default
+      const depts = new Set(allEmployees.map(e => e.department_name || 'Unassigned'))
+      setSelectedDepts(depts)
+
       setTasks(taskRes.data.results || taskRes.data)
       setProjects(projectRes.data.results || projectRes.data)
       setLoading(false)
     })
   }, [])
 
-  const userColorMap = {}
-  users.forEach((u, i) => { userColorMap[u.id] = USER_COLORS[i % USER_COLORS.length] })
+  // map user_id → department_name and color
+  const userDeptMap = {}   // userId → deptName
+  const deptColorMap = {}  // deptName → color
+  const deptNames = [...new Set(employees.map(e => e.department_name || 'Unassigned'))]
+  deptNames.forEach((d, i) => { deptColorMap[d] = DEPT_COLORS[i % DEPT_COLORS.length] })
+  employees.forEach(e => { userDeptMap[e.user] = e.department_name || 'Unassigned' })
 
-  // Tasks with due_date as single-day events
+  // user color map by index for task dots
+  const userColorMap = {}
+  employees.forEach((e, i) => { userColorMap[e.user] = USER_COLORS[i % USER_COLORS.length] })
+
+  // which user IDs are in selected departments
+  const visibleUserIds = new Set(
+    employees.filter(e => selectedDepts.has(e.department_name || 'Unassigned')).map(e => e.user)
+  )
+
   const taskEvents = tasks
-    .filter(t => t.due_date && (selectedUsers.has(t.assigned_to) || (!t.assigned_to && selectedUsers.size > 0)))
+    .filter(t => t.due_date && (visibleUserIds.has(t.assigned_to) || (!t.assigned_to && selectedDepts.size > 0)))
     .map(t => ({
       id: `task-${t.id}`,
       title: t.title,
@@ -53,7 +75,6 @@ export default function Calendar() {
       extendedProps: { type: 'task', data: t },
     }))
 
-  // Projects with start+end as multi-day bars
   const projectEvents = projects
     .filter(p => p.start_date && p.end_date)
     .map(p => ({
@@ -69,26 +90,21 @@ export default function Calendar() {
 
   const events = [...projectEvents, ...taskEvents]
 
-  // Tasks without due_date grouped by status
   const unscheduled = tasks.filter(t => !t.due_date)
-  const unscheduledByStatus = Object.keys(STATUS_LABELS).map(s => ({
-    status: s,
-    count: unscheduled.filter(t => t.status === s).length,
-  })).filter(s => s.count > 0)
+  const unscheduledByStatus = Object.keys(STATUS_LABELS)
+    .map(s => ({ status: s, count: unscheduled.filter(t => t.status === s).length }))
+    .filter(s => s.count > 0)
 
-  function toggleUser(userId) {
-    setSelectedUsers(prev => {
+  function toggleDept(dept) {
+    setSelectedDepts(prev => {
       const next = new Set(prev)
-      next.has(userId) ? next.delete(userId) : next.add(userId)
+      next.has(dept) ? next.delete(dept) : next.add(dept)
       return next
     })
   }
 
   function handleEventClick(info) {
-    setSelectedEvent({
-      type: info.event.extendedProps.type,
-      data: info.event.extendedProps.data,
-    })
+    setSelectedEvent({ type: info.event.extendedProps.type, data: info.event.extendedProps.data })
   }
 
   if (loading) return (
@@ -105,21 +121,21 @@ export default function Calendar() {
         <h1 className="text-lg font-bold text-gray-800 flex-1">Company Calendar</h1>
       </div>
 
-      {/* User filter */}
+      {/* Department filter */}
       <div className="bg-white border-b border-gray-200 px-4 py-2 flex gap-2 overflow-x-auto">
-        <button onClick={() => setSelectedUsers(new Set(users.map(u => u.id)))}
+        <button onClick={() => setSelectedDepts(new Set(deptNames))}
           className="shrink-0 text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
-        <button onClick={() => setSelectedUsers(new Set())}
+        <button onClick={() => setSelectedDepts(new Set())}
           className="shrink-0 text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">None</button>
-        {users.map(u => (
-          <button key={u.id} onClick={() => toggleUser(u.id)}
-            className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition"
+        {deptNames.map(dept => (
+          <button key={dept} onClick={() => toggleDept(dept)}
+            className="shrink-0 text-xs px-3 py-1 rounded-full border transition font-medium"
             style={{
-              backgroundColor: selectedUsers.has(u.id) ? userColorMap[u.id] : '#f3f4f6',
-              borderColor: userColorMap[u.id],
-              color: selectedUsers.has(u.id) ? '#fff' : '#6b7280',
+              backgroundColor: selectedDepts.has(dept) ? deptColorMap[dept] : '#f3f4f6',
+              borderColor: deptColorMap[dept],
+              color: selectedDepts.has(dept) ? '#fff' : '#6b7280',
             }}>
-            {u.first_name}
+            {dept}
           </button>
         ))}
       </div>
@@ -145,7 +161,7 @@ export default function Calendar() {
         </div>
       </div>
 
-      {/* Unscheduled tasks summary */}
+      {/* Unscheduled tasks */}
       {unscheduledByStatus.length > 0 && (
         <div className="px-3 pb-4">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -212,6 +228,10 @@ export default function Calendar() {
                     <span className="text-gray-700">{selectedEvent.data.group}</span>
                   </div>
                 )}
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Department</span>
+                  <span className="text-gray-700">{userDeptMap[selectedEvent.data.assigned_to] || '—'}</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Status</span>
                   <span className="text-gray-700">{STATUS_LABELS[selectedEvent.data.status]}</span>

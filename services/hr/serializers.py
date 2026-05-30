@@ -4,10 +4,14 @@ from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attenda
 
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
+    department_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
         exclude = ['tenant']
+
+    def get_department_name(self, obj):
+        return obj.department.name if obj.department else None
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
