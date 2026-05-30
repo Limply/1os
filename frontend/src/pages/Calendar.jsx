@@ -119,7 +119,7 @@ export default function Calendar() {
               borderColor: userColorMap[u.id],
               color: selectedUsers.has(u.id) ? '#fff' : '#6b7280',
             }}>
-            {u.first_name} {u.last_name}
+            {u.first_name}
           </button>
         ))}
       </div>
