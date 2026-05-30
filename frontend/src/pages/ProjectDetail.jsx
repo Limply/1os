@@ -170,7 +170,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                         className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none"
                       >
                         <option value="">Unassigned</option>
-                        {users.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
+                        {users.map(u => <option key={u.id} value={u.id}>{(u.first_name || u.last_name) ? `${u.first_name} ${u.last_name}`.trim() : u.email}</option>)}
                       </select>
                       <button onClick={saveEditing} className="text-xs text-white bg-blue-600 px-2 py-0.5 rounded-lg hover:bg-blue-700">Save</button>
                       <button onClick={cancelEditing} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
