@@ -26,6 +26,8 @@ export default function Calendar() {
   const [employees, setEmployees] = useState([])
   const [selectedUsers, setSelectedUsers] = useState(new Set())
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [editTask, setEditTask] = useState({}) // { title, assigned_to }
+  const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const calendarRef = useRef(null)
 
@@ -105,7 +107,20 @@ export default function Calendar() {
   }
 
   function handleEventClick(info) {
-    setSelectedEvent({ type: info.event.extendedProps.type, data: info.event.extendedProps.data })
+    const { type, data } = info.event.extendedProps
+    setSelectedEvent({ type, data })
+    if (type === 'task') setEditTask({ title: data.title, assigned_to: data.assigned_to || '' })
+  }
+
+  async function handleSaveTask() {
+    if (!selectedEvent || selectedEvent.type !== 'task') return
+    setSaving(true)
+    await api.patch(`/projects/tasks/${selectedEvent.data.id}/`, editTask)
+    // refresh tasks
+    const res = await api.get('/projects/tasks/')
+    setTasks(res.data.results || res.data)
+    setSelectedEvent(null)
+    setSaving(false)
   }
 
   if (loading) return (
@@ -209,10 +224,18 @@ export default function Calendar() {
           <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-xl"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
-              <h2 className="text-base font-bold text-gray-800 flex-1 pr-2">
-                {selectedEvent.type === 'project' ? '📁 ' : ''}{selectedEvent.data.name || selectedEvent.data.title}
-              </h2>
-              <button onClick={() => setSelectedEvent(null)} className="text-gray-400 text-xl leading-none">×</button>
+              {selectedEvent.type === 'task' ? (
+                <input
+                  className="flex-1 text-base font-bold text-gray-800 border-b border-gray-300 focus:border-blue-500 focus:outline-none pr-2 bg-transparent"
+                  value={editTask.title || ''}
+                  onChange={e => setEditTask(p => ({ ...p, title: e.target.value }))}
+                />
+              ) : (
+                <h2 className="text-base font-bold text-gray-800 flex-1 pr-2">
+                  📁 {selectedEvent.data.name}
+                </h2>
+              )}
+              <button onClick={() => setSelectedEvent(null)} className="text-gray-400 text-xl leading-none ml-2">×</button>
             </div>
 
             {selectedEvent.type === 'project' ? (
@@ -267,17 +290,31 @@ export default function Calendar() {
                   <span className="text-gray-400">Due</span>
                   <span className="text-gray-700">{selectedEvent.data.due_date}</span>
                 </div>
-                {selectedEvent.data.assigned_to_name && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Assigned to</span>
-                    <span className="text-gray-700">{selectedEvent.data.assigned_to_name}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Assigned to</span>
+                  <select
+                    value={editTask.assigned_to || ''}
+                    onChange={e => setEditTask(p => ({ ...p, assigned_to: e.target.value || null }))}
+                    className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">Unassigned</option>
+                    {employees.map(e => (
+                      <option key={e.user} value={e.user}>{e.first_name} {e.last_name}</option>
+                    ))}
+                  </select>
+                </div>
                 {selectedEvent.data.photo && (
                   <div className="pt-2">
                     <img src={selectedEvent.data.photo} alt="" className="w-full rounded-lg object-cover max-h-48" />
                   </div>
                 )}
+                <button
+                  onClick={handleSaveTask}
+                  disabled={saving}
+                  className="mt-3 w-full bg-blue-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </button>
               </div>
             )}
           </div>
