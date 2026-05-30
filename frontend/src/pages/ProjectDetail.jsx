@@ -14,6 +14,8 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [newTask, setNewTask] = useState({})
   const [addingTaskTo, setAddingTaskTo] = useState(null)
   const [photoPopup, setPhotoPopup] = useState(null) // { url, x, y }
+  const [editingTask, setEditingTask] = useState(null) // taskId
+  const [editValues, setEditValues] = useState({}) // { title, assigned_to }
 
   useEffect(() => {
     fetchProject()
@@ -68,6 +70,24 @@ export default function ProjectDetail({ projectId, onBack }) {
   async function handleStatusChange(taskId, status) {
     await api.patch(`/projects/tasks/${taskId}/`, { status })
     fetchProject()
+  }
+
+  function startEditing(task) {
+    setEditingTask(task.id)
+    setEditValues({ title: task.title, assigned_to: task.assigned_to || '' })
+  }
+
+  async function saveEditing() {
+    await api.patch(`/projects/tasks/${editingTask}/`, {
+      title: editValues.title,
+      assigned_to: editValues.assigned_to || null,
+    })
+    setEditingTask(null)
+    fetchProject()
+  }
+
+  function cancelEditing() {
+    setEditingTask(null)
   }
 
   async function handleTaskPhotoUpload(taskId, file) {
@@ -134,20 +154,45 @@ export default function ProjectDetail({ projectId, onBack }) {
                       <option key={val} value={val}>{STATUS_ICONS[val]} {label}</option>
                     ))}
                   </select>
-                  <span className={`flex-1 text-sm ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                    {task.title}
-                  </span>
-                  {task.assigned_to_name && (
-                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                      {task.assigned_to_name}
-                    </span>
+
+                  {editingTask === task.id ? (
+                    <div className="flex-1 flex items-center gap-2 flex-wrap">
+                      <input
+                        autoFocus
+                        value={editValues.title}
+                        onChange={e => setEditValues(p => ({ ...p, title: e.target.value }))}
+                        className="flex-1 text-sm border-b border-blue-400 focus:outline-none bg-transparent"
+                        onKeyDown={e => { if (e.key === 'Enter') saveEditing(); if (e.key === 'Escape') cancelEditing() }}
+                      />
+                      <select
+                        value={editValues.assigned_to}
+                        onChange={e => setEditValues(p => ({ ...p, assigned_to: e.target.value }))}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none"
+                      >
+                        <option value="">Unassigned</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
+                      </select>
+                      <button onClick={saveEditing} className="text-xs text-white bg-blue-600 px-2 py-0.5 rounded-lg hover:bg-blue-700">Save</button>
+                      <button onClick={cancelEditing} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span
+                        onClick={() => startEditing(task)}
+                        className={`flex-1 text-sm cursor-pointer ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700 hover:text-blue-600'}`}
+                      >
+                        {task.title}
+                      </span>
+                      <span
+                        onClick={() => startEditing(task)}
+                        className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full cursor-pointer hover:bg-blue-100 hover:text-blue-600"
+                      >
+                        {task.assigned_to_name || 'Unassigned'}
+                      </span>
+                      {task.due_date && <span className="text-xs text-gray-400">{task.due_date}</span>}
+                      <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+                    </>
                   )}
-                  {task.due_date && (
-                    <span className="text-xs text-gray-400">{task.due_date}</span>
-                  )}
-                  <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                    {task.priority}
-                  </span>
                   <div className="relative">
                     <label
                       className={`cursor-pointer text-sm font-bold ${task.photo ? 'text-blue-500' : 'text-gray-300 hover:text-gray-500'}`}
