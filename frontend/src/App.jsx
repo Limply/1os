@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
 import Projects from './pages/Projects'
+import Calendar from './pages/Calendar'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/finance"    element={<Placeholder title="Finance" />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />
           <Route path="/files"      element={<Files />} />
+          <Route path="/calendar"   element={<Calendar />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
