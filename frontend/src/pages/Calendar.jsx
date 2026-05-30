@@ -24,7 +24,7 @@ export default function Calendar() {
   const [tasks, setTasks] = useState([])
   const [projects, setProjects] = useState([])
   const [employees, setEmployees] = useState([])
-  const [selectedDepts, setSelectedDepts] = useState(new Set())
+  const [selectedUsers, setSelectedUsers] = useState(new Set())
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [loading, setLoading] = useState(true)
   const calendarRef = useRef(null)
@@ -37,10 +37,7 @@ export default function Calendar() {
     ]).then(([taskRes, projectRes, empRes]) => {
       const allEmployees = empRes.data.results || empRes.data
       setEmployees(allEmployees)
-
-      // collect unique department names and select all by default
-      const depts = new Set(allEmployees.map(e => e.department_name || 'Unassigned'))
-      setSelectedDepts(depts)
+      setSelectedUsers(new Set(allEmployees.map(e => e.user)))
 
       setTasks(taskRes.data.results || taskRes.data)
       setProjects(projectRes.data.results || projectRes.data)
@@ -48,24 +45,18 @@ export default function Calendar() {
     })
   }, [])
 
-  // map user_id → department_name and color
-  const userDeptMap = {}   // userId → deptName
-  const deptColorMap = {}  // deptName → color
+  const userDeptMap = {}
+  const deptColorMap = {}
+  const userColorMap = {}
   const deptNames = [...new Set(employees.map(e => e.department_name || 'Unassigned'))]
   deptNames.forEach((d, i) => { deptColorMap[d] = DEPT_COLORS[i % DEPT_COLORS.length] })
-  employees.forEach(e => { userDeptMap[e.user] = e.department_name || 'Unassigned' })
-
-  // user color map by index for task dots
-  const userColorMap = {}
-  employees.forEach((e, i) => { userColorMap[e.user] = USER_COLORS[i % USER_COLORS.length] })
-
-  // which user IDs are in selected departments
-  const visibleUserIds = new Set(
-    employees.filter(e => selectedDepts.has(e.department_name || 'Unassigned')).map(e => e.user)
-  )
+  employees.forEach((e, i) => {
+    userDeptMap[e.user] = e.department_name || 'Unassigned'
+    userColorMap[e.user] = USER_COLORS[i % USER_COLORS.length]
+  })
 
   const taskEvents = tasks
-    .filter(t => t.due_date && (visibleUserIds.has(t.assigned_to) || (!t.assigned_to && selectedDepts.size > 0)))
+    .filter(t => t.due_date && (selectedUsers.has(t.assigned_to) || (!t.assigned_to && selectedUsers.size > 0)))
     .map(t => ({
       id: `task-${t.id}`,
       title: t.title,
@@ -95,10 +86,20 @@ export default function Calendar() {
     .map(s => ({ status: s, count: unscheduled.filter(t => t.status === s).length }))
     .filter(s => s.count > 0)
 
-  function toggleDept(dept) {
-    setSelectedDepts(prev => {
+  function toggleUser(userId) {
+    setSelectedUsers(prev => {
       const next = new Set(prev)
-      next.has(dept) ? next.delete(dept) : next.add(dept)
+      next.has(userId) ? next.delete(userId) : next.add(userId)
+      return next
+    })
+  }
+
+  function toggleDept(dept) {
+    const deptUserIds = employees.filter(e => (e.department_name || 'Unassigned') === dept).map(e => e.user)
+    const allSelected = deptUserIds.every(id => selectedUsers.has(id))
+    setSelectedUsers(prev => {
+      const next = new Set(prev)
+      deptUserIds.forEach(id => allSelected ? next.delete(id) : next.add(id))
       return next
     })
   }
@@ -125,23 +126,38 @@ export default function Calendar() {
       <div className="bg-white border-b border-gray-200 px-4 py-2 space-y-1.5">
         {deptNames.map(dept => {
           const deptMembers = employees.filter(e => (e.department_name || 'Unassigned') === dept)
-          const active = selectedDepts.has(dept)
+          const allSelected = deptMembers.every(e => selectedUsers.has(e.user))
+          const someSelected = deptMembers.some(e => selectedUsers.has(e.user))
           return (
-            <div key={dept} className="flex items-center gap-2 flex-wrap">
+            <div key={dept} className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => toggleDept(dept)}
                 className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md border transition"
                 style={{
-                  backgroundColor: active ? deptColorMap[dept] : '#f3f4f6',
+                  backgroundColor: allSelected ? deptColorMap[dept] : someSelected ? deptColorMap[dept] + '44' : '#f3f4f6',
                   borderColor: deptColorMap[dept],
-                  color: active ? '#fff' : '#6b7280',
+                  color: allSelected ? '#fff' : someSelected ? deptColorMap[dept] : '#9ca3af',
                 }}
               >
                 {dept}
               </button>
-              <span className="text-xs text-gray-400">
-                {deptMembers.map(e => e.first_name).join(', ')}
-              </span>
+              {deptMembers.map(e => {
+                const on = selectedUsers.has(e.user)
+                return (
+                  <button
+                    key={e.user}
+                    onClick={() => toggleUser(e.user)}
+                    className="text-xs px-2 py-0.5 rounded-full border transition"
+                    style={{
+                      backgroundColor: on ? userColorMap[e.user] : '#f3f4f6',
+                      borderColor: on ? userColorMap[e.user] : '#e5e7eb',
+                      color: on ? '#fff' : '#9ca3af',
+                    }}
+                  >
+                    {e.first_name}
+                  </button>
+                )
+              })}
             </div>
           )
         })}
