@@ -8,6 +8,12 @@ class EmployeeAdmin(admin.ModelAdmin):
     search_fields = ['emp_no', 'first_name', 'last_name', 'email']
     list_filter = ['employment_type', 'pass_type', 'department', 'is_active']
     ordering = ['emp_no']
+    fieldsets = [
+        ('Personal', {'fields': ['user', 'emp_no', 'first_name', 'last_name', 'nric', 'nationality', 'email', 'phone']}),
+        ('Work Pass', {'fields': ['pass_type', 'pass_expiry'], 'classes': ['collapse'], 'description': 'Optional — only for foreign workers'}),
+        ('Employment', {'fields': ['department', 'position', 'employment_type', 'join_date', 'end_date', 'basic_salary']}),
+        ('Emergency Contact', {'fields': ['emergency_name', 'emergency_phone'], 'classes': ['collapse']}),
+    ]
 
 
 @admin.register(LeaveType)
