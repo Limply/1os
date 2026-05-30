@@ -122,22 +122,29 @@ export default function Calendar() {
       </div>
 
       {/* Department filter */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex gap-2 overflow-x-auto">
-        <button onClick={() => setSelectedDepts(new Set(deptNames))}
-          className="shrink-0 text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
-        <button onClick={() => setSelectedDepts(new Set())}
-          className="shrink-0 text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">None</button>
-        {deptNames.map(dept => (
-          <button key={dept} onClick={() => toggleDept(dept)}
-            className="shrink-0 text-xs px-3 py-1 rounded-full border transition font-medium"
-            style={{
-              backgroundColor: selectedDepts.has(dept) ? deptColorMap[dept] : '#f3f4f6',
-              borderColor: deptColorMap[dept],
-              color: selectedDepts.has(dept) ? '#fff' : '#6b7280',
-            }}>
-            {dept}
-          </button>
-        ))}
+      <div className="bg-white border-b border-gray-200 px-4 py-2 space-y-1.5">
+        {deptNames.map(dept => {
+          const deptMembers = employees.filter(e => (e.department_name || 'Unassigned') === dept)
+          const active = selectedDepts.has(dept)
+          return (
+            <div key={dept} className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => toggleDept(dept)}
+                className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md border transition"
+                style={{
+                  backgroundColor: active ? deptColorMap[dept] : '#f3f4f6',
+                  borderColor: deptColorMap[dept],
+                  color: active ? '#fff' : '#6b7280',
+                }}
+              >
+                {dept}
+              </button>
+              <span className="text-xs text-gray-400">
+                {deptMembers.map(e => e.first_name).join(', ')}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       {/* Calendar */}
