@@ -1,9 +1,10 @@
 from django.contrib import admin
+from shared.admin import TenantModelAdmin
 from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
 
 
 @admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
+class EmployeeAdmin(TenantModelAdmin):
     list_display = ['emp_no', 'first_name', 'last_name', 'employment_type', 'department', 'join_date', 'is_active']
     search_fields = ['emp_no', 'first_name', 'last_name', 'email']
     list_filter = ['employment_type', 'pass_type', 'department', 'is_active']
@@ -17,20 +18,20 @@ class EmployeeAdmin(admin.ModelAdmin):
 
 
 @admin.register(LeaveType)
-class LeaveTypeAdmin(admin.ModelAdmin):
+class LeaveTypeAdmin(TenantModelAdmin):
     list_display = ['name', 'days_per_year', 'paid', 'carry_forward', 'tenant']
     list_filter = ['paid', 'carry_forward', 'tenant']
 
 
 @admin.register(LeaveBalance)
-class LeaveBalanceAdmin(admin.ModelAdmin):
+class LeaveBalanceAdmin(TenantModelAdmin):
     list_display = ['employee', 'leave_type', 'year', 'entitled', 'taken', 'carried_forward']
     list_filter = ['year', 'leave_type']
     search_fields = ['employee__first_name', 'employee__last_name', 'employee__emp_no']
 
 
 @admin.register(LeaveApplication)
-class LeaveApplicationAdmin(admin.ModelAdmin):
+class LeaveApplicationAdmin(TenantModelAdmin):
     list_display = ['employee', 'leave_type', 'start_date', 'end_date', 'days', 'status']
     list_filter = ['status', 'leave_type']
     search_fields = ['employee__first_name', 'employee__last_name', 'employee__emp_no']
@@ -38,7 +39,7 @@ class LeaveApplicationAdmin(admin.ModelAdmin):
 
 
 @admin.register(Attendance)
-class AttendanceAdmin(admin.ModelAdmin):
+class AttendanceAdmin(TenantModelAdmin):
     list_display = ['employee', 'date', 'clock_in', 'clock_out', 'hours', 'status']
     list_filter = ['status', 'date']
     search_fields = ['employee__first_name', 'employee__last_name', 'employee__emp_no']
@@ -46,7 +47,7 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 
 @admin.register(Certification)
-class CertificationAdmin(admin.ModelAdmin):
+class CertificationAdmin(TenantModelAdmin):
     list_display = ['employee', 'name', 'issuer', 'issue_date', 'expiry_date', 'alert_days']
     search_fields = ['name', 'employee__first_name', 'employee__last_name', 'cert_number']
     list_filter = ['issuer']
@@ -54,7 +55,7 @@ class CertificationAdmin(admin.ModelAdmin):
 
 
 @admin.register(PublicHoliday)
-class PublicHolidayAdmin(admin.ModelAdmin):
+class PublicHolidayAdmin(TenantModelAdmin):
     list_display = ['date', 'name', 'year']
     list_filter = ['year']
     ordering = ['date']

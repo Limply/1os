@@ -1,4 +1,5 @@
 from django.contrib import admin
+from shared.admin import TenantModelAdmin
 from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment
 
 
@@ -23,7 +24,7 @@ class PaymentInline(admin.TabularInline):
 
 
 @admin.register(Quotation)
-class QuotationAdmin(admin.ModelAdmin):
+class QuotationAdmin(TenantModelAdmin):
     list_display = ['quote_no', 'client_name', 'status', 'issue_date', 'valid_until', 'total']
     search_fields = ['quote_no', 'client_name', 'client_email']
     list_filter = ['status']
@@ -32,7 +33,7 @@ class QuotationAdmin(admin.ModelAdmin):
 
 
 @admin.register(Invoice)
-class InvoiceAdmin(admin.ModelAdmin):
+class InvoiceAdmin(TenantModelAdmin):
     list_display = ['invoice_no', 'client_name', 'status', 'issue_date', 'due_date', 'total', 'paid_amount']
     search_fields = ['invoice_no', 'client_name', 'client_email']
     list_filter = ['status', 'payment_method']
@@ -41,7 +42,7 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 
 @admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
+class PaymentAdmin(TenantModelAdmin):
     list_display = ['invoice', 'amount', 'payment_date', 'method', 'reference']
     search_fields = ['invoice__invoice_no', 'reference']
     list_filter = ['method']
