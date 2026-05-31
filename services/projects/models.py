@@ -1,6 +1,17 @@
+import datetime
 from django.db import models
 from django.utils import timezone
 from shared.models import BaseModel
+
+
+def _generate_project_no(tenant):
+    year = str(datetime.date.today().year)[2:]
+    prefix = f'AST-{year}-'
+    last = Project.objects.filter(
+        tenant=tenant, project_no__startswith=prefix
+    ).order_by('-project_no').first()
+    seq = int(last.project_no.split('-')[-1]) + 1 if last else 1
+    return f'{prefix}{seq:04d}'
 
 
 class Project(BaseModel):
@@ -22,26 +33,39 @@ class Project(BaseModel):
         ('urgent', 'Urgent'),
     ]
 
-    name = models.CharField(max_length=255)
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='client')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
-    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
-    description = models.TextField(blank=True, null=True)
-    client_name = models.CharField(max_length=255, blank=True, null=True)
+    project_no    = models.CharField(max_length=20, unique=True, blank=True)
+    name          = models.CharField(max_length=255)
+    type          = models.CharField(max_length=20, choices=TYPE_CHOICES, default='client')
+    status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
+    priority      = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    description   = models.TextField(blank=True, null=True)
+
+    # Client info — referenced by quotations
+    client_name    = models.CharField(max_length=255, blank=True, null=True)
+    client_contact = models.CharField(max_length=255, blank=True, null=True, help_text='Contact person name')
+    client_email   = models.EmailField(blank=True, null=True)
+    client_phone   = models.CharField(max_length=20, blank=True, null=True)
+    client_address = models.TextField(blank=True, null=True)
+
     start_date = models.DateField(null=True, blank=True)
-    end_date = models.DateField(null=True, blank=True)
-    manager = models.ForeignKey(
+    end_date   = models.DateField(null=True, blank=True)
+    manager    = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='managed_projects'
     )
-    members = models.JSONField(default=list, blank=True)
+    members  = models.JSONField(default=list, blank=True)
     progress = models.IntegerField(default=0)
 
     ref_type = models.CharField(max_length=50, blank=True, null=True)
-    ref_id = models.UUIDField(null=True, blank=True)
+    ref_id   = models.UUIDField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.project_no:
+            self.project_no = _generate_project_no(self.tenant)
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name
+        return f'{self.project_no} — {self.name}'
 
     def recalculate_progress(self):
         total = self.tasks.count()

@@ -17,9 +17,7 @@ class TaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'completed_at', 'created_at', 'updated_at']
 
     def get_assigned_to_name(self, obj):
-        if obj.assigned_to:
-            return obj.assigned_to.full_name
-        return None
+        return obj.assigned_to.full_name if obj.assigned_to else None
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
@@ -29,9 +27,9 @@ class ProjectListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'name', 'type', 'status', 'priority',
-            'client_name', 'start_date', 'end_date',
-            'manager', 'manager_name', 'progress', 'task_count',
+            'id', 'project_no', 'name', 'type', 'status', 'priority',
+            'client_name', 'client_contact', 'client_email', 'client_phone',
+            'start_date', 'end_date', 'manager', 'manager_name', 'progress', 'task_count',
         ]
 
     def get_task_count(self, obj):
@@ -49,12 +47,14 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'tenant', 'name', 'type', 'status', 'priority',
-            'description', 'client_name', 'start_date', 'end_date',
+            'id', 'tenant', 'project_no', 'name', 'type', 'status', 'priority',
+            'description',
+            'client_name', 'client_contact', 'client_email', 'client_phone', 'client_address',
+            'start_date', 'end_date',
             'manager', 'manager_name', 'members', 'progress', 'ref_type', 'ref_id',
             'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'tenant', 'progress', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'tenant', 'project_no', 'progress', 'created_at', 'updated_at']
 
     def get_task_count(self, obj):
         return obj.tasks.count()

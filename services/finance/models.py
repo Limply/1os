@@ -12,9 +12,12 @@ class Quotation(BaseModel):
         ('expired', 'Expired'),
     ]
 
-    quote_no = models.CharField(max_length=20, unique=True)
-    client_name = models.CharField(max_length=255)
-    client_email = models.EmailField(blank=True, null=True)
+    quote_no   = models.CharField(max_length=20, unique=True)
+    project_no = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number e.g. AST-26-0001')
+    client_name    = models.CharField(max_length=255)
+    client_contact = models.CharField(max_length=255, blank=True, null=True)
+    client_email   = models.EmailField(blank=True, null=True)
+    client_phone   = models.CharField(max_length=20, blank=True, null=True)
     client_address = models.TextField(blank=True, null=True)
     site = models.ForeignKey(
         'organisation.Site', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations'
