@@ -5,6 +5,39 @@
 
 ---
 
+## Coding Rules
+
+### Decoupling (Primary Rule)
+Each service module is fully independent. A change in one module must never break another.
+
+| Rule | Detail |
+|---|---|
+| No cross-service imports | Services never import models or functions from each other |
+| API-only communication | Services talk via HTTP API calls, not direct DB queries |
+| Shared layer only | Only `shared/` (BaseModel, middleware) and `accounts.User` may be referenced across services |
+| Loose linking | Cross-module references use `ref_type` + `ref_id` (not FK) |
+| Independent migrations | Each service manages its own migrations — no cross-service dependencies |
+| Frontend mirrors this | Each page/feature only calls its own service API endpoints |
+
+### Django Rules
+- `perform_create` always sets `tenant=request.tenant`
+- Admin uses `TenantModelAdmin` to auto-set tenant on save
+- Settings split: `base.py` / `dev.py` / `prod.py`, secrets in `.env`
+- Never hardcode tenant, credentials, or environment values
+
+### Code Style
+- No comments unless the WHY is non-obvious
+- No error handling for things that can't happen
+- No abstractions beyond what the task needs
+- No backwards-compatibility hacks
+
+### Git
+- Commit after every completed feature
+- Always push to `github.com/Limply/1os`
+- Never force push to main
+
+---
+
 ## Current State
 
 | Area | Status | Notes |
