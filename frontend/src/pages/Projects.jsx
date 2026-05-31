@@ -139,7 +139,7 @@ export default function Projects() {
         </div>
       )}
 
-      {/* Project list */}
+      {/* Project table */}
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
       ) : projects.length === 0 ? (
@@ -148,34 +148,49 @@ export default function Projects() {
           <p className="text-sm mt-1">Click "+ New Project" to get started</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {projects.map(p => (
-            <div key={p.id} onClick={() => setSelected(p.id)}
-              className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 hover:border-blue-300 hover:shadow-sm cursor-pointer transition">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono text-gray-400">{p.project_no}</span>
-                  <span className="font-semibold text-gray-800 truncate">{p.name}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status]}`}>
-                    {p.status.replace('_', ' ')}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500">
-                  {p.client_name && <span className="mr-3">{p.client_name}</span>}
-                  {p.client_contact && <span className="mr-3 text-gray-400">· {p.client_contact}</span>}
-                  <span className={`font-medium ${PRIORITY_COLORS[p.priority]}`}>{p.priority}</span>
-                  {p.manager_name && <span className="ml-3 text-gray-400">· {p.manager_name}</span>}
-                </p>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-bold text-gray-700">{p.progress}%</div>
-                <div className="w-20 bg-gray-200 rounded-full h-1.5 mt-1">
-                  <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
-                </div>
-                <div className="text-xs text-gray-400 mt-1">{p.task_count} tasks</div>
-              </div>
-            </div>
-          ))}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left">Project No.</th>
+                <th className="px-4 py-3 text-left">Name</th>
+                <th className="px-4 py-3 text-left">Client</th>
+                <th className="px-4 py-3 text-left">Contact</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Priority</th>
+                <th className="px-4 py-3 text-right">Progress</th>
+                <th className="px-4 py-3 text-right">Tasks</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {projects.map(p => (
+                <tr key={p.id} onClick={() => setSelected(p.id)}
+                  className="hover:bg-blue-50 cursor-pointer transition">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.project_no}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                  <td className="px-4 py-3 text-gray-600">{p.client_name || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{p.client_contact || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status]}`}>
+                      {p.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className={`px-4 py-3 font-medium ${PRIORITY_COLORS[p.priority]}`}>
+                    {p.priority}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-600 w-8">{p.progress}%</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-500">{p.task_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
