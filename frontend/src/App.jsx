@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
 import Projects from './pages/Projects'
+import HR from './pages/HR'
 import Calendar from './pages/Calendar'
 
 export default function App() {
@@ -15,7 +16,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/"           element={<Dashboard />} />
           <Route path="/projects"   element={<Projects />} />
-          <Route path="/hr"         element={<Placeholder title="HR" />} />
+          <Route path="/hr"         element={<HR />} />
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Placeholder title="Finance" />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />
