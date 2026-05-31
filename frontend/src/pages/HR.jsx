@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import api from '../api/axios'
+import { getUser } from '../api/auth'
 
-const TABS = ['My Leave', 'Attendance', 'Courses']
+const MANAGER_ROLES = ['superadmin', 'admin', 'manager']
 
 const STATUS_COLORS = {
   pending:   'bg-yellow-100 text-yellow-700',
@@ -19,6 +20,9 @@ const ATTENDANCE_COLORS = {
 }
 
 export default function HR() {
+  const currentUser = getUser()
+  const isManager = MANAGER_ROLES.includes(currentUser?.role)
+  const TABS = ['My Leave', 'Attendance', 'Courses', ...(isManager ? ['Manager'] : [])]
   const [tab, setTab] = useState('My Leave')
   const [employee, setEmployee] = useState(null)
   const [leaveBalances, setLeaveBalances] = useState([])
@@ -26,6 +30,8 @@ export default function HR() {
   const [leaveTypes, setLeaveTypes] = useState([])
   const [attendance, setAttendance] = useState([])
   const [certifications, setCertifications] = useState([])
+  const [pendingLeaves, setPendingLeaves] = useState([])
+  const [remarkInput, setRemarkInput] = useState({})
   const [loading, setLoading] = useState(true)
   const [noProfile, setNoProfile] = useState(false)
 
@@ -48,18 +54,21 @@ export default function HR() {
       const emp = empRes.data
       setEmployee(emp)
 
-      const [balances, history, types, attend, certs] = await Promise.all([
+      const requests = [
         api.get(`/hr/leave-balances/?employee=${emp.id}`),
         api.get(`/hr/leave-applications/?employee=${emp.id}`),
         api.get('/hr/leave-types/'),
         api.get(`/hr/attendance/?employee=${emp.id}`),
         api.get(`/hr/certifications/?employee=${emp.id}`),
-      ])
+      ]
+      if (isManager) requests.push(api.get('/hr/leave-applications/?status=pending'))
+      const [balances, history, types, attend, certs, pending] = await Promise.all(requests)
       setLeaveBalances(balances.data.results || balances.data)
       setLeaveHistory(history.data.results || history.data)
       setLeaveTypes(types.data.results || types.data)
       setAttendance(attend.data.results || attend.data)
       setCertifications(certs.data.results || certs.data)
+      if (pending) setPendingLeaves(pending.data.results || pending.data)
     } catch (e) {
       if (e.response?.status === 404) setNoProfile(true)
     } finally {
@@ -74,6 +83,14 @@ export default function HR() {
     setApplyForm({ leave_type: '', start_date: '', end_date: '', days: '', reason: '' })
     setShowApplyForm(false)
     setApplying(false)
+    fetchAll()
+  }
+
+  async function handleDecision(leaveId, action) {
+    await api.post(`/hr/leave-applications/${leaveId}/${action}/`, {
+      remarks: remarkInput[leaveId] || '',
+    })
+    setRemarkInput(p => ({ ...p, [leaveId]: '' }))
     fetchAll()
   }
 
@@ -279,6 +296,51 @@ export default function HR() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Manager */}
+      {tab === 'Manager' && (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-gray-500">
+            Pending Leave Applications ({pendingLeaves.length})
+          </p>
+          {pendingLeaves.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-sm text-gray-400">
+              No pending leave applications.
+            </div>
+          ) : pendingLeaves.map(l => (
+            <div key={l.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-medium text-gray-800">{l.employee_name}</p>
+                  <p className="text-xs text-gray-400">{l.leave_type_name} · {l.start_date} → {l.end_date} · {l.days} day(s)</p>
+                  {l.reason && <p className="text-xs text-gray-500 mt-1">"{l.reason}"</p>}
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 shrink-0">pending</span>
+              </div>
+              <input
+                placeholder="Remarks (optional)"
+                value={remarkInput[l.id] || ''}
+                onChange={e => setRemarkInput(p => ({ ...p, [l.id]: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDecision(l.id, 'approve')}
+                  className="flex-1 bg-green-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-green-700 transition"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleDecision(l.id, 'reject')}
+                  className="flex-1 bg-red-500 text-white py-2 rounded-xl text-sm font-medium hover:bg-red-600 transition"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

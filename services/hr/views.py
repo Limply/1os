@@ -1,5 +1,6 @@
+from django.utils import timezone
 from rest_framework import viewsets, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
 from .serializers import (
@@ -53,6 +54,26 @@ class LeaveApplicationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         if status:
             qs = qs.filter(status=status)
         return qs.order_by('-created_at')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        leave = self.get_object()
+        leave.status = 'approved'
+        leave.approved_by = request.user
+        leave.approved_at = timezone.now()
+        leave.remarks = request.data.get('remarks', '')
+        leave.save()
+        return Response(LeaveApplicationSerializer(leave).data)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        leave = self.get_object()
+        leave.status = 'rejected'
+        leave.approved_by = request.user
+        leave.approved_at = timezone.now()
+        leave.remarks = request.data.get('remarks', '')
+        leave.save()
+        return Response(LeaveApplicationSerializer(leave).data)
 
 
 class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
