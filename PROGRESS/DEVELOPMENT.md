@@ -19,6 +19,13 @@ Each service module is fully independent. A change in one module must never brea
 | Independent migrations | Each service manages its own migrations — no cross-service dependencies |
 | Frontend mirrors this | Each page/feature only calls its own service API endpoints |
 
+### Calendar Architecture
+- `components/CalendarView.jsx` — shared FullCalendar UI wrapper, accepts `events[]` prop only
+- Each module owns its own calendar page (data fetching, filters, modals)
+- `pages/Calendar.jsx` — Projects calendar (tasks + project date bars + dept filter)
+- Future: `pages/hr/Calendar.jsx`, `pages/ops/Calendar.jsx` — each uses `CalendarView`
+- Never put business data or API calls inside `CalendarView`
+
 ### Django Rules
 - `perform_create` always sets `tenant=request.tenant`
 - Admin uses `TenantModelAdmin` to auto-set tenant on save
@@ -43,20 +50,24 @@ Each service module is fully independent. A change in one module must never brea
 | Area | Status | Notes |
 |---|---|---|
 | Project structure | ✅ Done | `/opt/1os/` — correct location |
-| DB models (31) | ✅ Done | All migrated — includes Project, TaskList, Task |
+| DB models (30) | ✅ Done | All migrated — TaskList merged into Task (project FK + group field) |
 | API routes | ✅ Done | All services routed |
 | JWT auth | ✅ Done | 8h access / 7d refresh |
 | Tenant scoping (middleware) | ✅ Done | Reads JWT, resolves user → tenant, sets `request.tenant` |
 | Django Admin | ✅ Done | All models registered with search, filter, inline items |
 | Split settings | ✅ Done | `base.py` / `dev.py` / `prod.py`, secrets via `.env` |
 | GitHub repo | ✅ Done | `github.com/Limply/1os` (private) |
-| Frontend (React) | ✅ Done | Login, Dashboard, Projects, Files — live at `https://ast1.sim-eng.com` |
+| Frontend (React) | ✅ Done | Login, Dashboard, Projects, Files, Calendar — live at `https://ast1.sim-eng.com` |
 | Cloudflare Tunnel | ✅ Done | `ast1.sim-eng.com` → Vite; SSH tunnel at `ssh.ast1.sim-eng.com` |
+| Calendar (Projects) | ✅ Done | Company calendar with dept filter, project bars, task dots, unscheduled summary |
+| CalendarView component | ✅ Done | Shared FullCalendar wrapper at `components/CalendarView.jsx` |
 | Business logic | ❌ Not started | See task list below |
 | API contracts | ❌ Not started | Needed before more frontend work |
 | Tests | ❌ Not started | |
 | Docker | ❌ Not started | Needed for production deployment |
 | HR / Ops / Finance / Compliance pages | ❌ Not started | Placeholders only |
+| HR Calendar | ❌ Not started | Leave applications, public holidays — uses `CalendarView` |
+| Ops Calendar | ❌ Not started | Jobs, site visits — uses `CalendarView` |
 
 ---
 
