@@ -7,7 +7,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Project.objects.filter(tenant=self.request.tenant).order_by('-created_at')
+        qs = Project.objects.filter(tenant=self.request.tenant).order_by('-created_at')
+        project_no = self.request.query_params.get('project_no')
+        if project_no:
+            qs = qs.filter(project_no=project_no)
+        return qs
 
     def get_serializer_class(self):
         if self.action == 'list':

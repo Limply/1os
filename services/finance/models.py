@@ -1,5 +1,14 @@
+import datetime
 from django.db import models
 from shared.models import BaseModel
+
+
+def _next_no(model, field, prefix, tenant):
+    year = str(datetime.date.today().year)[2:]
+    p = f'{prefix}-{year}-'
+    last = model.objects.filter(tenant=tenant, **{f'{field}__startswith': p}).order_by(f'-{field}').first()
+    seq = int(getattr(last, field).split('-')[-1]) + 1 if last else 1
+    return f'{p}{seq:03d}'
 
 
 class Quotation(BaseModel):
@@ -12,7 +21,7 @@ class Quotation(BaseModel):
         ('expired', 'Expired'),
     ]
 
-    quote_no   = models.CharField(max_length=20, unique=True)
+    quote_no   = models.CharField(max_length=20, unique=True, blank=True)
     project_no = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number e.g. AST-26-0001')
     client_name    = models.CharField(max_length=255)
     client_contact = models.CharField(max_length=255, blank=True, null=True)
@@ -33,6 +42,11 @@ class Quotation(BaseModel):
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations'
     )
     revision = models.IntegerField(default=1)
+
+    def save(self, *args, **kwargs):
+        if not self.quote_no:
+            self.quote_no = _next_no(Quotation, 'quote_no', 'Q', self.tenant)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.quote_no} — {self.client_name}"
@@ -83,7 +97,7 @@ class Invoice(BaseModel):
         ('paynow', 'PayNow'),
     ]
 
-    invoice_no = models.CharField(max_length=20, unique=True)
+    invoice_no = models.CharField(max_length=20, unique=True, blank=True)
     quotation = models.ForeignKey(
         Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices'
     )
@@ -99,6 +113,11 @@ class Invoice(BaseModel):
     paid_date = models.DateField(null=True, blank=True)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_no:
+            self.invoice_no = _next_no(Invoice, 'invoice_no', 'INV', self.tenant)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.invoice_no} — {self.client_name}"
@@ -147,7 +166,7 @@ class DeliveryOrder(BaseModel):
         ('cancelled',   'Cancelled'),
     ]
 
-    do_no = models.CharField(max_length=20, unique=True)
+    do_no = models.CharField(max_length=20, unique=True, blank=True)
     quotation = models.ForeignKey(
         Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_orders'
     )
@@ -165,6 +184,11 @@ class DeliveryOrder(BaseModel):
     prepared_by = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_orders'
     )
+
+    def save(self, *args, **kwargs):
+        if not self.do_no:
+            self.do_no = _next_no(DeliveryOrder, 'do_no', 'DO', self.tenant)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.do_no} — {self.client_name}"
