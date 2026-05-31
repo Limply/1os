@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
-from .models import Company, Department, Team, Position, Site
-from .serializers import CompanySerializer, DepartmentSerializer, TeamSerializer, PositionSerializer, SiteSerializer
+from .models import Company, Department, Team, Position, Site, Client
+from .serializers import CompanySerializer, DepartmentSerializer, TeamSerializer, PositionSerializer, SiteSerializer, ClientSerializer
 
 
 class TenantScopedMixin:
@@ -36,3 +36,14 @@ class PositionViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 class SiteViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Site.objects.all()
     serializer_class = SiteSerializer
+
+
+class ClientViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    serializer_class = ClientSerializer
+
+    def get_queryset(self):
+        qs = Client.objects.filter(tenant=self.request.user.tenant, is_active=True)
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return qs.order_by('name')

@@ -81,3 +81,18 @@ class Site(BaseModel):
 
     def __str__(self):
         return self.name
+
+
+class Client(BaseModel):
+    """Client / customer company record."""
+    name = models.CharField(max_length=255)
+    uen = models.CharField(max_length=20, blank=True, null=True, help_text='UEN / company registration')
+    gst_no = models.CharField(max_length=20, blank=True, null=True)
+    contact_name = models.CharField(max_length=255, blank=True, null=True)
+    contact_email = models.EmailField(blank=True, null=True)
+    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+    billing_address = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name

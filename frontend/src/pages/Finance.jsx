@@ -137,6 +137,28 @@ export default function Finance() {
     setLoading(false)
   }
 
+  const [clientSuggestions, setClientSuggestions] = useState([])
+
+  async function searchClients(name) {
+    if (!name || name.length < 2) { setClientSuggestions([]); return }
+    try {
+      const res = await api.get(`/org/clients/?search=${name}`)
+      setClientSuggestions(res.data.results || res.data)
+    } catch {}
+  }
+
+  function fillFromClient(client) {
+    setQForm(f => ({
+      ...f,
+      client_name: client.name,
+      client_contact: client.contact_name || '',
+      client_email: client.contact_email || '',
+      client_phone: client.contact_phone || '',
+      client_address: client.billing_address || '',
+    }))
+    setClientSuggestions([])
+  }
+
   async function lookupProject(project_no) {
     if (!project_no) return
     try {
@@ -249,7 +271,24 @@ export default function Finance() {
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                   </div>
                   {inp('Issue Date *', 'issue_date', qForm, setQForm, { required: true, type: 'date' })}
-                  {inp('Client Name *', 'client_name', qForm, setQForm, { required: true })}
+                  <div className="relative">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Client Name *</label>
+                    <input required value={qForm.client_name}
+                      onChange={e => { setQForm(f => ({ ...f, client_name: e.target.value })); searchClients(e.target.value) }}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                      placeholder="Type to search clients..." />
+                    {clientSuggestions.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {clientSuggestions.map(c => (
+                          <button key={c.id} type="button" onClick={() => fillFromClient(c)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                            <span className="font-medium text-gray-800">{c.name}</span>
+                            {c.contact_name && <span className="text-gray-400 ml-2 text-xs">· {c.contact_name}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {inp('Valid Until', 'valid_until', qForm, setQForm, { type: 'date' })}
                   {inp('Contact Person', 'client_contact', qForm, setQForm)}
                   {inp('Phone', 'client_phone', qForm, setQForm)}

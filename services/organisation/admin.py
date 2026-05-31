@@ -1,6 +1,6 @@
 from django.contrib import admin
 from shared.admin import TenantModelAdmin
-from .models import Company, Department, Team, Position, Site
+from .models import Company, Department, Team, Position, Site, Client
 
 
 @admin.register(Company)
@@ -35,3 +35,10 @@ class SiteAdmin(TenantModelAdmin):
     list_display = ['name', 'type', 'address', 'postal_code', 'contact_name', 'tenant']
     search_fields = ['name', 'address', 'contact_name']
     list_filter = ['type', 'tenant']
+
+
+@admin.register(Client)
+class ClientAdmin(TenantModelAdmin):
+    list_display = ['name', 'uen', 'contact_name', 'contact_email', 'contact_phone']
+    search_fields = ['name', 'uen', 'contact_name', 'contact_email']
+    ordering = ['name']

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Department, Team, Position, Site
+from .models import Company, Department, Team, Position, Site, Client
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -33,5 +33,12 @@ class PositionSerializer(serializers.ModelSerializer):
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
+        exclude = ['tenant']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ClientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Client
         exclude = ['tenant']
         read_only_fields = ['id', 'created_at', 'updated_at']
