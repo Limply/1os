@@ -16,7 +16,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return obj.department.name if obj.department else None
 
     def get_position_name(self, obj):
-        return obj.position.name if obj.position else None
+        return obj.position.title if obj.position else None
 
 
 class LeaveTypeSerializer(serializers.ModelSerializer):
