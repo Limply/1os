@@ -32,19 +32,19 @@ class FileBrowserStorage(Storage):
     def _headers(self):
         if not self._token:
             self._login()
-        return {'Authorization': f'Bearer {self._token}'}
+        return {'X-Auth': self._token}
 
     def _save(self, name, content):
         ext = os.path.splitext(name)[1].lower()
         filename = f"{uuid.uuid4().hex}{ext}"
+        folder = self.scope.strip('/')
 
         def do_upload(headers):
             content.seek(0)
             return requests.post(
-                f'{self.base_url}/api/upload',
+                f'{self.base_url}/api/resources/{folder}/{filename}',
                 headers=headers,
-                params={'destination': self.scope, 'override': 'true'},
-                files={'files': (filename, content, 'application/octet-stream')},
+                data=content,
                 timeout=30,
             )
 
@@ -56,18 +56,18 @@ class FileBrowserStorage(Storage):
         return filename
 
     def url(self, name):
-        return f'{self.base_url}/files{self.scope}{name}'
+        folder = self.scope.strip('/')
+        return f'{self.base_url}/files/{folder}/{name}'
 
     def exists(self, name):
-        # UUID filenames — always unique, no collision check needed
         return False
 
     def delete(self, name):
         try:
-            headers = self._headers()
+            folder = self.scope.strip('/')
             requests.delete(
-                f'{self.base_url}/api/resources{self.scope}{name}',
-                headers=headers,
+                f'{self.base_url}/api/resources/{folder}/{name}',
+                headers=self._headers(),
                 timeout=10,
             )
         except Exception:
