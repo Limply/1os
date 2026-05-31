@@ -11,10 +11,16 @@ class TaskInline(admin.TabularInline):
 
 @admin.register(Project)
 class ProjectAdmin(TenantModelAdmin):
-    list_display = ['name', 'type', 'status', 'priority', 'client_name', 'manager', 'progress', 'end_date']
-    search_fields = ['name', 'client_name']
+    list_display = ['project_no', 'name', 'type', 'status', 'priority', 'client_name', 'manager', 'progress', 'end_date']
+    search_fields = ['project_no', 'name', 'client_name']
     list_filter = ['type', 'status', 'priority']
     ordering = ['-created_at']
+    readonly_fields = ['project_no']
+    fieldsets = [
+        (None, {'fields': ['project_no', 'name', 'type', 'status', 'priority', 'description']}),
+        ('Client', {'fields': ['client_name', 'client_contact', 'client_email', 'client_phone', 'client_address']}),
+        ('Schedule', {'fields': ['start_date', 'end_date', 'manager', 'members']}),
+    ]
     inlines = [TaskInline]
 
 
