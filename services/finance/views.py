@@ -1,8 +1,9 @@
 from rest_framework import viewsets, permissions
-from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment
+from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem
 from .serializers import (
     QuotationSerializer, QuotationItemSerializer,
     InvoiceSerializer, InvoiceItemSerializer, PaymentSerializer,
+    DeliveryOrderSerializer, DeliveryOrderItemSerializer,
 )
 
 
@@ -39,3 +40,13 @@ class InvoiceItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 class PaymentViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Payment.objects.select_related('invoice')
     serializer_class = PaymentSerializer
+
+
+class DeliveryOrderViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = DeliveryOrder.objects.prefetch_related('items')
+    serializer_class = DeliveryOrderSerializer
+
+
+class DeliveryOrderItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = DeliveryOrderItem.objects.select_related('delivery_order')
+    serializer_class = DeliveryOrderItemSerializer

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from shared.admin import TenantModelAdmin
-from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment
+from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem
 
 
 class QuotationItemInline(admin.TabularInline):
@@ -47,3 +47,18 @@ class PaymentAdmin(TenantModelAdmin):
     search_fields = ['invoice__invoice_no', 'reference']
     list_filter = ['method']
     ordering = ['-payment_date']
+
+
+class DeliveryOrderItemInline(admin.TabularInline):
+    model = DeliveryOrderItem
+    extra = 0
+    fields = ['description', 'unit', 'qty', 'remarks', 'sort_order']
+
+
+@admin.register(DeliveryOrder)
+class DeliveryOrderAdmin(TenantModelAdmin):
+    list_display = ['do_no', 'client_name', 'status', 'issue_date', 'delivery_date', 'delivered_by']
+    search_fields = ['do_no', 'client_name']
+    list_filter = ['status']
+    ordering = ['-issue_date']
+    inlines = [DeliveryOrderItemInline]

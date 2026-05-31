@@ -134,6 +134,55 @@ class InvoiceItem(BaseModel):
         super().save(*args, **kwargs)
 
 
+class DeliveryOrder(BaseModel):
+    """Delivery order issued to client for goods/materials delivered on site."""
+    STATUS_CHOICES = [
+        ('draft',       'Draft'),
+        ('issued',      'Issued'),
+        ('delivered',   'Delivered'),
+        ('acknowledged','Acknowledged'),
+        ('cancelled',   'Cancelled'),
+    ]
+
+    do_no = models.CharField(max_length=20, unique=True)
+    quotation = models.ForeignKey(
+        Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_orders'
+    )
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_orders'
+    )
+    client_name = models.CharField(max_length=255)
+    delivery_address = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    issue_date = models.DateField()
+    delivery_date = models.DateField(null=True, blank=True)
+    delivered_by = models.CharField(max_length=255, blank=True, null=True, help_text='Driver or transporter name')
+    received_by = models.CharField(max_length=255, blank=True, null=True, help_text='Person who received on site')
+    notes = models.TextField(blank=True, null=True)
+    prepared_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_orders'
+    )
+
+    def __str__(self):
+        return f"{self.do_no} — {self.client_name}"
+
+
+class DeliveryOrderItem(BaseModel):
+    """Line item on a delivery order."""
+    delivery_order = models.ForeignKey(DeliveryOrder, on_delete=models.CASCADE, related_name='items')
+    description = models.TextField()
+    unit = models.CharField(max_length=20, blank=True, null=True)
+    qty = models.DecimalField(max_digits=10, decimal_places=2)
+    remarks = models.CharField(max_length=255, blank=True, null=True)
+    sort_order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order']
+
+    def __str__(self):
+        return f"{self.delivery_order.do_no} — {self.description[:50]}"
+
+
 class Payment(BaseModel):
     """Individual payment against an invoice, enabling partial payment history."""
     PAYMENT_METHODS = [
