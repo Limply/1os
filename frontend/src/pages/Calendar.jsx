@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import FullCalendar from '@fullcalendar/react'
-import dayGridPlugin from '@fullcalendar/daygrid'
-import listPlugin from '@fullcalendar/list'
-import interactionPlugin from '@fullcalendar/interaction'
+import { useEffect, useState } from 'react'
+
+import CalendarView from '../components/CalendarView'
 import api from '../api/axios'
 
 const USER_COLORS = [
@@ -29,8 +27,6 @@ export default function Calendar() {
   const [editTask, setEditTask] = useState({}) // { title, assigned_to }
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
-  const calendarRef = useRef(null)
-
   useEffect(() => {
     Promise.all([
       api.get('/projects/tasks/'),
@@ -180,23 +176,7 @@ export default function Calendar() {
 
       {/* Calendar */}
       <div className="p-3">
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, listPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,listMonth',
-            }}
-            events={events}
-            eventClick={handleEventClick}
-            height="auto"
-            eventDisplay="block"
-            dayMaxEvents={3}
-          />
-        </div>
+        <CalendarView events={events} onEventClick={handleEventClick} />
       </div>
 
       {/* Unscheduled tasks */}
