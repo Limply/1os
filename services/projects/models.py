@@ -11,7 +11,7 @@ def _generate_project_no(tenant):
         tenant=tenant, project_no__startswith=prefix
     ).order_by('-project_no').first()
     seq = int(last.project_no.split('-')[-1]) + 1 if last else 1
-    return f'{prefix}{seq:04d}'
+    return f'{prefix}{seq:03d}'
 
 
 class Project(BaseModel):

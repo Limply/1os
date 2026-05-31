@@ -6,7 +6,7 @@ def assign_project_numbers(apps, schema_editor):
     Project = apps.get_model('projects', 'Project')
     year = str(datetime.date.today().year)[2:]
     for i, project in enumerate(Project.objects.all().order_by('created_at'), 1):
-        project.project_no = f'AST-{year}-{i:04d}'
+        project.project_no = f'AST-{year}-{i:03d}'
         project.save(update_fields=['project_no'])
 
 
