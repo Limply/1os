@@ -1,6 +1,40 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
 import ProjectDetail from './ProjectDetail'
+
+const DEFAULT_WIDTHS = { no: 110, name: 220, client: 160, contact: 140, status: 100, priority: 90, progress: 110, tasks: 60 }
+
+function ResizableHeader({ label, colKey, widths, setWidths, align = 'left' }) {
+  const startX = useRef(null)
+  const startW = useRef(null)
+
+  function onMouseDown(e) {
+    e.preventDefault()
+    startX.current = e.clientX
+    startW.current = widths[colKey]
+    const onMove = ev => {
+      const delta = ev.clientX - startX.current
+      setWidths(w => ({ ...w, [colKey]: Math.max(50, startW.current + delta) }))
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  return (
+    <th style={{ width: widths[colKey], minWidth: widths[colKey], position: 'relative' }}
+      className="px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide select-none"
+    >
+      <span className={`block text-${align}`}>{label}</span>
+      <div onMouseDown={onMouseDown}
+        className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-blue-300 opacity-0 hover:opacity-100 transition-opacity"
+      />
+    </th>
+  )
+}
 
 const STATUS_COLORS = {
   planning:  'bg-gray-100 text-gray-600',
@@ -26,6 +60,7 @@ export default function Projects() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [widths, setWidths] = useState(DEFAULT_WIDTHS)
 
   useEffect(() => { fetchProjects() }, [])
 
@@ -148,18 +183,18 @@ export default function Projects() {
           <p className="text-sm mt-1">Click "+ New Project" to get started</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+          <table className="text-sm" style={{ tableLayout: 'fixed', width: Object.values(widths).reduce((a, b) => a + b, 0) }}>
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3 text-left">Project No.</th>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-left">Client</th>
-                <th className="px-4 py-3 text-left">Contact</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Priority</th>
-                <th className="px-4 py-3 text-right">Progress</th>
-                <th className="px-4 py-3 text-right">Tasks</th>
+              <tr>
+                <ResizableHeader label="Project No." colKey="no"       widths={widths} setWidths={setWidths} />
+                <ResizableHeader label="Name"         colKey="name"     widths={widths} setWidths={setWidths} />
+                <ResizableHeader label="Client"       colKey="client"   widths={widths} setWidths={setWidths} />
+                <ResizableHeader label="Contact"      colKey="contact"  widths={widths} setWidths={setWidths} />
+                <ResizableHeader label="Status"       colKey="status"   widths={widths} setWidths={setWidths} />
+                <ResizableHeader label="Priority"     colKey="priority" widths={widths} setWidths={setWidths} />
+                <ResizableHeader label="Progress"     colKey="progress" widths={widths} setWidths={setWidths} align="right" />
+                <ResizableHeader label="Tasks"        colKey="tasks"    widths={widths} setWidths={setWidths} align="right" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
