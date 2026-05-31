@@ -22,7 +22,12 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')
 
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='https://ast1.sim-eng.com').split(',')
+
 # Security headers
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_SECURE = True    # only send session cookie over HTTPS
+CSRF_COOKIE_SECURE = True       # only send CSRF cookie over HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # trust Cloudflare's HTTPS header
