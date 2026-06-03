@@ -264,7 +264,7 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             clock_status, clock_time = self._clock_status(s)
             writer.writerow([
                 s.employee.emp_no, s.employee.first_name, s.employee.last_name,
-                s.date, s.shift_start, s.shift_end,
+                s.date.strftime('%Y-%m-%d'), s.shift_start, s.shift_end,
                 s.location_name, s.location_lat, s.location_lng, s.radius,
                 clock_status, clock_time,
             ])
@@ -351,9 +351,18 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 continue
 
             try:
-                date_obj = datetime.strptime(str(date_val).split(' ')[0], '%Y-%m-%d').date()
+                date_str = str(date_val).split(' ')[0].split('T')[0]
+                date_obj = None
+                for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y'):
+                    try:
+                        date_obj = datetime.strptime(date_str, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                if not date_obj:
+                    raise ValueError
             except ValueError:
-                errors.append(f'{line}: Invalid date "{date_val}" — use YYYY-MM-DD')
+                errors.append(f'{line}: Invalid date "{date_val}" — use YYYY-MM-DD or DD/MM/YYYY')
                 continue
 
             # Check for duplicate
