@@ -264,7 +264,7 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             clock_status, clock_time = self._clock_status(s)
             writer.writerow([
                 s.employee.emp_no, s.employee.first_name, s.employee.last_name,
-                s.date.strftime('%Y-%m-%d'), s.shift_start, s.shift_end,
+                s.date.strftime('%d-%m-%Y'), s.shift_start, s.shift_end,
                 s.location_name, s.location_lat, s.location_lng, s.radius,
                 clock_status, clock_time,
             ])
@@ -280,7 +280,7 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             clock_status, clock_time = self._clock_status(s)
             ws.append([
                 s.employee.emp_no, s.employee.first_name, s.employee.last_name,
-                str(s.date), str(s.shift_start), str(s.shift_end),
+                s.date.strftime('%d-%m-%Y'), str(s.shift_start), str(s.shift_end),
                 s.location_name, float(s.location_lat), float(s.location_lng), s.radius,
                 clock_status, clock_time,
             ])
@@ -353,7 +353,7 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             try:
                 date_str = str(date_val).split(' ')[0].split('T')[0]
                 date_obj = None
-                for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y'):
+                for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y'):
                     try:
                         date_obj = datetime.strptime(date_str, fmt).date()
                         break
