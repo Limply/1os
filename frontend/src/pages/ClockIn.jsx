@@ -54,8 +54,9 @@ export default function ClockIn() {
   // Start camera
   const startCamera = async () => {
     try {
+      setMessage('🔄 Opening camera...')
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: 'user' },
         audio: false,
       })
       if (videoRef.current) {
@@ -65,8 +66,8 @@ export default function ClockIn() {
         setMessage('')
       }
     } catch (err) {
-      setMessage(`📹 Camera error: ${err.name} — ${err.message}`)
       console.error('Camera error:', err)
+      setMessage(`❌ Camera: ${err.name} — ${err.message}`)
     }
   }
 
@@ -205,21 +206,17 @@ export default function ClockIn() {
       <div className="flex-1 p-6 flex flex-col items-center justify-center max-w-2xl mx-auto w-full">
         {/* Camera Section */}
         <div className="w-full bg-black rounded-lg overflow-hidden shadow-lg mb-6">
-          {cameraActive ? (
+          {photoPreview ? (
+            <img src={photoPreview} alt="Preview" className="w-full h-96 object-cover" />
+          ) : (
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
               className="w-full h-96 object-cover bg-black"
-              style={{ transform: 'scaleX(-1)' }}
+              style={{ transform: cameraActive ? 'scaleX(-1)' : 'none' }}
             />
-          ) : photoPreview ? (
-            <img src={photoPreview} alt="Preview" className="w-full h-96 object-cover" />
-          ) : (
-            <div className="w-full h-96 bg-gray-800 flex items-center justify-center text-gray-500">
-              <span>No camera access / photo ready</span>
-            </div>
           )}
           <canvas ref={canvasRef} className="hidden" />
         </div>
