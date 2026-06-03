@@ -61,8 +61,8 @@ function StaffCard({ node, depth, onSelect, highlight, isLeaf }) {
         {/* Text info */}
         <div style={{ textAlign: isLeaf ? 'left' : 'center', minWidth: isLeaf ? 'auto' : '100%' }}>
           <p style={{ fontSize: '0.75rem', fontWeight: 'bold', lineHeight: '1', margin: 0 }}>{node.full_name}</p>
-          {!isLeaf && node.position_name && (
-            <p style={{ fontSize: '0.75rem', marginTop: 0.5, opacity: 0.8, margin: 0 }}>{node.position_name}</p>
+          {node.position_name && (
+            <p style={{ fontSize: isLeaf ? '0.7rem' : '0.75rem', marginTop: 0.5, opacity: 0.8, margin: 0 }}>{node.position_name}</p>
           )}
           {!isLeaf && node.department_name && (
             <p style={{ fontSize: '0.75rem', opacity: 0.6, margin: 0 }}>{node.department_name}</p>
