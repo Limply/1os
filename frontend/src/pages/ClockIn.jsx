@@ -183,11 +183,11 @@ export default function ClockIn() {
       const res = await api.post('/hr/attendance/clock_in/', formData)
       if (res.data.success) {
         setClockedIn(true)
-        setMessage(`✓ ${res.data.message}`)
+        setMessage(`✓ Clock In Accepted at ${new Date().toLocaleTimeString()}\n⏰ Remember to Clock Out later!`)
         setPhotoBlob(null)
         setPhotoPreview(null)
         setGpsCoords(null)
-        setTimeout(() => setMessage(''), 3000)
+        setTimeout(() => setMessage(''), 5000)
       } else {
         setMessage(`✗ ${res.data.message}`)
       }
@@ -220,11 +220,11 @@ export default function ClockIn() {
       const res = await api.post('/hr/attendance/clock_out/', formData)
       if (res.data.success) {
         setClockedIn(false)
-        setMessage(`✓ ${res.data.message} (${res.data.hours_worked}h)`)
+        setMessage(`✓ Clock Out Accepted at ${new Date().toLocaleTimeString()}\n⏱️ Total Hours: ${res.data.hours_worked}h\n✅ Have a great day!`)
         setPhotoBlob(null)
         setPhotoPreview(null)
         setGpsCoords(null)
-        setTimeout(() => setMessage(''), 3000)
+        setTimeout(() => setMessage(''), 5000)
       } else {
         setMessage(`✗ ${res.data.message}`)
       }
@@ -332,7 +332,7 @@ export default function ClockIn() {
 
         {/* Status Message */}
         {message && (
-          <div className={`w-full p-4 rounded-lg mb-6 text-center text-white font-semibold ${
+          <div className={`w-full p-4 rounded-lg mb-6 text-center text-white font-semibold whitespace-pre-line ${
             message.startsWith('✓') ? 'bg-green-600 bg-opacity-70' : 'bg-red-600 bg-opacity-70'
           }`}>
             {message}
