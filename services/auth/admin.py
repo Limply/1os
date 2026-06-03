@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import Group
 from .models import Tenant, User, PermissionGroup
 
 
@@ -54,3 +55,21 @@ class PermissionGroupAdmin(admin.ModelAdmin):
     def has_module_perms(self, request):
         """Only superusers can see/manage permission groups."""
         return request.user.is_superuser
+
+
+# Unregister and re-register Django's Group with proper tenant permissions
+admin.site.unregister(Group)
+
+@admin.register(Group)
+class GroupAdmin(admin.ModelAdmin):
+    """Django's built-in Group with tenant scoping."""
+    list_display = ['name']
+    search_fields = ['name']
+
+    def has_module_perms(self, request):
+        """Tenant admins can manage groups in their tenant."""
+        if request.user.is_superuser:
+            return True
+        if request.user.role in ('admin', 'superadmin'):
+            return True
+        return False

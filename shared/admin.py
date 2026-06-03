@@ -58,6 +58,11 @@ class TenantModelAdmin(admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
         """Filter FK dropdowns to current tenant for non-superusers."""
         if request and not request.user.is_superuser:
-            # Filter the queryset for this FK to the user's tenant
-            kwargs['queryset'] = db_field.remote_field.model.objects.filter(tenant=request.user.tenant)
+            model = db_field.remote_field.model
+            # Only filter if the remote model has a tenant field
+            try:
+                model._meta.get_field('tenant')
+                kwargs['queryset'] = model.objects.filter(tenant=request.user.tenant)
+            except:
+                pass
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
