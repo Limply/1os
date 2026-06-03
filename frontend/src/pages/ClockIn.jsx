@@ -55,7 +55,8 @@ export default function ClockIn() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
       })
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -64,7 +65,8 @@ export default function ClockIn() {
         setMessage('')
       }
     } catch (err) {
-      setMessage(`Camera error: ${err.message}`)
+      setMessage(`📹 Camera error: ${err.name} — ${err.message}`)
+      console.error('Camera error:', err)
     }
   }
 
@@ -208,7 +210,9 @@ export default function ClockIn() {
               ref={videoRef}
               autoPlay
               playsInline
-              className="w-full h-96 object-cover"
+              muted
+              className="w-full h-96 object-cover bg-black"
+              style={{ transform: 'scaleX(-1)' }}
             />
           ) : photoPreview ? (
             <img src={photoPreview} alt="Preview" className="w-full h-96 object-cover" />
