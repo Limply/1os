@@ -75,11 +75,13 @@ function renderTree(node, depth, onSelect, highlight) {
 
 function HorizontalNode({ node, depth, onSelect, highlight }) {
   if (!node) return null
+  const allLeaves = node.children?.every(c => !c.children?.length)
+
   return (
     <div className="flex items-center">
       <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} />
       {node.children?.length > 0 && (
-        <div className="flex flex-col ml-6 pl-6 border-l-2 border-slate-300 gap-4">
+        <div className={`ml-6 pl-6 border-l-2 border-slate-300 ${allLeaves ? 'flex flex-row flex-wrap gap-3 items-center' : 'flex flex-col gap-4'}`}>
           {node.children.map(child => (
             <HorizontalNode key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
           ))}
