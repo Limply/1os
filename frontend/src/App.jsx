@@ -7,6 +7,7 @@ import Files from './pages/Files'
 import Projects from './pages/Projects'
 import HR from './pages/HR'
 import Finance from './pages/Finance'
+import OrgChart from './pages/OrgChart'
 import Calendar from './pages/Calendar'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/"           element={<Dashboard />} />
           <Route path="/projects"   element={<Projects />} />
           <Route path="/hr"         element={<HR />} />
+          <Route path="/orgchart"   element={<OrgChart />} />
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Finance />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />

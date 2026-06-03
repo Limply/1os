@@ -44,6 +44,10 @@ class Employee(BaseModel):
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     emergency_name = models.CharField(max_length=100, blank=True, null=True)
     emergency_phone = models.CharField(max_length=20, blank=True, null=True)
+    manager = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates'
+    )
+    photo = models.ImageField(upload_to='staff/photos/', null=True, blank=True)
 
     def __str__(self):
         return f"{self.emp_no} — {self.first_name} {self.last_name}"

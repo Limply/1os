@@ -2,7 +2,12 @@ import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
 
 const links = [
-  { to: '/',           label: 'Dashboard' },
+  {
+    to: '/', label: 'Dashboard',
+    children: [
+      { to: '/orgchart', label: 'Org Chart' },
+    ],
+  },
   {
     to: '/projects',   label: 'Projects',
     children: [

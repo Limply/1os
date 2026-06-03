@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
 from .serializers import (
-    EmployeeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
+    EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
 )
 
@@ -104,6 +104,18 @@ class PublicHolidayViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PublicHoliday.objects.all()
     serializer_class = PublicHolidaySerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def org_tree(request):
+    """Return recursive org chart tree from root(s)."""
+    tenant = request.user.tenant
+    roots = Employee.objects.filter(tenant=tenant, is_active=True, manager__isnull=True)
+    data = EmployeeTreeSerializer(roots, many=True, context={'request': request}).data
+    if len(data) == 1:
+        return Response(data[0])
+    return Response({'id': None, 'full_name': 'Company', 'children': data})
 
 
 @api_view(['GET'])
