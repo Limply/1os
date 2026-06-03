@@ -213,7 +213,7 @@ export default function Schedules() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Employee</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Location</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Shift</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Radius</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -226,7 +226,19 @@ export default function Schedules() {
                     <p className="text-xs text-gray-400">{s.location_lat}, {s.location_lng}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{s.shift_start} – {s.shift_end}</td>
-                  <td className="px-4 py-3 text-gray-600">{s.radius}m</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      s.clock_status === 'Done'    ? 'bg-green-100 text-green-700' :
+                      s.clock_status === 'Late'    ? 'bg-yellow-100 text-yellow-700' :
+                      s.clock_status === 'Missed'  ? 'bg-red-100 text-red-600' :
+                                                     'bg-gray-100 text-gray-500'
+                    }`}>
+                      {s.clock_status === 'Done'   ? '✓ Done' :
+                       s.clock_status === 'Late'   ? '⚠ Late' :
+                       s.clock_status === 'Missed' ? '✗ Missed' : '— Pending'}
+                      {s.clock_in_time && ` ${s.clock_in_time}`}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 flex gap-2 justify-end">
                     <button onClick={() => openEdit(s)}
                       className="text-xs text-blue-600 hover:underline">Edit</button>

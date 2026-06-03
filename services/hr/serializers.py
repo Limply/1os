@@ -121,6 +121,8 @@ class PublicHolidaySerializer(serializers.ModelSerializer):
 
 class WorkScheduleSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
+    clock_status = serializers.SerializerMethodField()
+    clock_in_time = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkSchedule
@@ -129,6 +131,19 @@ class WorkScheduleSerializer(serializers.ModelSerializer):
 
     def get_employee_name(self, obj):
         return obj.employee.full_name if obj.employee else None
+
+    def get_clock_status(self, obj):
+        from django.utils import timezone
+        record = obj.employee.attendance_records.filter(date=obj.date).first()
+        if not record or not record.clock_in:
+            return 'Missed' if obj.date < timezone.now().date() else 'Pending'
+        return 'Late' if record.status == 'late' else 'Done'
+
+    def get_clock_in_time(self, obj):
+        record = obj.employee.attendance_records.filter(date=obj.date).first()
+        if record and record.clock_in:
+            return record.clock_in.strftime('%H:%M')
+        return None
 
 
 class ClockInResponseSerializer(serializers.Serializer):

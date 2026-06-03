@@ -224,7 +224,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             )
 
 
-SCHEDULE_COLUMNS = ['emp_no', 'date', 'shift_start', 'shift_end', 'location_name', 'location_lat', 'location_lng', 'radius']
+SCHEDULE_COLUMNS = ['emp_no', 'first_name', 'last_name', 'date', 'shift_start', 'shift_end', 'location_name', 'location_lat', 'location_lng', 'radius', 'clock_in_status', 'clock_in_time']
 
 
 class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
@@ -241,6 +241,19 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             qs = qs.filter(employee_id=employee)
         return qs.order_by('date', 'shift_start')
 
+    def _clock_status(self, schedule):
+        """Return clock-in status for a schedule: Done, Late, or Missed."""
+        record = Attendance.objects.filter(
+            employee=schedule.employee, date=schedule.date
+        ).first()
+        if not record or not record.clock_in:
+            # If date is in the past with no clock-in, it's missed
+            if schedule.date < timezone.now().date():
+                return 'Missed', ''
+            return 'Pending', ''
+        clock_in_time = record.clock_in.strftime('%H:%M:%S')
+        return ('Late' if record.status == 'late' else 'Done'), clock_in_time
+
     @action(detail=False, methods=['get'])
     def export_csv(self, request):
         response = HttpResponse(content_type='text/csv')
@@ -248,9 +261,12 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         writer = csv.writer(response)
         writer.writerow(SCHEDULE_COLUMNS)
         for s in self.get_queryset():
+            clock_status, clock_time = self._clock_status(s)
             writer.writerow([
-                s.employee.emp_no, s.date, s.shift_start, s.shift_end,
+                s.employee.emp_no, s.employee.first_name, s.employee.last_name,
+                s.date, s.shift_start, s.shift_end,
                 s.location_name, s.location_lat, s.location_lng, s.radius,
+                clock_status, clock_time,
             ])
         return response
 
@@ -261,9 +277,12 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         ws.title = 'Schedules'
         ws.append(SCHEDULE_COLUMNS)
         for s in self.get_queryset():
+            clock_status, clock_time = self._clock_status(s)
             ws.append([
-                s.employee.emp_no, str(s.date), str(s.shift_start), str(s.shift_end),
+                s.employee.emp_no, s.employee.first_name, s.employee.last_name,
+                str(s.date), str(s.shift_start), str(s.shift_end),
                 s.location_name, float(s.location_lat), float(s.location_lng), s.radius,
+                clock_status, clock_time,
             ])
         # Auto-width columns
         for col in ws.columns:
