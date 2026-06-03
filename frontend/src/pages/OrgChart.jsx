@@ -75,16 +75,32 @@ function renderTree(node, depth, onSelect, highlight) {
 
 function HorizontalNode({ node, depth, onSelect, highlight }) {
   if (!node) return null
-  const allLeaves = node.children?.every(c => !c.children?.length)
+  const hasChildren = node.children?.length > 0
+  const allLeaves = hasChildren && node.children.every(c => !c.children?.length)
 
   return (
-    <div className="flex items-center">
+    <div style={{ display: 'flex', alignItems: 'center' }}>
       <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} />
-      {node.children?.length > 0 && (
-        <div className={`ml-6 pl-6 border-l-2 border-slate-300 ${allLeaves ? 'flex flex-row flex-wrap gap-3 items-center' : 'flex flex-col gap-4'}`}>
-          {node.children.map(child => (
-            <HorizontalNode key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
-          ))}
+      {hasChildren && (
+        <div style={{
+          marginLeft: 24, paddingLeft: 24,
+          borderLeft: '2px solid #cbd5e1',
+          display: 'flex',
+          flexDirection: allLeaves ? 'row' : 'column',
+          flexWrap: allLeaves ? 'wrap' : 'nowrap',
+          gap: 12,
+          alignItems: allLeaves ? 'flex-start' : 'flex-start',
+        }}>
+          {allLeaves
+            ? node.children.map(child => (
+                <div key={child.id} style={{ display: 'inline-block' }}>
+                  <StaffCard node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
+                </div>
+              ))
+            : node.children.map(child => (
+                <HorizontalNode key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
+              ))
+          }
         </div>
       )}
     </div>
