@@ -9,6 +9,10 @@ class TenantAdmin(admin.ModelAdmin):
     search_fields = ['name', 'schema_name', 'domain']
     list_filter = ['plan']
 
+    def has_module_perms(self, request):
+        """Only superusers can see/manage tenants."""
+        return request.user.is_superuser
+
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
@@ -25,9 +29,28 @@ class UserAdmin(BaseUserAdmin):
         (None, {'fields': ('email', 'password1', 'password2', 'tenant', 'role')}),
     )
 
+    def get_queryset(self, request):
+        """Tenant admins only see users from their own tenant."""
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(tenant=request.user.tenant)
+
+    def has_module_perms(self, request):
+        """Tenant admins can manage users in their tenant."""
+        if request.user.is_superuser:
+            return True
+        if request.user.role in ('admin', 'superadmin'):
+            return True
+        return False
+
 
 @admin.register(PermissionGroup)
 class PermissionGroupAdmin(admin.ModelAdmin):
     list_display = ['name', 'tenant', 'is_active']
     search_fields = ['name']
     list_filter = ['tenant', 'is_active']
+
+    def has_module_perms(self, request):
+        """Only superusers can see/manage permission groups."""
+        return request.user.is_superuser
