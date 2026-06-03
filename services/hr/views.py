@@ -15,6 +15,7 @@ from .serializers import (
 )
 from shared.permissions import IsClockInAllowed
 from shared.utils import haversine_distance
+from shared.filebrowser_csv import read_csv as fb_read_csv, write_csv as fb_write_csv
 
 
 class TenantScopedMixin:
@@ -107,11 +108,11 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         try:
             employee = request.user.employee_profile
             today = timezone.now().date()
+            today_str = today.strftime('%d-%m-%Y')
 
-            # Check schedule exists
-            schedule = WorkSchedule.objects.filter(
-                employee=employee, date=today, is_active=True
-            ).first()
+            # Check schedule exists in CSV
+            rows = fb_read_csv(CSV_PATH)
+            schedule = next((r for r in rows if r.get('emp_no') == employee.emp_no and r.get('date') == today_str), None)
             if not schedule:
                 return Response(
                     {'success': False, 'message': 'No schedule assigned for today. Contact your supervisor.'},
@@ -122,16 +123,19 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             gps_lat = request.data.get('gps_lat')
             gps_lng = request.data.get('gps_lng')
             if gps_lat and gps_lng:
-                distance = haversine_distance(gps_lat, gps_lng, schedule.location_lat, schedule.location_lng)
-                if distance > schedule.radius:
+                distance = haversine_distance(gps_lat, gps_lng, schedule['location_lat'], schedule['location_lng'])
+                radius = int(schedule.get('radius', 200))
+                if distance > radius:
                     return Response({
                         'success': False,
-                        'message': f'You are {int(distance)}m away from {schedule.location_name}. Must be within {schedule.radius}m to clock in.'
+                        'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Must be within {radius}m to clock in.'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             # Flag late if past shift_start
             now = timezone.now()
-            attendance_status = 'late' if now.time() > schedule.shift_start else 'present'
+            from datetime import time as time_type
+            shift_start = datetime.strptime(schedule.get('shift_start', '00:00'), '%H:%M').time()
+            attendance_status = 'late' if now.time() > shift_start else 'present'
 
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
@@ -162,9 +166,9 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 'photo_url': photo_url,
                 'gps_location': record.clock_in_gps,
                 'schedule': {
-                    'location': schedule.location_name,
-                    'shift_start': str(schedule.shift_start),
-                    'shift_end': str(schedule.shift_end),
+                    'location': schedule['location_name'],
+                    'shift_start': schedule['shift_start'],
+                    'shift_end': schedule['shift_end'],
                 },
             }
             return Response(response, status=status.HTTP_200_OK)
@@ -224,77 +228,167 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             )
 
 
-SCHEDULE_COLUMNS = ['emp_no', 'first_name', 'last_name', 'date', 'shift_start', 'shift_end', 'location_name', 'location_lat', 'location_lng', 'radius', 'clock_in_status', 'clock_in_time']
+CSV_PATH = '1os/database/Work_schedule.csv'
 
 
-class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
-    queryset = WorkSchedule.objects.select_related('employee')
-    serializer_class = WorkScheduleSerializer
+def _try_parse(val):
+    try:
+        return _parse_date(val)
+    except Exception:
+        return None
+CSV_FIELDS = ['emp_no', 'first_name', 'last_name', 'date', 'shift_start', 'shift_end', 'location_name', 'location_lat', 'location_lng', 'radius']
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        date = self.request.query_params.get('date')
-        employee = self.request.query_params.get('employee')
-        if date:
-            qs = qs.filter(date=date)
-        if employee:
-            qs = qs.filter(employee_id=employee)
-        return qs.order_by('date', 'shift_start')
 
-    def _clock_status(self, schedule):
-        """Return clock-in status for a schedule: Done, Late, or Missed."""
-        record = Attendance.objects.filter(
-            employee=schedule.employee, date=schedule.date
-        ).first()
-        if not record or not record.clock_in:
-            # If date is in the past with no clock-in, it's missed
-            if schedule.date < timezone.now().date():
-                return 'Missed', ''
-            return 'Pending', ''
-        clock_in_time = record.clock_in.strftime('%H:%M:%S')
-        return ('Late' if record.status == 'late' else 'Done'), clock_in_time
+def _parse_date(val):
+    """Parse date string accepting DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD."""
+    s = str(val).split(' ')[0].split('T')[0]
+    for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f'Invalid date: {val}')
 
-    @action(detail=False, methods=['get'])
-    def export_csv(self, request):
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="schedules.csv"'
-        writer = csv.writer(response)
-        writer.writerow(SCHEDULE_COLUMNS)
-        for s in self.get_queryset():
-            clock_status, clock_time = self._clock_status(s)
-            writer.writerow([
-                s.employee.emp_no, s.employee.first_name, s.employee.last_name,
-                s.date.strftime('%d-%m-%Y'), s.shift_start, s.shift_end,
-                s.location_name, s.location_lat, s.location_lng, s.radius,
-                clock_status, clock_time,
-            ])
-        return response
+
+def _row_clock_status(emp, date_obj):
+    record = Attendance.objects.filter(employee=emp, date=date_obj).first()
+    if not record or not record.clock_in:
+        return ('Missed' if date_obj < timezone.now().date() else 'Pending'), None
+    return ('Late' if record.status == 'late' else 'Done'), record.clock_in.strftime('%H:%M')
+
+
+def _enrich(row, tenant):
+    """Add id, employee_name, clock_status, clock_in_time to a CSV row dict."""
+    try:
+        date_obj = _parse_date(row.get('date', ''))
+    except ValueError:
+        row['id'] = f"{row.get('emp_no','')}_{row.get('date','')}"
+        row['employee_name'] = f"{row.get('first_name','')} {row.get('last_name','')}".strip()
+        row['clock_status'] = 'Pending'
+        row['clock_in_time'] = None
+        return row
+
+    emp = Employee.objects.filter(emp_no=row.get('emp_no', ''), tenant=tenant).first()
+    row['id'] = f"{row['emp_no']}_{date_obj.strftime('%d-%m-%Y')}"
+    row['employee_name'] = emp.full_name if emp else f"{row.get('first_name','')} {row.get('last_name','')}".strip()
+    clock_status, clock_time = _row_clock_status(emp, date_obj) if emp else ('Pending', None)
+    row['clock_status'] = clock_status
+    row['clock_in_time'] = clock_time
+    return row
+
+
+class WorkScheduleViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _tenant_emp_nos(self, tenant):
+        return set(Employee.objects.filter(tenant=tenant, is_active=True).values_list('emp_no', flat=True))
+
+    def list(self, request):
+        tenant = request.user.tenant
+        emp_nos = self._tenant_emp_nos(tenant)
+        rows = [r for r in fb_read_csv(CSV_PATH) if r.get('emp_no', '') in emp_nos]
+
+        date_filter = request.query_params.get('date')
+        emp_filter = request.query_params.get('employee')
+
+        if date_filter:
+            rows = [r for r in rows if r.get('date') == date_filter or
+                    (lambda d: d.strftime('%d-%m-%Y') == date_filter if d else False)(_try_parse(r.get('date', '')))]
+        if emp_filter:
+            emp = Employee.objects.filter(id=emp_filter, tenant=tenant).first()
+            if emp:
+                rows = [r for r in rows if r.get('emp_no') == emp.emp_no]
+
+        rows = sorted(rows, key=lambda r: (r.get('date', ''), r.get('shift_start', '')))
+        rows = [_enrich(r, tenant) for r in rows]
+        return Response({'results': rows, 'count': len(rows)})
+
+    def create(self, request):
+        tenant = request.user.tenant
+        emp_id = request.data.get('employee')
+        emp = Employee.objects.filter(id=emp_id, tenant=tenant).first() if emp_id else None
+        if not emp:
+            return Response({'error': 'Employee not found'}, status=400)
+
+        try:
+            date_obj = _parse_date(request.data.get('date', ''))
+        except ValueError:
+            return Response({'error': 'Invalid date format'}, status=400)
+
+        date_str = date_obj.strftime('%d-%m-%Y')
+        rows = fb_read_csv(CSV_PATH)
+
+        if any(r.get('emp_no') == emp.emp_no and r.get('date') == date_str for r in rows):
+            return Response({'error': f'Schedule already exists for {emp.emp_no} on {date_str}'}, status=400)
+
+        new_row = {
+            'emp_no': emp.emp_no,
+            'first_name': emp.first_name,
+            'last_name': emp.last_name,
+            'date': date_str,
+            'shift_start': request.data.get('shift_start', ''),
+            'shift_end': request.data.get('shift_end', ''),
+            'location_name': request.data.get('location_name', ''),
+            'location_lat': request.data.get('location_lat', ''),
+            'location_lng': request.data.get('location_lng', ''),
+            'radius': request.data.get('radius', 200),
+        }
+        rows.append(new_row)
+        fb_write_csv(CSV_PATH, rows, CSV_FIELDS)
+        return Response(_enrich(new_row, tenant), status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        tenant = request.user.tenant
+        emp_no, date_str = pk.rsplit('_', 1)
+        rows = fb_read_csv(CSV_PATH)
+        updated = None
+        for i, r in enumerate(rows):
+            if r.get('emp_no') == emp_no and r.get('date') == date_str:
+                rows[i].update({
+                    'shift_start': request.data.get('shift_start', r['shift_start']),
+                    'shift_end': request.data.get('shift_end', r['shift_end']),
+                    'location_name': request.data.get('location_name', r['location_name']),
+                    'location_lat': request.data.get('location_lat', r['location_lat']),
+                    'location_lng': request.data.get('location_lng', r['location_lng']),
+                    'radius': request.data.get('radius', r['radius']),
+                })
+                updated = rows[i]
+                break
+        if not updated:
+            return Response({'error': 'Schedule not found'}, status=404)
+        fb_write_csv(CSV_PATH, rows, CSV_FIELDS)
+        return Response(_enrich(updated, tenant))
+
+    def destroy(self, request, pk=None):
+        emp_no, date_str = pk.rsplit('_', 1)
+        rows = fb_read_csv(CSV_PATH)
+        rows = [r for r in rows if not (r.get('emp_no') == emp_no and r.get('date') == date_str)]
+        fb_write_csv(CSV_PATH, rows, CSV_FIELDS)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'])
     def export_excel(self, request):
+        tenant = request.user.tenant
+        emp_nos = self._tenant_emp_nos(tenant)
+        rows = [r for r in fb_read_csv(CSV_PATH) if r.get('emp_no', '') in emp_nos]
+        rows = [_enrich(r, tenant) for r in rows]
+
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = 'Schedules'
-        ws.append(SCHEDULE_COLUMNS)
-        for s in self.get_queryset():
-            clock_status, clock_time = self._clock_status(s)
-            ws.append([
-                s.employee.emp_no, s.employee.first_name, s.employee.last_name,
-                s.date.strftime('%d-%m-%Y'), str(s.shift_start), str(s.shift_end),
-                s.location_name, float(s.location_lat), float(s.location_lng), s.radius,
-                clock_status, clock_time,
-            ])
-        # Auto-width columns
+        headers = CSV_FIELDS + ['clock_in_status', 'clock_in_time']
+        ws.append(headers)
+        for r in rows:
+            ws.append([r.get(h, '') for h in headers])
         for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
-            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+            ws.column_dimensions[col[0].column_letter].width = max(len(str(c.value or '')) for c in col) + 4
 
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        response = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename="schedules.xlsx"'
-        return response
+        resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = 'attachment; filename="Work_schedule.xlsx"'
+        return resp
 
     @action(detail=False, methods=['post'])
     def import_file(self, request):
@@ -302,8 +396,7 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         if not file:
             return Response({'success': False, 'message': 'No file uploaded'}, status=400)
 
-        # Parse rows from CSV or Excel
-        rows = []
+        incoming = []
         filename = file.name.lower()
         try:
             if filename.endswith('.xlsx'):
@@ -312,26 +405,27 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 headers = [str(c.value).strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 for row in ws.iter_rows(min_row=2, values_only=True):
                     if any(v for v in row):
-                        rows.append(dict(zip(headers, row)))
+                        incoming.append(dict(zip(headers, [str(v) if v is not None else '' for v in row])))
             elif filename.endswith('.csv'):
                 text = file.read().decode('utf-8-sig')
                 reader = csv.DictReader(io.StringIO(text))
-                rows = [r for r in reader if any(v.strip() for v in r.values())]
+                incoming = [r for r in reader if any(str(v).strip() for v in r.values())]
             else:
                 return Response({'success': False, 'message': 'Only .csv or .xlsx files are supported'}, status=400)
         except Exception as e:
             return Response({'success': False, 'message': f'File parse error: {e}'}, status=400)
 
-        if not rows:
+        if not incoming:
             return Response({'success': False, 'message': 'File is empty'}, status=400)
 
         tenant = request.user.tenant
-        errors = []
+        emp_nos = self._tenant_emp_nos(tenant)
+        existing = fb_read_csv(CSV_PATH)
+        existing_keys = {(r.get('emp_no'), r.get('date')) for r in existing}
 
-        # Validate all rows first — reject entire file if any issues
+        errors = []
         validated = []
-        for i, row in enumerate(rows, start=2):
-            line = f'Row {i}'
+        for i, row in enumerate(incoming, start=2):
             emp_no = str(row.get('emp_no', '')).strip()
             date_val = str(row.get('date', '')).strip()
             shift_start = str(row.get('shift_start', '')).strip()
@@ -342,50 +436,40 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             radius = str(row.get('radius', '200')).strip() or '200'
 
             if not all([emp_no, date_val, shift_start, shift_end, location_name, location_lat, location_lng]):
-                errors.append(f'{line}: Missing required fields')
+                errors.append(f'Row {i}: Missing required fields')
+                continue
+            if emp_no not in emp_nos:
+                errors.append(f'Row {i}: Employee {emp_no} not found')
+                continue
+            try:
+                date_obj = _parse_date(date_val)
+                date_str = date_obj.strftime('%d-%m-%Y')
+            except ValueError:
+                errors.append(f'Row {i}: Invalid date "{date_val}" — use DD-MM-YYYY')
+                continue
+            if (emp_no, date_str) in existing_keys:
+                errors.append(f'Row {i}: Schedule already exists for {emp_no} on {date_str}')
                 continue
 
             emp = Employee.objects.filter(emp_no=emp_no, tenant=tenant).first()
-            if not emp:
-                errors.append(f'{line}: Employee {emp_no} not found')
-                continue
-
-            try:
-                date_str = str(date_val).split(' ')[0].split('T')[0]
-                date_obj = None
-                for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y'):
-                    try:
-                        date_obj = datetime.strptime(date_str, fmt).date()
-                        break
-                    except ValueError:
-                        continue
-                if not date_obj:
-                    raise ValueError
-            except ValueError:
-                errors.append(f'{line}: Invalid date "{date_val}" — use YYYY-MM-DD or DD/MM/YYYY')
-                continue
-
-            # Check for duplicate
-            if WorkSchedule.objects.filter(employee=emp, date=date_obj, tenant=tenant).exists():
-                errors.append(f'{line}: Schedule already exists for {emp_no} on {date_obj}')
-                continue
-
             validated.append({
-                'employee': emp, 'date': date_obj,
-                'shift_start': shift_start, 'shift_end': shift_end,
+                'emp_no': emp_no,
+                'first_name': emp.first_name if emp else '',
+                'last_name': emp.last_name if emp else '',
+                'date': date_str,
+                'shift_start': shift_start,
+                'shift_end': shift_end,
                 'location_name': location_name,
-                'location_lat': location_lat, 'location_lng': location_lng,
-                'radius': int(radius),
+                'location_lat': location_lat,
+                'location_lng': location_lng,
+                'radius': radius,
             })
 
         if errors:
-            return Response({'success': False, 'errors': errors, 'message': f'{len(errors)} error(s) found — nothing imported'}, status=400)
+            return Response({'success': False, 'errors': errors, 'message': f'{len(errors)} error(s) — nothing imported'}, status=400)
 
-        # All valid — save all
-        for v in validated:
-            WorkSchedule.objects.create(tenant=tenant, **v)
-
-        return Response({'success': True, 'message': f'{len(validated)} schedule(s) imported successfully'})
+        fb_write_csv(CSV_PATH, existing + validated, CSV_FIELDS)
+        return Response({'success': True, 'message': f'{len(validated)} schedule(s) imported'})
 
 
 class CertificationViewSet(TenantScopedMixin, viewsets.ModelViewSet):

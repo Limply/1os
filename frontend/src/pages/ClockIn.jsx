@@ -48,8 +48,9 @@ export default function ClockIn() {
   // Fetch today's schedule for this employee
   useEffect(() => {
     if (employee?.id) {
-      const today = new Date().toISOString().split('T')[0]
-      api.get(`/hr/work-schedules/?date=${today}&employee=${employee.id}`).then(res => {
+      const d = new Date()
+      const todayDD = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`
+      api.get(`/hr/work-schedules/?date=${todayDD}&employee=${employee.id}`).then(res => {
         const s = res.data.results?.[0] || null
         setSchedule(s)
       }).catch(console.error)

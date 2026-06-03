@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 
-const today = () => new Date().toISOString().split('T')[0]
+const todayStr = () => {
+  const d = new Date()
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`
+}
+const todayISO = () => new Date().toISOString().split('T')[0]
 
 const EMPTY_FORM = {
-  employee: '',
-  date: today(),
+  employee: '',   // UUID for dropdown
+  date: todayISO(),
   shift_start: '08:00',
   shift_end: '18:00',
   location_name: '',
@@ -19,7 +23,7 @@ export default function Schedules() {
   const user = getUser()
   const isManager = ['superadmin', 'admin', 'manager'].includes(user?.role)
 
-  const [date, setDate] = useState(today())
+  const [date, setDate] = useState(todayStr())
   const [schedules, setSchedules] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,20 +46,22 @@ export default function Schedules() {
     setLoading(true)
     api.get(`/hr/work-schedules/?date=${date}`).then(res => {
       setSchedules(res.data.results || [])
-    }).finally(() => setLoading(false))
+    }).catch(console.error).finally(() => setLoading(false))
   }, [date])
 
   const openAdd = () => {
-    setForm({ ...EMPTY_FORM, date })
+    setForm({ ...EMPTY_FORM, date: todayISO() })
     setEditingId(null)
     setError('')
     setShowModal(true)
   }
 
   const openEdit = (s) => {
+    // Find employee UUID from employees list using emp_no
+    const emp = employees.find(e => e.emp_no === s.emp_no)
     setForm({
-      employee: s.employee,
-      date: s.date,
+      employee: emp?.id || '',
+      date: todayISO(),  // not used for edits, just needed for form
       shift_start: s.shift_start,
       shift_end: s.shift_end,
       location_name: s.location_name,
@@ -63,7 +69,7 @@ export default function Schedules() {
       location_lng: s.location_lng,
       radius: s.radius,
     })
-    setEditingId(s.id)
+    setEditingId(s.id)   // id = "emp_no_date"
     setError('')
     setShowModal(true)
   }
@@ -90,13 +96,14 @@ export default function Schedules() {
       if (editingId) {
         await api.put(`/hr/work-schedules/${editingId}/`, form)
       } else {
+        // Send date as ISO; backend converts to DD-MM-YYYY
         await api.post('/hr/work-schedules/', form)
       }
       setShowModal(false)
       const res = await api.get(`/hr/work-schedules/?date=${date}`)
       setSchedules(res.data.results || [])
     } catch (err) {
-      setError(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Save failed')
+      setError(err.response?.data?.error || err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -109,7 +116,7 @@ export default function Schedules() {
   }
 
   const handleExportCSV = () => {
-    window.location.href = `/api/hr/work-schedules/export_csv/?date=${date}`
+    window.open('https://files.sim-eng.com/files/1os/database/Work_schedule.csv', '_blank')
   }
 
   const handleExportExcel = () => {
@@ -190,9 +197,16 @@ export default function Schedules() {
       {/* Date Filter */}
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-gray-600">Date:</label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+        <input type="date"
+          value={date.includes('-') && date.length === 10 && date[2] === '-'
+            ? date.split('-').reverse().join('-')
+            : date}
+          onChange={e => {
+            const [y,m,d] = e.target.value.split('-')
+            setDate(`${d}-${m}-${y}`)
+          }}
           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
-        <button onClick={() => setDate(today())}
+        <button onClick={() => setDate(todayStr())}
           className="text-xs text-blue-600 hover:underline">Today</button>
       </div>
 
