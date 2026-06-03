@@ -81,27 +81,49 @@ function HorizontalNode({ node, depth, onSelect, highlight }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
       <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} />
+
       {hasChildren && (
-        <div style={{
-          marginLeft: 24, paddingLeft: 24,
-          borderLeft: '2px solid #cbd5e1',
-          display: 'flex',
-          flexDirection: allLeaves ? 'row' : 'column',
-          flexWrap: allLeaves ? 'wrap' : 'nowrap',
-          gap: 12,
-          alignItems: allLeaves ? 'flex-start' : 'flex-start',
-        }}>
-          {allLeaves
-            ? node.children.map(child => (
-                <div key={child.id} style={{ display: 'inline-block' }}>
-                  <StaffCard node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
+        <>
+          {/* horizontal line from card toward children */}
+          <div style={{ width: 20, height: 2, background: '#cbd5e1', flexShrink: 0 }} />
+
+          {allLeaves ? (
+            /* leaf workers — side by side, NO connecting lines */
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start' }}>
+              {node.children.map(child => (
+                <StaffCard key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
+              ))}
+            </div>
+          ) : (
+            /* non-leaf children — with vertical branch and horizontal stubs */
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 16, paddingLeft: 10 }}>
+              {/* vertical bar connecting all children */}
+              <div style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                background: '#cbd5e1',
+              }} />
+              {node.children.map(child => (
+                <div key={child.id} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                  {/* horizontal stub from vertical bar to child */}
+                  <div style={{
+                    position: 'absolute',
+                    left: -10,
+                    top: '50%',
+                    width: 10,
+                    height: 2,
+                    background: '#cbd5e1',
+                    transform: 'translateY(-50%)',
+                  }} />
+                  <HorizontalNode node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
                 </div>
-              ))
-            : node.children.map(child => (
-                <HorizontalNode key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
-              ))
-          }
-        </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
