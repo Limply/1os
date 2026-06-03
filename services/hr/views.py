@@ -111,6 +111,10 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             if gps_lat and gps_lng:
                 record.clock_in_gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
 
+            address = request.data.get('address')
+            if address:
+                record.clock_in_address = address
+
             record.save()
 
             photo_url = record.clock_in_photo.url if record.clock_in_photo else None
@@ -144,6 +148,10 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             gps_lng = request.data.get('gps_lng')
             if gps_lat and gps_lng:
                 record.clock_out_gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
+
+            address = request.data.get('address')
+            if address:
+                record.clock_out_address = address
 
             if record.clock_in:
                 delta = now - record.clock_in

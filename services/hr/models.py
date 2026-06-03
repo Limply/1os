@@ -139,6 +139,8 @@ class Attendance(BaseModel):
     clock_out_photo = models.ImageField(upload_to='attendance/photos/', null=True, blank=True)
     clock_in_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-in: {"lat": x, "lng": y}')
     clock_out_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-out: {"lat": x, "lng": y}')
+    clock_in_address = models.CharField(max_length=500, blank=True, null=True)
+    clock_out_address = models.CharField(max_length=500, blank=True, null=True)
 
     class Meta:
         unique_together = ('employee', 'date')

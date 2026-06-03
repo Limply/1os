@@ -101,18 +101,34 @@ export default function ClockIn() {
     }
   }
 
-  // Get GPS location
-  const getGPS = () => {
+  // Get GPS location and reverse geocode to address
+  const getGPS = async () => {
     if (!navigator.geolocation) {
       setGpsError('Geolocation not supported')
       return
     }
 
     navigator.geolocation.getCurrentPosition(
-      position => {
+      async (position) => {
         const { latitude, longitude, accuracy } = position.coords
         setGpsCoords({ lat: latitude, lng: longitude, accuracy })
         setGpsError('')
+
+        // Reverse geocode using OpenStreetMap Nominatim (free, no API key)
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          )
+          const data = await res.json()
+          if (data.address) {
+            const address = data.address.road || data.address.village || data.address.town || data.address.city || ''
+            if (address) {
+              setGpsCoords(prev => ({ ...prev, address }))
+            }
+          }
+        } catch (err) {
+          console.error('Geocoding error:', err)
+        }
       },
       error => {
         setGpsError(`GPS error: ${error.message}`)
@@ -142,6 +158,9 @@ export default function ClockIn() {
       if (gpsCoords) {
         formData.append('gps_lat', gpsCoords.lat)
         formData.append('gps_lng', gpsCoords.lng)
+        if (gpsCoords.address) {
+          formData.append('address', gpsCoords.address)
+        }
       }
 
       const res = await api.post('/hr/attendance/clock_in/', formData)
@@ -176,6 +195,9 @@ export default function ClockIn() {
       if (gpsCoords) {
         formData.append('gps_lat', gpsCoords.lat)
         formData.append('gps_lng', gpsCoords.lng)
+        if (gpsCoords.address) {
+          formData.append('address', gpsCoords.address)
+        }
       }
 
       const res = await api.post('/hr/attendance/clock_out/', formData)
@@ -272,8 +294,11 @@ export default function ClockIn() {
           </button>
           {gpsCoords && (
             <div className="text-white text-sm mt-3">
-              <p>✓ Latitude: {gpsCoords.lat.toFixed(6)}</p>
-              <p>✓ Longitude: {gpsCoords.lng.toFixed(6)}</p>
+              {gpsCoords.address && (
+                <p className="font-semibold mb-2">📍 {gpsCoords.address}</p>
+              )}
+              <p>Latitude: {gpsCoords.lat.toFixed(6)}</p>
+              <p>Longitude: {gpsCoords.lng.toFixed(6)}</p>
               <p className="text-gray-300">Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m</p>
               <a
                 href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
