@@ -17,44 +17,57 @@ function initials(name) {
   return name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
 }
 
-function StaffCard({ node, depth, onSelect, highlight }) {
+function StaffCard({ node, depth, onSelect, highlight, isLeaf }) {
   const colors = levelColor(depth)
   const isHighlighted = highlight && node.full_name?.toLowerCase().includes(highlight.toLowerCase())
 
   return (
     <div
       onClick={() => onSelect(node)}
-      className="inline-flex flex-col items-center cursor-pointer group"
-      style={{ minWidth: 120 }}
+      className="cursor-pointer group"
+      style={{ display: 'inline-flex', alignItems: 'center', minWidth: isLeaf ? 'auto' : 120 }}
     >
       <div
-        className="rounded-xl px-3 py-2.5 shadow-md transition-all group-hover:shadow-lg group-hover:-translate-y-0.5 select-none"
+        className="rounded-xl shadow-md transition-all group-hover:shadow-lg group-hover:-translate-y-0.5 select-none"
         style={{
           backgroundColor: isHighlighted ? '#f59e0b' : colors.bg,
           color: isHighlighted ? '#000' : colors.text,
           border: `2px solid ${isHighlighted ? '#f59e0b' : colors.border}`,
-          minWidth: 120,
+          padding: isLeaf ? '8px 10px' : '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: isLeaf ? 8 : 0,
+          flexDirection: isLeaf ? 'row' : 'column',
+          minWidth: isLeaf ? 'auto' : 120,
         }}
       >
-        {/* Avatar */}
-        <div className="flex justify-center mb-1.5">
-          {node.photo_url ? (
-            <img src={node.photo_url} alt={node.full_name}
-              className="w-12 h-12 rounded-full object-cover border-2 border-white/30" />
-          ) : (
-            <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: isHighlighted ? '#000' : colors.text }}>
-              {initials(node.full_name)}
-            </div>
+        {/* Avatar on left for leaf cards, top for others */}
+        {node.photo_url ? (
+          <img src={node.photo_url} alt={node.full_name}
+            className="rounded-full object-cover border-2 flex-shrink-0"
+            style={{ width: isLeaf ? 28 : 40, height: isLeaf ? 28 : 40, borderColor: 'rgba(255,255,255,0.3)' }} />
+        ) : (
+          <div className="rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+            style={{
+              width: isLeaf ? 28 : 40,
+              height: isLeaf ? 28 : 40,
+              backgroundColor: 'rgba(0,0,0,0.2)',
+              color: isHighlighted ? '#000' : colors.text,
+            }}>
+            {initials(node.full_name)}
+          </div>
+        )}
+
+        {/* Text info */}
+        <div style={{ textAlign: isLeaf ? 'left' : 'center', minWidth: isLeaf ? 'auto' : '100%' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 'bold', lineHeight: '1', margin: 0 }}>{node.full_name}</p>
+          {!isLeaf && node.position_name && (
+            <p style={{ fontSize: '0.75rem', marginTop: 0.5, opacity: 0.8, margin: 0 }}>{node.position_name}</p>
+          )}
+          {!isLeaf && node.department_name && (
+            <p style={{ fontSize: '0.75rem', opacity: 0.6, margin: 0 }}>{node.department_name}</p>
           )}
         </div>
-        <p className="text-xs font-bold text-center leading-tight">{node.full_name}</p>
-        {node.position_name && (
-          <p className="text-xs text-center mt-0.5 opacity-80">{node.position_name}</p>
-        )}
-        {node.department_name && (
-          <p className="text-xs text-center opacity-60">{node.department_name}</p>
-        )}
       </div>
     </div>
   )
@@ -62,7 +75,7 @@ function StaffCard({ node, depth, onSelect, highlight }) {
 
 function renderTree(node, depth, onSelect, highlight) {
   if (!node) return null
-  const card = <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} />
+  const card = <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} isLeaf={false} />
   if (!node.children || node.children.length === 0) {
     return <TreeNode key={node.id} label={card} />
   }
@@ -80,7 +93,7 @@ function HorizontalNode({ node, depth, onSelect, highlight }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} />
+      <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} isLeaf={false} />
 
       {hasChildren && (
         <>
@@ -88,10 +101,10 @@ function HorizontalNode({ node, depth, onSelect, highlight }) {
           <div style={{ width: 20, height: 2, background: '#cbd5e1', flexShrink: 0 }} />
 
           {allLeaves ? (
-            /* leaf workers — side by side, NO connecting lines */
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start' }}>
+            /* leaf workers — side by side, NO wrapping, NO connecting lines */
+            <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'flex-start', overflowX: 'auto' }}>
               {node.children.map(child => (
-                <StaffCard key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
+                <StaffCard key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} isLeaf />
               ))}
             </div>
           ) : (
