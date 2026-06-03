@@ -29,7 +29,7 @@ export default function ClockIn() {
   // Fetch current user's employee data
   useEffect(() => {
     if (user?.id) {
-      api.get(`/hr/employees/`).then(res => {
+      api.get(`/hr/employees/?limit=999`).then(res => {
         const results = res.data.results || []
         let empData = results.find(e => e.user === user.id)
         if (!empData && user.first_name) {
