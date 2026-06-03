@@ -107,22 +107,23 @@ export default function ClockIn() {
       canvasRef.current.height = video.videoHeight
       ctx.drawImage(video, 0, 0)
 
-      // Add timestamp watermark
+      // Add timestamp + location watermark
       const now = new Date()
       const timestamp = now.toLocaleString()
-      const location = gpsCoords ? `${gpsCoords.lat.toFixed(4)}, ${gpsCoords.lng.toFixed(4)}` : ''
+      const coords = gpsCoords ? `${gpsCoords.lat.toFixed(5)}, ${gpsCoords.lng.toFixed(5)}` : ''
+      const address = gpsCoords?.address || ''
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
-      ctx.fillRect(0, canvasRef.current.height - 70, canvasRef.current.width, 70)
+      const lines = [timestamp, address, coords].filter(Boolean)
+      const barHeight = 30 + lines.length * 28
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+      ctx.fillRect(0, canvasRef.current.height - barHeight, canvasRef.current.width, barHeight)
 
       ctx.fillStyle = '#FFFFFF'
-      ctx.font = 'bold 20px Arial'
-      ctx.fillText(timestamp, 15, canvasRef.current.height - 45)
-
-      if (location) {
-        ctx.font = '16px Arial'
-        ctx.fillText(`📍 ${location}`, 15, canvasRef.current.height - 15)
-      }
+      lines.forEach((line, i) => {
+        ctx.font = i === 0 ? 'bold 20px Arial' : '17px Arial'
+        ctx.fillText(line, 15, canvasRef.current.height - barHeight + 26 + i * 28)
+      })
 
       canvasRef.current.toBlob(blob => {
         setPhotoBlob(blob)
@@ -325,15 +326,15 @@ export default function ClockIn() {
         {/* Camera Section */}
         <div className="w-full bg-black rounded-lg overflow-hidden shadow-lg mb-6">
           {photoPreview ? (
-            <img src={photoPreview} alt="Preview" className="w-full h-96 object-cover" />
+            <img src={photoPreview} alt="Preview" className="w-full object-cover" style={{ height: '307px' }} />
           ) : (
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
-              className="w-full h-96 object-cover bg-black"
-              style={{ transform: cameraActive ? 'scaleX(-1)' : 'none' }}
+              className="w-full object-cover bg-black"
+              style={{ height: '307px', transform: cameraActive ? 'scaleX(-1)' : 'none' }}
             />
           )}
           <canvas ref={canvasRef} className="hidden" />
