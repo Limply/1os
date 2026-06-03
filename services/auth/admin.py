@@ -10,7 +10,7 @@ class TenantAdmin(admin.ModelAdmin):
     search_fields = ['name', 'schema_name', 'domain']
     list_filter = ['plan']
 
-    def has_module_perms(self, request):
+    def has_module_permission(self, request):
         """Only superusers can see/manage tenants."""
         return request.user.is_superuser
 
@@ -37,13 +37,21 @@ class UserAdmin(BaseUserAdmin):
             return qs
         return qs.filter(tenant=request.user.tenant)
 
-    def has_module_perms(self, request):
+    def has_module_permission(self, request):
         """Tenant admins can manage users in their tenant."""
         if request.user.is_superuser:
             return True
         if request.user.role in ('admin', 'superadmin'):
             return True
         return False
+
+    def get_model_perms(self, request):
+        """Grant all perms to tenant admins."""
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        if request.user.role in ('admin', 'superadmin'):
+            return {'add': True, 'change': True, 'delete': True, 'view': True}
+        return super().get_model_perms(request)
 
 
 @admin.register(PermissionGroup)
@@ -52,7 +60,7 @@ class PermissionGroupAdmin(admin.ModelAdmin):
     search_fields = ['name']
     list_filter = ['tenant', 'is_active']
 
-    def has_module_perms(self, request):
+    def has_module_permission(self, request):
         """Only superusers can see/manage permission groups."""
         return request.user.is_superuser
 
@@ -66,10 +74,18 @@ class GroupAdmin(admin.ModelAdmin):
     list_display = ['name']
     search_fields = ['name']
 
-    def has_module_perms(self, request):
+    def has_module_permission(self, request):
         """Tenant admins can manage groups in their tenant."""
         if request.user.is_superuser:
             return True
         if request.user.role in ('admin', 'superadmin'):
             return True
         return False
+
+    def get_model_perms(self, request):
+        """Grant all perms to tenant admins."""
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        if request.user.role in ('admin', 'superadmin'):
+            return {'add': True, 'change': True, 'delete': True, 'view': True}
+        return super().get_model_perms(request)

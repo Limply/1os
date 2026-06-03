@@ -16,12 +16,25 @@ class TenantModelAdmin(admin.ModelAdmin):
         return qs.filter(tenant=request.user.tenant)
 
     def has_module_perms(self, request):
+        """Legacy — Django 5.2+ uses has_module_permission."""
+        return self.has_module_permission(request)
+
+    def has_module_permission(self, request):
         """Tenant admins (role='admin') see module if they have any perms."""
         if request.user.is_superuser:
             return True
         if request.user.role in ('admin', 'superadmin'):
             return True
         return False
+
+    def get_model_perms(self, request):
+        """Grant all perms to tenant admins without checking Django permissions."""
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        if request.user.role in ('admin', 'superadmin'):
+            # Return all True for tenant admins, skip Django permission checks
+            return {'add': True, 'change': True, 'delete': True, 'view': True}
+        return super().get_model_perms(request)
 
     def has_view_permission(self, request, obj=None):
         """Tenant admins can view all objects in their tenant."""
