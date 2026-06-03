@@ -180,3 +180,125 @@ Each service module is fully independent. A change in one module must never brea
 ---
 
 *Update this file as tasks are completed. Change `- [ ]` to `- [x]` when done.*
+
+---
+
+## Architectural Decision: Multi-Tenant vs Docker-per-Tenant (June 2026)
+
+### Question
+Should 1OS be deployed as a separate Docker container per tenant to eliminate multi-tenant complexity and cross-tenant risk?
+
+### Decision: **Stay Multi-Tenant (for now)**
+
+**Rationale:** Docker-per-tenant adds more operational overhead than it eliminates at current scale (1-3 tenants). A single Django instance serving all tenants is simpler, more resource-efficient, and faster to update.
+
+### Context
+- **Current tenants:** 1 active (Astronic), pipeline 1-2 more
+- **Expected growth:** 5-20 tenants within 12 months
+- **Operational capacity:** Single DevOps engineer (Lucus)
+- **Infrastructure:** Simple VPS/cloud instance, not Kubernetes
+
+### Analysis
+
+#### Docker-per-Tenant Would Require
+| Item | Cost / Effort |
+|---|---|
+| Manage 20+ containers | High — needs Kubernetes |
+| Per-tenant CI/CD pipeline | Medium — per-tenant builds |
+| Monitoring 20+ app instances | High — 20 dashboards, 20 alert channels |
+| Database per tenant (option A) | Medium — 20 DBs, more backup complexity |
+| Shared database (option B) | Medium — still need cross-tenant filters anyway |
+| Per-tenant secrets/config | Medium — 20 `.env` files |
+| Rolling updates | Hard — update all 20 without downtime |
+| Resource scaling | Bad — small tenants waste resources; each gets full app |
+
+**Rough cost:** $5000-15000/month ops + licensing for K8s, monitoring, per-tenant tools.
+
+#### Multi-Tenant (Current) Provides
+| Item | Benefit |
+|---|---|
+| Single app instance | Scales by adding replicas, not containers |
+| One deployment pipeline | One CI/CD run updates all tenants |
+| Shared resources | Resource-efficient (small tenants don't get wasted CPU) |
+| Fast updates | One code push, all tenants benefit immediately |
+| Unified monitoring | One dashboard, one alert channel |
+| One database | Simpler backups; cross-tenant queries possible (if needed) |
+
+**Rough cost:** $500-2000/month ops.
+
+### Risk Mitigation (Multi-Tenant)
+
+#### 1. Cross-Tenant Data Leakage
+**Safeguard:** All querysets filtered by `tenant=request.user.tenant` at the view/serializer level.
+```python
+# Every view must use this pattern
+qs = Employee.objects.filter(tenant=request.user.tenant)
+```
+**Test:** Multi-tenant isolation test matrix (create Astronic + other tenant user, verify data separation).
+
+#### 2. Shared Data Ambiguity
+**Safeguard:** Mark models that are truly global vs per-tenant.
+```python
+class Settings(models.Model):
+    # Global — accessed by all tenants, no tenant FK
+    smtp_host = models.CharField(...)
+    feature_flags = models.JSONField(...)
+
+class Employee(models.Model):
+    # Per-tenant — always filter by tenant
+    tenant = models.ForeignKey(Tenant, ...)
+```
+
+#### 3. Admin Permission Complexity
+**Safeguard:** Role-based access (role='admin' → full CRUD on own tenant; is_superuser → global).
+- Implemented in `/opt/1os/shared/admin.py` and `/opt/1os/services/auth/admin.py`
+- `has_module_permission()` and `get_model_perms()` grant access without needing Django permission table
+
+#### 4. Django Version Compatibility
+**Safeguard:** Monitor Django release notes; add CI checks to catch permission method changes.
+
+### When to Reconsider Docker-per-Tenant
+
+**Switch to per-tenant Docker if:**
+
+| Condition | Trigger | Action |
+|-----------|---------|--------|
+| **Tenants** | 20+ active tenants | Evaluate ops burden |
+| **Revenue** | Large customer ($50k+/year) | May justify dedicated instance |
+| **Customization** | 30%+ of tenants need custom code | Per-tenant builds needed |
+| **Regulation** | Data residency laws (China, EU) | Per-country deployments |
+| **Compliance** | SOC 2 / HIPAA audit failure | Stricter isolation needed |
+| **Ops maturity** | Kubernetes + CDCI team hired | Infrastructure ready |
+
+**At that point:** Migrate to **Kubernetes-per-tenant with Helm charts**, not raw Docker.
+
+### Current Safeguards in Place (June 2026)
+
+✅ **Tenant scoping:**
+- Middleware reads JWT, resolves `request.user.tenant`
+- All model querysets filter by tenant
+- FK dropdowns scoped to own tenant
+
+✅ **Admin access control:**
+- role='admin' → full CRUD on own tenant (no is_superuser needed)
+- Tenant + PermissionGroup → superuser only
+- `has_module_permission()` + `get_model_perms()` (Django 5.2 compatible)
+
+✅ **Role hierarchy:**
+- viewer (read-only) → staff (portal) → manager (team) → admin (tenant) → superadmin (global)
+
+### Planned Safeguards (Next Sprint)
+
+⏳ **Audit logging:** TenantAuditLog table to track all data access per tenant  
+⏳ **Test isolation:** Parametrized tests verify every model filters by tenant  
+⏳ **CI checks:** Pre-commit hooks to catch unfiltered querysets (grep for `.objects.all()` without tenant filter)  
+⏳ **Explicit assertion:** Model `save()` method asserts `tenant is not None` before insert
+
+### References
+- Implementation: `/opt/1os/shared/admin.py`, `/opt/1os/services/auth/admin.py`
+- Django 5.2 AdminSite: Uses `has_module_permission()`, not `has_module_perms()`
+- Tenant middleware: `/opt/1os/shared/middleware.py`
+
+---
+
+*Decision made June 2026 by Lucus (CTO). Revisit Q4 2026 or if tenant count exceeds 15.*
