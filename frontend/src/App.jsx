@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import ClockIn from './pages/ClockIn'
+import CameraTest from './pages/CameraTest'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
@@ -17,6 +18,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/clock-in" element={<ClockIn />} />
+        <Route path="/camera-test" element={<CameraTest />} />
         <Route element={<Layout />}>
           <Route path="/"           element={<Dashboard />} />
           <Route path="/projects"   element={<Projects />} />
