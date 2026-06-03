@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 
@@ -28,6 +28,9 @@ export default function Schedules() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [importErrors, setImportErrors] = useState([])
+  const [importMsg, setImportMsg] = useState('')
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     api.get('/hr/employees/?limit=999&can_clock_in=true').then(res => {
@@ -105,6 +108,33 @@ export default function Schedules() {
     setSchedules(s => s.filter(x => x.id !== id))
   }
 
+  const handleExportCSV = () => {
+    window.location.href = `/api/hr/work-schedules/export_csv/?date=${date}`
+  }
+
+  const handleExportExcel = () => {
+    window.location.href = `/api/hr/work-schedules/export_excel/?date=${date}`
+  }
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setImportErrors([])
+    setImportMsg('')
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await api.post('/hr/work-schedules/import_file/', formData)
+      setImportMsg(res.data.message)
+      const res2 = await api.get(`/hr/work-schedules/?date=${date}`)
+      setSchedules(res2.data.results || [])
+    } catch (err) {
+      const data = err.response?.data
+      setImportErrors(data?.errors || [data?.message || 'Import failed'])
+    }
+    e.target.value = ''
+  }
+
   if (!isManager) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
@@ -121,11 +151,41 @@ export default function Schedules() {
           <h1 className="text-2xl font-bold text-gray-800">Work Schedules</h1>
           <p className="text-sm text-gray-500 mt-1">Assign workers to sites with geofenced clock-in</p>
         </div>
-        <button onClick={openAdd}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
-          + Add Schedule
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportCSV}
+            className="border border-gray-300 text-gray-600 hover:bg-gray-50 font-semibold px-3 py-2 rounded-lg text-sm transition">
+            ↓ CSV
+          </button>
+          <button onClick={handleExportExcel}
+            className="border border-gray-300 text-gray-600 hover:bg-gray-50 font-semibold px-3 py-2 rounded-lg text-sm transition">
+            ↓ Excel
+          </button>
+          <button onClick={() => fileInputRef.current.click()}
+            className="border border-blue-300 text-blue-600 hover:bg-blue-50 font-semibold px-3 py-2 rounded-lg text-sm transition">
+            ↑ Import
+          </button>
+          <input ref={fileInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleImport} />
+          <button onClick={openAdd}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+            + Add Schedule
+          </button>
+        </div>
       </div>
+
+      {/* Import feedback */}
+      {importMsg && (
+        <div className="mb-4 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
+          ✓ {importMsg}
+        </div>
+      )}
+      {importErrors.length > 0 && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          <p className="font-semibold mb-1">Import failed — nothing was saved:</p>
+          <ul className="list-disc ml-4 space-y-0.5">
+            {importErrors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        </div>
+      )}
 
       {/* Date Filter */}
       <div className="flex items-center gap-3 mb-6">

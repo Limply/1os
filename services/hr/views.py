@@ -1,4 +1,8 @@
+import csv
+import io
+import openpyxl
 from django.utils import timezone
+from django.http import HttpResponse
 from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
@@ -220,6 +224,9 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             )
 
 
+SCHEDULE_COLUMNS = ['emp_no', 'date', 'shift_start', 'shift_end', 'location_name', 'location_lat', 'location_lng', 'radius']
+
+
 class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = WorkSchedule.objects.select_related('employee')
     serializer_class = WorkScheduleSerializer
@@ -233,6 +240,124 @@ class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         if employee:
             qs = qs.filter(employee_id=employee)
         return qs.order_by('date', 'shift_start')
+
+    @action(detail=False, methods=['get'])
+    def export_csv(self, request):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="schedules.csv"'
+        writer = csv.writer(response)
+        writer.writerow(SCHEDULE_COLUMNS)
+        for s in self.get_queryset():
+            writer.writerow([
+                s.employee.emp_no, s.date, s.shift_start, s.shift_end,
+                s.location_name, s.location_lat, s.location_lng, s.radius,
+            ])
+        return response
+
+    @action(detail=False, methods=['get'])
+    def export_excel(self, request):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Schedules'
+        ws.append(SCHEDULE_COLUMNS)
+        for s in self.get_queryset():
+            ws.append([
+                s.employee.emp_no, str(s.date), str(s.shift_start), str(s.shift_end),
+                s.location_name, float(s.location_lat), float(s.location_lng), s.radius,
+            ])
+        # Auto-width columns
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        response = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="schedules.xlsx"'
+        return response
+
+    @action(detail=False, methods=['post'])
+    def import_file(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'success': False, 'message': 'No file uploaded'}, status=400)
+
+        # Parse rows from CSV or Excel
+        rows = []
+        filename = file.name.lower()
+        try:
+            if filename.endswith('.xlsx'):
+                wb = openpyxl.load_workbook(file)
+                ws = wb.active
+                headers = [str(c.value).strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    if any(v for v in row):
+                        rows.append(dict(zip(headers, row)))
+            elif filename.endswith('.csv'):
+                text = file.read().decode('utf-8-sig')
+                reader = csv.DictReader(io.StringIO(text))
+                rows = [r for r in reader if any(v.strip() for v in r.values())]
+            else:
+                return Response({'success': False, 'message': 'Only .csv or .xlsx files are supported'}, status=400)
+        except Exception as e:
+            return Response({'success': False, 'message': f'File parse error: {e}'}, status=400)
+
+        if not rows:
+            return Response({'success': False, 'message': 'File is empty'}, status=400)
+
+        tenant = request.user.tenant
+        errors = []
+
+        # Validate all rows first — reject entire file if any issues
+        validated = []
+        for i, row in enumerate(rows, start=2):
+            line = f'Row {i}'
+            emp_no = str(row.get('emp_no', '')).strip()
+            date_val = str(row.get('date', '')).strip()
+            shift_start = str(row.get('shift_start', '')).strip()
+            shift_end = str(row.get('shift_end', '')).strip()
+            location_name = str(row.get('location_name', '')).strip()
+            location_lat = str(row.get('location_lat', '')).strip()
+            location_lng = str(row.get('location_lng', '')).strip()
+            radius = str(row.get('radius', '200')).strip() or '200'
+
+            if not all([emp_no, date_val, shift_start, shift_end, location_name, location_lat, location_lng]):
+                errors.append(f'{line}: Missing required fields')
+                continue
+
+            emp = Employee.objects.filter(emp_no=emp_no, tenant=tenant).first()
+            if not emp:
+                errors.append(f'{line}: Employee {emp_no} not found')
+                continue
+
+            try:
+                date_obj = datetime.strptime(str(date_val).split(' ')[0], '%Y-%m-%d').date()
+            except ValueError:
+                errors.append(f'{line}: Invalid date "{date_val}" — use YYYY-MM-DD')
+                continue
+
+            # Check for duplicate
+            if WorkSchedule.objects.filter(employee=emp, date=date_obj, tenant=tenant).exists():
+                errors.append(f'{line}: Schedule already exists for {emp_no} on {date_obj}')
+                continue
+
+            validated.append({
+                'employee': emp, 'date': date_obj,
+                'shift_start': shift_start, 'shift_end': shift_end,
+                'location_name': location_name,
+                'location_lat': location_lat, 'location_lng': location_lng,
+                'radius': int(radius),
+            })
+
+        if errors:
+            return Response({'success': False, 'errors': errors, 'message': f'{len(errors)} error(s) found — nothing imported'}, status=400)
+
+        # All valid — save all
+        for v in validated:
+            WorkSchedule.objects.create(tenant=tenant, **v)
+
+        return Response({'success': True, 'message': f'{len(validated)} schedule(s) imported successfully'})
 
 
 class CertificationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
