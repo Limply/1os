@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -117,6 +117,18 @@ class PublicHolidaySerializer(serializers.ModelSerializer):
     class Meta:
         model = PublicHoliday
         fields = '__all__'
+
+
+class WorkScheduleSerializer(serializers.ModelSerializer):
+    employee_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkSchedule
+        exclude = ['tenant']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_employee_name(self, obj):
+        return obj.employee.full_name if obj.employee else None
 
 
 class ClockInResponseSerializer(serializers.Serializer):

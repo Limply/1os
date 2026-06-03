@@ -165,6 +165,24 @@ class Certification(BaseModel):
         return f"{self.employee} — {self.name}"
 
 
+class WorkSchedule(BaseModel):
+    """Assigns an employee to a site location for a specific date and shift."""
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='work_schedules')
+    date = models.DateField()
+    shift_start = models.TimeField()
+    shift_end = models.TimeField()
+    location_name = models.CharField(max_length=200)
+    location_lat = models.DecimalField(max_digits=10, decimal_places=7)
+    location_lng = models.DecimalField(max_digits=10, decimal_places=7)
+    radius = models.IntegerField(default=200, help_text='Allowed clock-in radius in meters')
+
+    class Meta:
+        unique_together = ('employee', 'date')
+
+    def __str__(self):
+        return f"{self.employee.full_name} @ {self.location_name} on {self.date}"
+
+
 class PublicHoliday(models.Model):
     """Singapore public holiday calendar (shared, not tenant-scoped)."""
     date = models.DateField(unique=True)

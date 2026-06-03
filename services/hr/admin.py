@@ -1,6 +1,6 @@
 from django.contrib import admin
 from shared.admin import TenantModelAdmin
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule
 
 
 @admin.register(Employee)
@@ -67,3 +67,11 @@ class PublicHolidayAdmin(TenantModelAdmin):
     list_display = ['date', 'name', 'year']
     list_filter = ['year']
     ordering = ['date']
+
+
+@admin.register(WorkSchedule)
+class WorkScheduleAdmin(TenantModelAdmin):
+    list_display = ['employee', 'date', 'location_name', 'shift_start', 'shift_end', 'radius']
+    search_fields = ['employee__first_name', 'employee__last_name', 'location_name']
+    list_filter = ['date']
+    ordering = ['date', 'shift_start']

@@ -3,13 +3,14 @@ from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
-    ClockInResponseSerializer,
+    ClockInResponseSerializer, WorkScheduleSerializer,
 )
 from shared.permissions import IsClockInAllowed
+from shared.utils import haversine_distance
 
 
 class TenantScopedMixin:
@@ -96,18 +97,41 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             employee = request.user.employee_profile
             today = timezone.now().date()
 
+            # Check schedule exists
+            schedule = WorkSchedule.objects.filter(
+                employee=employee, date=today, is_active=True
+            ).first()
+            if not schedule:
+                return Response(
+                    {'success': False, 'message': 'No schedule assigned for today. Contact your supervisor.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check GPS within allowed radius
+            gps_lat = request.data.get('gps_lat')
+            gps_lng = request.data.get('gps_lng')
+            if gps_lat and gps_lng:
+                distance = haversine_distance(gps_lat, gps_lng, schedule.location_lat, schedule.location_lng)
+                if distance > schedule.radius:
+                    return Response({
+                        'success': False,
+                        'message': f'You are {int(distance)}m away from {schedule.location_name}. Must be within {schedule.radius}m to clock in.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Flag late if past shift_start
+            now = timezone.now()
+            attendance_status = 'late' if now.time() > schedule.shift_start else 'present'
+
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
                 date=today,
                 defaults={'tenant': request.user.tenant}
             )
 
-            now = timezone.now()
             record.clock_in = now
             record.clock_in_photo = request.FILES.get('photo')
+            record.status = attendance_status
 
-            gps_lat = request.data.get('gps_lat')
-            gps_lng = request.data.get('gps_lng')
             if gps_lat and gps_lng:
                 record.clock_in_gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
 
@@ -118,12 +142,19 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             record.save()
 
             photo_url = record.clock_in_photo.url if record.clock_in_photo else None
+            late_note = ' (Late)' if attendance_status == 'late' else ''
             response = {
                 'success': True,
-                'message': f'Clocked in at {now.strftime("%H:%M:%S")}',
+                'message': f'Clocked in at {now.strftime("%H:%M:%S")}{late_note}',
                 'clock_in_time': now,
+                'status': attendance_status,
                 'photo_url': photo_url,
                 'gps_location': record.clock_in_gps,
+                'schedule': {
+                    'location': schedule.location_name,
+                    'shift_start': str(schedule.shift_start),
+                    'shift_end': str(schedule.shift_end),
+                },
             }
             return Response(response, status=status.HTTP_200_OK)
         except Exception as e:
@@ -180,6 +211,21 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 {'success': False, 'message': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class WorkScheduleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = WorkSchedule.objects.select_related('employee')
+    serializer_class = WorkScheduleSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        date = self.request.query_params.get('date')
+        employee = self.request.query_params.get('employee')
+        if date:
+            qs = qs.filter(date=date)
+        if employee:
+            qs = qs.filter(employee_id=employee)
+        return qs.order_by('date', 'shift_start')
 
 
 class CertificationViewSet(TenantScopedMixin, viewsets.ModelViewSet):

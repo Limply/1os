@@ -14,7 +14,12 @@ const links = [
       { to: '/calendar', label: 'Project Calendar' },
     ],
   },
-  { to: '/hr',         label: 'HR' },
+  {
+    to: '/hr', label: 'HR',
+    children: [
+      { to: '/schedules', label: 'Schedules' },
+    ],
+  },
   { to: '/operations', label: 'Operations' },
   { to: '/finance',    label: 'Finance' },
   { to: '/compliance', label: 'Compliance' },

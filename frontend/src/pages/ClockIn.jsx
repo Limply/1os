@@ -3,8 +3,11 @@ import api from '../api/axios'
 import { getUser } from '../api/auth'
 
 export default function ClockIn() {
-  const [user, setUser] = useState(getUser())
+  const [user] = useState(getUser())
   const [employee, setEmployee] = useState(null)
+  const [schedule, setSchedule] = useState(null)
+  const [geofenceStatus, setGeofenceStatus] = useState(null) // null | 'ok' | 'fail'
+  const [geofenceMsg, setGeofenceMsg] = useState('')
   const [currentTime, setCurrentTime] = useState(new Date())
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -41,6 +44,17 @@ export default function ClockIn() {
       }).catch(console.error)
     }
   }, [user])
+
+  // Fetch today's schedule for this employee
+  useEffect(() => {
+    if (employee?.id) {
+      const today = new Date().toISOString().split('T')[0]
+      api.get(`/hr/work-schedules/?date=${today}&employee=${employee.id}`).then(res => {
+        const s = res.data.results?.[0] || null
+        setSchedule(s)
+      }).catch(console.error)
+    }
+  }, [employee])
 
   // Check if already clocked in today
   useEffect(() => {
@@ -130,6 +144,23 @@ export default function ClockIn() {
         const { latitude, longitude, accuracy } = position.coords
         setGpsCoords({ lat: latitude, lng: longitude, accuracy })
         setGpsError('')
+
+        // Geofence check against today's schedule
+        if (schedule) {
+          const toRad = d => d * Math.PI / 180
+          const R = 6371000
+          const dLat = toRad(parseFloat(schedule.location_lat) - latitude)
+          const dLng = toRad(parseFloat(schedule.location_lng) - longitude)
+          const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(latitude)) * Math.cos(toRad(parseFloat(schedule.location_lat))) * Math.sin(dLng / 2) ** 2
+          const distance = Math.round(2 * Math.asin(Math.sqrt(a)) * R)
+          if (distance <= schedule.radius) {
+            setGeofenceStatus('ok')
+            setGeofenceMsg(`✅ Within ${distance}m of ${schedule.location_name}`)
+          } else {
+            setGeofenceStatus('fail')
+            setGeofenceMsg(`❌ ${distance}m away — must be within ${schedule.radius}m of ${schedule.location_name}`)
+          }
+        }
 
         // Reverse geocode using OpenStreetMap Nominatim (free, no API key)
         try {
@@ -241,9 +272,18 @@ export default function ClockIn() {
       <div className="bg-blue-950 text-white p-6 text-center">
         <h1 className="text-3xl font-bold">Clock In/Out</h1>
         <p className="text-blue-200 mt-2">{user?.first_name} {user?.last_name}</p>
-        <p className="text-blue-300 text-sm">{employee?.position?.title || '—'}</p>
+        <p className="text-blue-300 text-sm">{employee?.position_name || '—'}</p>
         <div className="text-4xl font-mono font-bold mt-4">{currentTime.toLocaleTimeString()}</div>
         <div className="text-sm text-blue-200 mt-1">{currentTime.toLocaleDateString()}</div>
+        {schedule ? (
+          <div className="mt-3 bg-blue-900 bg-opacity-60 rounded-lg px-4 py-2 text-sm inline-block">
+            📋 {schedule.location_name} &nbsp;|&nbsp; {schedule.shift_start} – {schedule.shift_end}
+          </div>
+        ) : (
+          <div className="mt-3 bg-red-900 bg-opacity-60 rounded-lg px-4 py-2 text-sm inline-block text-red-200">
+            ⚠️ No schedule assigned for today
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
@@ -264,6 +304,11 @@ export default function ClockIn() {
               <p>Latitude: {gpsCoords.lat.toFixed(6)}</p>
               <p>Longitude: {gpsCoords.lng.toFixed(6)}</p>
               <p className="text-gray-300">Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m</p>
+              {geofenceMsg && (
+                <p className={`mt-2 font-semibold ${geofenceStatus === 'ok' ? 'text-green-300' : 'text-red-300'}`}>
+                  {geofenceMsg}
+                </p>
+              )}
               <a
                 href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
                 target="_blank"
@@ -344,7 +389,7 @@ export default function ClockIn() {
           {!clockedIn ? (
             <button
               onClick={handleClockIn}
-              disabled={!photoBlob || loading}
+              disabled={!photoBlob || loading || !schedule || geofenceStatus === 'fail'}
               className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-500 text-white font-bold py-4 px-6 rounded-lg text-xl transition"
             >
               {loading ? '⏳ Clocking In...' : '✓ Clock In'}

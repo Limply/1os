@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import ClockIn from './pages/ClockIn'
 import CameraTest from './pages/CameraTest'
+import Schedules from './pages/Schedules'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/"           element={<Dashboard />} />
           <Route path="/projects"   element={<Projects />} />
           <Route path="/hr"         element={<HR />} />
+          <Route path="/schedules"  element={<Schedules />} />
           <Route path="/orgchart"   element={<OrgChart />} />
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Finance />} />
