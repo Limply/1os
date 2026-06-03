@@ -26,13 +26,18 @@ export default function ClockIn() {
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch employee data
+  // Fetch current user's employee data
   useEffect(() => {
     if (user?.id) {
-      api.get('/hr/employees/?limit=1').then(res => {
-        if (res.data.results?.length > 0) {
-          setEmployee(res.data.results[0])
+      api.get(`/hr/employees/`).then(res => {
+        const results = res.data.results || []
+        let empData = results.find(e => e.user === user.id)
+        if (!empData && user.first_name) {
+          empData = results.find(e =>
+            e.first_name.toLowerCase() === user.first_name.toLowerCase()
+          )
         }
+        setEmployee(empData || results[0])
       }).catch(console.error)
     }
   }, [user])
