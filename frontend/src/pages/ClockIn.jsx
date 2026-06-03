@@ -248,6 +248,35 @@ export default function ClockIn() {
 
       {/* Main Content */}
       <div className="flex-1 p-6 flex flex-col items-center justify-center max-w-2xl mx-auto w-full">
+        {/* GPS Section - TOP */}
+        <div className="w-full bg-blue-800 bg-opacity-50 rounded-lg p-4 mb-6">
+          <button
+            onClick={getGPS}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2"
+          >
+            📍 Get GPS Location
+          </button>
+          {gpsCoords && (
+            <div className="text-white text-sm mt-3">
+              {gpsCoords.address && (
+                <p className="font-semibold mb-2">📍 {gpsCoords.address}</p>
+              )}
+              <p>Latitude: {gpsCoords.lat.toFixed(6)}</p>
+              <p>Longitude: {gpsCoords.lng.toFixed(6)}</p>
+              <p className="text-gray-300">Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m</p>
+              <a
+                href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs"
+              >
+                🗺️ View on Google Maps
+              </a>
+            </div>
+          )}
+          {gpsError && <p className="text-red-300 text-sm mt-2">{gpsError}</p>}
+        </div>
+
         {/* Camera Section */}
         <div className="w-full bg-black rounded-lg overflow-hidden shadow-lg mb-6">
           {photoPreview ? (
@@ -299,35 +328,6 @@ export default function ClockIn() {
               🔄 Retake Photo
             </button>
           )}
-        </div>
-
-        {/* GPS Section */}
-        <div className="w-full bg-blue-800 bg-opacity-50 rounded-lg p-4 mb-6">
-          <button
-            onClick={getGPS}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2"
-          >
-            📍 Get GPS Location
-          </button>
-          {gpsCoords && (
-            <div className="text-white text-sm mt-3">
-              {gpsCoords.address && (
-                <p className="font-semibold mb-2">📍 {gpsCoords.address}</p>
-              )}
-              <p>Latitude: {gpsCoords.lat.toFixed(6)}</p>
-              <p>Longitude: {gpsCoords.lng.toFixed(6)}</p>
-              <p className="text-gray-300">Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m</p>
-              <a
-                href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs"
-              >
-                🗺️ View on Google Maps
-              </a>
-            </div>
-          )}
-          {gpsError && <p className="text-red-300 text-sm mt-2">{gpsError}</p>}
         </div>
 
         {/* Status Message */}
