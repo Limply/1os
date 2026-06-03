@@ -5,14 +5,15 @@ from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attenda
 
 @admin.register(Employee)
 class EmployeeAdmin(TenantModelAdmin):
-    list_display = ['emp_no', 'first_name', 'last_name', 'employment_type', 'department', 'join_date', 'is_active']
+    list_display = ['emp_no', 'first_name', 'last_name', 'employment_type', 'department', 'can_clock_in', 'join_date', 'is_active']
     search_fields = ['emp_no', 'first_name', 'last_name', 'email']
-    list_filter = ['employment_type', 'pass_type', 'department', 'is_active']
+    list_filter = ['employment_type', 'pass_type', 'department', 'can_clock_in', 'is_active']
     ordering = ['emp_no']
     fieldsets = [
         ('Personal', {'fields': ['user', 'emp_no', 'first_name', 'last_name', 'photo', 'nric', 'nationality', 'email', 'phone']}),
         ('Work Pass', {'fields': ['pass_type', 'pass_expiry'], 'classes': ['collapse'], 'description': 'Optional — only for foreign workers'}),
         ('Employment', {'fields': ['department', 'position', 'employment_type', 'join_date', 'end_date', 'basic_salary', 'manager']}),
+        ('Clock-In', {'fields': ['can_clock_in'], 'description': 'Enable clock-in/out feature for this employee'}),
         ('Emergency Contact', {'fields': ['emergency_name', 'emergency_phone'], 'classes': ['collapse']}),
     ]
 
@@ -44,6 +45,13 @@ class AttendanceAdmin(TenantModelAdmin):
     list_filter = ['status', 'date']
     search_fields = ['employee__first_name', 'employee__last_name', 'employee__emp_no']
     ordering = ['-date']
+    fieldsets = [
+        ('Attendance', {'fields': ['employee', 'date', 'status', 'notes']}),
+        ('Clock-In', {'fields': ['clock_in', 'clock_in_photo', 'clock_in_gps']}),
+        ('Clock-Out', {'fields': ['clock_out', 'clock_out_photo', 'clock_out_gps']}),
+        ('Hours', {'fields': ['hours', 'overtime']}),
+    ]
+    readonly_fields = ['clock_in', 'clock_out', 'hours']
 
 
 @admin.register(Certification)

@@ -117,3 +117,13 @@ class PublicHolidaySerializer(serializers.ModelSerializer):
     class Meta:
         model = PublicHoliday
         fields = '__all__'
+
+
+class ClockInResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    clock_in_time = serializers.DateTimeField(required=False, allow_null=True)
+    clock_out_time = serializers.DateTimeField(required=False, allow_null=True)
+    hours_worked = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, allow_null=True)
+    photo_url = serializers.URLField(required=False, allow_null=True)
+    gps_location = serializers.JSONField(required=False, allow_null=True)

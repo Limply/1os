@@ -49,6 +49,7 @@ class Employee(BaseModel):
         verbose_name='Supervisor'
     )
     photo = models.ImageField(upload_to='staff/photos/', null=True, blank=True)
+    can_clock_in = models.BooleanField(default=False, help_text='Employee can use clock-in/out feature')
 
     def __str__(self):
         return f"{self.emp_no} — {self.first_name} {self.last_name}"
@@ -134,6 +135,10 @@ class Attendance(BaseModel):
     overtime = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
     notes = models.TextField(blank=True, null=True)
+    clock_in_photo = models.ImageField(upload_to='attendance/photos/', null=True, blank=True)
+    clock_out_photo = models.ImageField(upload_to='attendance/photos/', null=True, blank=True)
+    clock_in_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-in: {"lat": x, "lng": y}')
+    clock_out_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-out: {"lat": x, "lng": y}')
 
     class Meta:
         unique_together = ('employee', 'date')

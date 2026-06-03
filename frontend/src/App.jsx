@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import ClockIn from './pages/ClockIn'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
@@ -15,6 +16,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/clock-in" element={<ClockIn />} />
         <Route element={<Layout />}>
           <Route path="/"           element={<Dashboard />} />
           <Route path="/projects"   element={<Projects />} />

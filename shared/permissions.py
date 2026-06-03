@@ -35,3 +35,15 @@ class IsTenantMember(BasePermission):
     """Ensures the user belongs to the requested tenant."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and hasattr(request, 'tenant')
+
+
+class IsClockInAllowed(BasePermission):
+    """Only employees with can_clock_in=True can use clock-in API."""
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        try:
+            employee = request.user.employee_profile
+            return employee and employee.can_clock_in
+        except:
+            return False

@@ -1,12 +1,15 @@
 from django.utils import timezone
-from rest_framework import viewsets, permissions
+from datetime import datetime
+from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
+    ClockInResponseSerializer,
 )
+from shared.permissions import IsClockInAllowed
 
 
 class TenantScopedMixin:
@@ -86,6 +89,89 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         if employee_id:
             qs = qs.filter(employee_id=employee_id)
         return qs.order_by('-date')
+
+    @action(detail=False, methods=['post'], permission_classes=[IsClockInAllowed])
+    def clock_in(self, request):
+        try:
+            employee = request.user.employee_profile
+            today = timezone.now().date()
+
+            record, created = Attendance.objects.get_or_create(
+                employee=employee,
+                date=today,
+                defaults={'tenant': request.user.tenant}
+            )
+
+            now = timezone.now()
+            record.clock_in = now
+            record.clock_in_photo = request.FILES.get('photo')
+
+            gps_lat = request.data.get('gps_lat')
+            gps_lng = request.data.get('gps_lng')
+            if gps_lat and gps_lng:
+                record.clock_in_gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
+
+            record.save()
+
+            photo_url = record.clock_in_photo.url if record.clock_in_photo else None
+            response = {
+                'success': True,
+                'message': f'Clocked in at {now.strftime("%H:%M:%S")}',
+                'clock_in_time': now,
+                'photo_url': photo_url,
+                'gps_location': record.clock_in_gps,
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsClockInAllowed])
+    def clock_out(self, request):
+        try:
+            employee = request.user.employee_profile
+            today = timezone.now().date()
+
+            record = Attendance.objects.get(employee=employee, date=today)
+
+            now = timezone.now()
+            record.clock_out = now
+            record.clock_out_photo = request.FILES.get('photo')
+
+            gps_lat = request.data.get('gps_lat')
+            gps_lng = request.data.get('gps_lng')
+            if gps_lat and gps_lng:
+                record.clock_out_gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
+
+            if record.clock_in:
+                delta = now - record.clock_in
+                hours = delta.total_seconds() / 3600
+                record.hours = round(hours, 2)
+
+            record.save()
+
+            photo_url = record.clock_out_photo.url if record.clock_out_photo else None
+            response = {
+                'success': True,
+                'message': f'Clocked out at {now.strftime("%H:%M:%S")}',
+                'clock_out_time': now,
+                'hours_worked': record.hours,
+                'photo_url': photo_url,
+                'gps_location': record.clock_out_gps,
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        except Attendance.DoesNotExist:
+            return Response(
+                {'success': False, 'message': 'No clock-in record for today'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class CertificationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
