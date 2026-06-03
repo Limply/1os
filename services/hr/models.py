@@ -1,5 +1,6 @@
 from django.db import models
 from shared.models import BaseModel
+from shared.storage import FileBrowserStorage
 
 
 class Employee(BaseModel):
@@ -48,7 +49,7 @@ class Employee(BaseModel):
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates',
         verbose_name='Supervisor'
     )
-    photo = models.ImageField(upload_to='staff/photos/', null=True, blank=True)
+    photo = models.ImageField(upload_to='staff/photos/', storage=FileBrowserStorage(), null=True, blank=True)
     can_clock_in = models.BooleanField(default=False, help_text='Employee can use clock-in/out feature')
 
     def __str__(self):
@@ -135,8 +136,8 @@ class Attendance(BaseModel):
     overtime = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
     notes = models.TextField(blank=True, null=True)
-    clock_in_photo = models.ImageField(upload_to='attendance/photos/', null=True, blank=True)
-    clock_out_photo = models.ImageField(upload_to='attendance/photos/', null=True, blank=True)
+    clock_in_photo = models.ImageField(upload_to='attendance/photos/', storage=FileBrowserStorage(), null=True, blank=True)
+    clock_out_photo = models.ImageField(upload_to='attendance/photos/', storage=FileBrowserStorage(), null=True, blank=True)
     clock_in_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-in: {"lat": x, "lng": y}')
     clock_out_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-out: {"lat": x, "lng": y}')
     clock_in_address = models.CharField(max_length=500, blank=True, null=True)
