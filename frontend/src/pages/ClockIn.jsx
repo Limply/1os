@@ -84,7 +84,7 @@ export default function ClockIn() {
     }
   }
 
-  // Capture photo
+  // Capture photo with timestamp watermark
   const capturePhoto = () => {
     if (videoRef.current && canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d')
@@ -92,6 +92,23 @@ export default function ClockIn() {
       canvasRef.current.width = video.videoWidth
       canvasRef.current.height = video.videoHeight
       ctx.drawImage(video, 0, 0)
+
+      // Add timestamp watermark
+      const now = new Date()
+      const timestamp = now.toLocaleString()
+      const location = gpsCoords ? `${gpsCoords.lat.toFixed(4)}, ${gpsCoords.lng.toFixed(4)}` : ''
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+      ctx.fillRect(0, canvasRef.current.height - 70, canvasRef.current.width, 70)
+
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = 'bold 20px Arial'
+      ctx.fillText(timestamp, 15, canvasRef.current.height - 45)
+
+      if (location) {
+        ctx.font = '16px Arial'
+        ctx.fillText(`📍 ${location}`, 15, canvasRef.current.height - 15)
+      }
 
       canvasRef.current.toBlob(blob => {
         setPhotoBlob(blob)
