@@ -73,6 +73,22 @@ function renderTree(node, depth, onSelect, highlight) {
   )
 }
 
+function HorizontalNode({ node, depth, onSelect, highlight }) {
+  if (!node) return null
+  return (
+    <div className="flex items-center">
+      <StaffCard node={node} depth={depth} onSelect={onSelect} highlight={highlight} />
+      {node.children?.length > 0 && (
+        <div className="flex flex-col ml-6 pl-6 border-l-2 border-slate-300 gap-4">
+          {node.children.map(child => (
+            <HorizontalNode key={child.id} node={child} depth={depth + 1} onSelect={onSelect} highlight={highlight} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function OrgChart() {
   const [tree, setTree] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -151,16 +167,19 @@ export default function OrgChart() {
 
       {/* Tree */}
       <div className="overflow-auto p-6">
-        <div ref={treeRef} style={{ transform: `scale(${scale})`, transformOrigin: 'top center', display: 'inline-block', minWidth: '100%' }}>
-          <Tree
-            label={<StaffCard node={tree} depth={0} onSelect={setSelected} highlight={search} />}
-            lineWidth="2px"
-            lineColor="#cbd5e1"
-            lineBorderRadius="8px"
-            orientation={orientation}
-          >
-            {tree.children?.map(child => renderTree(child, 1, setSelected, search))}
-          </Tree>
+        <div ref={treeRef} style={{ transform: `scale(${scale})`, transformOrigin: 'top left', display: 'inline-block', minWidth: '100%' }}>
+          {orientation === 'top' ? (
+            <Tree
+              label={<StaffCard node={tree} depth={0} onSelect={setSelected} highlight={search} />}
+              lineWidth="2px"
+              lineColor="#cbd5e1"
+              lineBorderRadius="8px"
+            >
+              {tree.children?.map(child => renderTree(child, 1, setSelected, search))}
+            </Tree>
+          ) : (
+            <HorizontalNode node={tree} depth={0} onSelect={setSelected} highlight={search} />
+          )}
         </div>
       </div>
 
