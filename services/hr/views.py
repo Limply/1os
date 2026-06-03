@@ -27,6 +27,13 @@ class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Employee.objects.select_related('department', 'position')
     serializer_class = EmployeeSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        can_clock_in = self.request.query_params.get('can_clock_in')
+        if can_clock_in == 'true':
+            qs = qs.filter(can_clock_in=True)
+        return qs
+
 
 class LeaveTypeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()

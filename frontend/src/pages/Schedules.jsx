@@ -30,7 +30,7 @@ export default function Schedules() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get('/hr/employees/?limit=999').then(res => {
+    api.get('/hr/employees/?limit=999&can_clock_in=true').then(res => {
       setEmployees(res.data.results || [])
     })
   }, [])
