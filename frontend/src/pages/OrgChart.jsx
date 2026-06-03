@@ -79,6 +79,7 @@ export default function OrgChart() {
   const [selected, setSelected] = useState(null)
   const [scale, setScale] = useState(0.9)
   const [search, setSearch] = useState('')
+  const [orientation, setOrientation] = useState('top') // 'top' = vertical, 'left' = horizontal
   const treeRef = useRef(null)
   const currentUser = getUser()
   const isManager = ['superadmin', 'admin', 'manager'].includes(currentUser?.role)
@@ -122,6 +123,16 @@ export default function OrgChart() {
           <button onClick={() => setScale(0.9)}
             className="px-3 h-8 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-100 ml-1">Fit</button>
         </div>
+        <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden ml-2">
+          <button onClick={() => setOrientation('top')}
+            className={`px-3 py-1.5 text-xs font-medium transition ${orientation === 'top' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+            Vertical
+          </button>
+          <button onClick={() => setOrientation('left')}
+            className={`px-3 py-1.5 text-xs font-medium transition ${orientation === 'left' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+            Horizontal
+          </button>
+        </div>
         <button onClick={exportPNG}
           className="ml-auto px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700">
           Export PNG
@@ -146,6 +157,7 @@ export default function OrgChart() {
             lineWidth="2px"
             lineColor="#cbd5e1"
             lineBorderRadius="8px"
+            orientation={orientation}
           >
             {tree.children?.map(child => renderTree(child, 1, setSelected, search))}
           </Tree>
