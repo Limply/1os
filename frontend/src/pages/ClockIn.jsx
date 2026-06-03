@@ -275,6 +275,14 @@ export default function ClockIn() {
               <p>✓ Latitude: {gpsCoords.lat.toFixed(6)}</p>
               <p>✓ Longitude: {gpsCoords.lng.toFixed(6)}</p>
               <p className="text-gray-300">Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m</p>
+              <a
+                href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs"
+              >
+                🗺️ View on Google Maps
+              </a>
             </div>
           )}
           {gpsError && <p className="text-red-300 text-sm mt-2">{gpsError}</p>}
