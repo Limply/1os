@@ -201,7 +201,7 @@ export default function ClockIn() {
       {/* Header */}
       <div className="bg-blue-950 text-white p-6 text-center">
         <h1 className="text-3xl font-bold">Clock In/Out</h1>
-        <p className="text-blue-200 mt-2">{employee?.first_name} {employee?.last_name}</p>
+        <p className="text-blue-200 mt-2">{user?.first_name} {user?.last_name}</p>
         <p className="text-blue-300 text-sm">{employee?.position?.title || '—'}</p>
         <div className="text-4xl font-mono font-bold mt-4">{currentTime.toLocaleTimeString()}</div>
         <div className="text-sm text-blue-200 mt-1">{currentTime.toLocaleDateString()}</div>
