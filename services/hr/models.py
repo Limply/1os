@@ -45,7 +45,8 @@ class Employee(BaseModel):
     emergency_name = models.CharField(max_length=100, blank=True, null=True)
     emergency_phone = models.CharField(max_length=20, blank=True, null=True)
     manager = models.ForeignKey(
-        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates'
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates',
+        verbose_name='Supervisor'
     )
     photo = models.ImageField(upload_to='staff/photos/', null=True, blank=True)
 
