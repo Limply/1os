@@ -1,34 +1,44 @@
 import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
 
-const links = [
+// module key maps to what's stored in user.modules
+const ALL_LINKS = [
   {
-    to: '/', label: 'Dashboard',
+    module: 'dashboard', to: '/', label: 'Dashboard',
     children: [
-      { to: '/orgchart', label: 'Org Chart' },
+      { module: 'orgchart', to: '/orgchart', label: 'Org Chart' },
     ],
   },
   {
-    to: '/projects',   label: 'Projects',
+    module: 'projects', to: '/projects', label: 'Projects',
     children: [
-      { to: '/calendar', label: 'Project Calendar' },
+      { module: 'calendar', to: '/calendar', label: 'Project Calendar' },
     ],
   },
   {
-    to: '/hr', label: 'HR',
+    module: 'hr', to: '/hr', label: 'HR',
     children: [
-      { to: '/schedules', label: 'Schedules' },
+      { module: 'schedules', to: '/schedules', label: 'Schedules' },
     ],
   },
-  { to: '/operations', label: 'Operations' },
-  { to: '/finance',    label: 'Finance' },
-  { to: '/compliance', label: 'Compliance' },
-  { to: '/files',      label: 'Files' },
+  { module: 'operations', to: '/operations', label: 'Operations' },
+  { module: 'finance',    to: '/finance',    label: 'Finance' },
+  { module: 'compliance', to: '/compliance', label: 'Compliance' },
+  { module: 'files',      to: '/files',      label: 'Files' },
 ]
 
-function NavItem({ link }) {
+function canSee(module, allowed, isAdminPlus) {
+  // Admins and superadmins always see everything
+  if (isAdminPlus) return true
+  // Empty modules list = no restrictions (backwards compatible)
+  if (!allowed || allowed.length === 0) return true
+  return allowed.includes(module)
+}
+
+function NavItem({ link, allowed, isAdminPlus }) {
   const isParentActive = useMatch({ path: link.to, end: link.to === '/' })
-  const isChildActive = link.children?.some(c => window.location.pathname === c.to)
+  const visibleChildren = link.children?.filter(c => canSee(c.module, allowed, isAdminPlus))
+  const isChildActive = visibleChildren?.some(c => window.location.pathname === c.to)
 
   return (
     <>
@@ -46,9 +56,9 @@ function NavItem({ link }) {
         {link.label}
       </NavLink>
 
-      {link.children && (isParentActive || isChildActive) && (
+      {visibleChildren?.length > 0 && (isParentActive || isChildActive) && (
         <div className="ml-3 border-l border-gray-700 pl-2 space-y-0.5 mt-0.5">
-          {link.children.map(child => (
+          {visibleChildren.map(child => (
             <NavLink
               key={child.to}
               to={child.to}
@@ -72,6 +82,10 @@ function NavItem({ link }) {
 export default function Sidebar({ onCollapse }) {
   const navigate = useNavigate()
   const user = getUser()
+  const allowed = user.modules || []
+  const isAdminPlus = ['admin', 'superadmin'].includes(user.role)
+
+  const visibleLinks = ALL_LINKS.filter(link => canSee(link.module, allowed, isAdminPlus))
 
   function handleLogout() {
     logout()
@@ -86,8 +100,8 @@ export default function Sidebar({ onCollapse }) {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {links.map((link) => (
-          <NavItem key={link.to} link={link} />
+        {visibleLinks.map(link => (
+          <NavItem key={link.to} link={link} allowed={allowed} isAdminPlus={isAdminPlus} />
         ))}
       </nav>
 
