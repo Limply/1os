@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import ClockInWidget from '../components/ClockInWidget'
 
 const MANAGER_ROLES = ['superadmin', 'admin', 'manager']
 
@@ -39,7 +39,6 @@ function SubTabs({ tabs, active, onChange }) {
 }
 
 export default function HR() {
-  const navigate = useNavigate()
   const currentUser = getUser()
   const isManager = MANAGER_ROLES.includes(currentUser?.role)
 
@@ -54,7 +53,7 @@ export default function HR() {
   const [tab, setTab] = useState('My Leave')
 
   // Attendance sub-tabs
-  const [attendSubTab, setAttendSubTab] = useState('Record')
+  const [attendSubTab, setAttendSubTab] = useState('Clock In')
 
   // Data
   const [employee, setEmployee] = useState(null)
@@ -353,51 +352,7 @@ export default function HR() {
 
           {/* Clock In sub-tab */}
           {attendSubTab === 'Clock In' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 text-center space-y-4">
-              <div className="text-5xl">📍</div>
-              <p className="font-semibold text-gray-800">Daily Clock In / Out</p>
-              <p className="text-sm text-gray-400">
-                Use the clock-in service to record your attendance with photo and GPS location.
-              </p>
-              <button
-                onClick={() => navigate('/clock-in')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">
-                Open Clock In
-              </button>
-              {/* Today's record */}
-              {(() => {
-                const today = new Date().toISOString().split('T')[0]
-                const todayRecord = attendance.find(a => a.date === today)
-                if (!todayRecord) return (
-                  <p className="text-xs text-gray-400">No clock-in recorded today</p>
-                )
-                return (
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-left">
-                    <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Today</p>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Clock In</span>
-                      <span className="font-medium">{todayRecord.clock_in?.slice(11, 16) || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Clock Out</span>
-                      <span className="font-medium">{todayRecord.clock_out?.slice(11, 16) || '—'}</span>
-                    </div>
-                    {todayRecord.hours && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Hours</span>
-                        <span className="font-medium">{todayRecord.hours}h</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ATTENDANCE_COLORS[todayRecord.status]}`}>
-                        {todayRecord.status}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
+            <ClockInWidget employee={employee} compact />
           )}
         </div>
       )}
