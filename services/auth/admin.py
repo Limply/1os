@@ -1,8 +1,6 @@
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.contrib.auth.models import Group
-from shared.admin import _is_tenant_admin
 from .models import Tenant, User, PermissionGroup
 
 ALL_MODULES = [
@@ -51,74 +49,26 @@ class TenantAdmin(admin.ModelAdmin):
     search_fields = ['name', 'schema_name', 'domain']
     list_filter = ['plan']
 
-    def has_module_permission(self, request):
-        return request.user.is_authenticated and request.user.is_superuser
-
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     form = UserModulesForm
-    list_display = ['email', 'first_name', 'last_name', 'role', 'tenant', 'is_active']
+    list_display = ['email', 'first_name', 'last_name', 'role', 'is_active']
     search_fields = ['email', 'first_name', 'last_name']
-    list_filter = ['role', 'is_active', 'tenant']
+    list_filter = ['role', 'is_active']
     ordering = ['email']
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal', {'fields': ('first_name', 'last_name', 'avatar')}),
-        ('Access', {'fields': ('tenant', 'role', 'is_active', 'is_staff', 'mfa_enabled')}),
+        ('Access', {'fields': ('tenant', 'role', 'is_active', 'is_staff', 'is_superuser', 'mfa_enabled')}),
         ('Module Access', {'fields': ('module_access',), 'description': 'Select which modules this user can see in the app.'}),
     )
     add_fieldsets = (
         (None, {'fields': ('email', 'password1', 'password2', 'tenant', 'role')}),
     )
 
-    def get_queryset(self, request):
-        """Tenant admins only see users from their own tenant."""
-        qs = super().get_queryset(request)
-        if request.user.is_superuser:
-            return qs
-        return qs.filter(tenant=request.user.tenant)
-
-    def has_module_permission(self, request):
-        if request.user.is_superuser:
-            return True
-        return _is_tenant_admin(request.user)
-
-    def get_model_perms(self, request):
-        if request.user.is_superuser:
-            return super().get_model_perms(request)
-        if _is_tenant_admin(request.user):
-            return {'add': True, 'change': True, 'delete': True, 'view': True}
-        return super().get_model_perms(request)
-
 
 @admin.register(PermissionGroup)
 class PermissionGroupAdmin(admin.ModelAdmin):
-    list_display = ['name', 'tenant', 'is_active']
+    list_display = ['name', 'is_active']
     search_fields = ['name']
-    list_filter = ['tenant', 'is_active']
-
-    def has_module_permission(self, request):
-        return request.user.is_authenticated and request.user.is_superuser
-
-
-# Unregister and re-register Django's Group with proper tenant permissions
-admin.site.unregister(Group)
-
-@admin.register(Group)
-class GroupAdmin(admin.ModelAdmin):
-    """Django's built-in Group with tenant scoping."""
-    list_display = ['name']
-    search_fields = ['name']
-
-    def has_module_permission(self, request):
-        if request.user.is_superuser:
-            return True
-        return _is_tenant_admin(request.user)
-
-    def get_model_perms(self, request):
-        if request.user.is_superuser:
-            return super().get_model_perms(request)
-        if _is_tenant_admin(request.user):
-            return {'add': True, 'change': True, 'delete': True, 'view': True}
-        return super().get_model_perms(request)

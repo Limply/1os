@@ -7,7 +7,7 @@ class TenantScopedMixin:
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.filter(tenant=self.request.user.tenant, is_active=True)
+        return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)

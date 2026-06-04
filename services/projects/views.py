@@ -7,7 +7,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        qs = Project.objects.filter(tenant=self.request.tenant).order_by('-created_at')
+        qs = Project.objects.order_by('-created_at')
         project_no = self.request.query_params.get('project_no')
         if project_no:
             qs = qs.filter(project_no=project_no)
@@ -19,7 +19,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return ProjectSerializer
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        serializer.save(tenant=self.request.user.tenant)
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -27,7 +27,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
 
     def get_queryset(self):
-        qs = Task.objects.filter(tenant=self.request.tenant)
+        qs = Task.objects.all()
         project_id = self.request.query_params.get('project')
         group = self.request.query_params.get('group')
         assigned_to = self.request.query_params.get('assigned_to')
@@ -43,4 +43,4 @@ class TaskViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        serializer.save(tenant=self.request.user.tenant)

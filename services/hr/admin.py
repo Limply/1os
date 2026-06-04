@@ -20,8 +20,8 @@ class EmployeeAdmin(TenantModelAdmin):
 
 @admin.register(LeaveType)
 class LeaveTypeAdmin(TenantModelAdmin):
-    list_display = ['name', 'days_per_year', 'paid', 'carry_forward', 'tenant']
-    list_filter = ['paid', 'carry_forward', 'tenant']
+    list_display = ['name', 'days_per_year', 'paid', 'carry_forward']
+    list_filter = ['paid', 'carry_forward']
 
 
 @admin.register(LeaveBalance)

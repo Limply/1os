@@ -31,9 +31,3 @@ class IsStaff(BasePermission):
         return request.user.is_authenticated and _rank(request.user.role) >= _rank('staff')
 
 
-class IsTenantMember(BasePermission):
-    """Ensures the user belongs to the requested tenant."""
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and hasattr(request, 'tenant')
-
-

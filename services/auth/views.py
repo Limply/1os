@@ -44,7 +44,7 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return User.objects.filter(tenant=self.request.user.tenant)
+        return User.objects.all()
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -58,4 +58,4 @@ class PermissionGroupViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return PermissionGroup.objects.filter(tenant=self.request.user.tenant)
+        return PermissionGroup.objects.all()

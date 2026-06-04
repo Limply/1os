@@ -3,10 +3,10 @@ from django.db import models
 from shared.models import BaseModel
 
 
-def _next_no(model, field, prefix, tenant):
+def _next_no(model, field, prefix, tenant=None):
     year = str(datetime.date.today().year)[2:]
     p = f'{prefix}-{year}-'
-    last = model.objects.filter(tenant=tenant, **{f'{field}__startswith': p}).order_by(f'-{field}').first()
+    last = model.objects.filter(**{f'{field}__startswith': p}).order_by(f'-{field}').first()
     seq = int(getattr(last, field).split('-')[-1]) + 1 if last else 1
     return f'{p}{seq:03d}'
 

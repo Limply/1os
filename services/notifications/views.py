@@ -10,7 +10,6 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Notification.objects.filter(
-            tenant=self.request.user.tenant,
             recipient=self.request.user,
         )
 

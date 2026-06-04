@@ -7,7 +7,7 @@ class TenantScopedMixin:
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.filter(tenant=self.request.user.tenant, is_active=True)
+        return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
@@ -42,7 +42,7 @@ class ClientViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     serializer_class = ClientSerializer
 
     def get_queryset(self):
-        qs = Client.objects.filter(tenant=self.request.user.tenant, is_active=True)
+        qs = Client.objects.filter(is_active=True)
         search = self.request.query_params.get('search')
         if search:
             qs = qs.filter(name__icontains=search)

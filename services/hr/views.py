@@ -22,7 +22,7 @@ class TenantScopedMixin:
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.filter(tenant=self.request.user.tenant, is_active=True)
+        return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
@@ -257,7 +257,7 @@ def _row_clock_status(emp, date_obj):
     return ('Late' if record.status == 'late' else 'Done'), record.clock_in.strftime('%H:%M')
 
 
-def _enrich(row, tenant):
+def _enrich(row):
     """Add id, employee_name, clock_status, clock_in_time to a CSV row dict."""
     try:
         date_obj = _parse_date(row.get('date', ''))
@@ -268,7 +268,7 @@ def _enrich(row, tenant):
         row['clock_in_time'] = None
         return row
 
-    emp = Employee.objects.filter(emp_no=row.get('emp_no', ''), tenant=tenant).first()
+    emp = Employee.objects.filter(emp_no=row.get('emp_no', '')).first()
     row['id'] = f"{row['emp_no']}_{date_obj.strftime('%d-%m-%Y')}"
     row['employee_name'] = emp.full_name if emp else f"{row.get('first_name','')} {row.get('last_name','')}".strip()
     clock_status, clock_time = _row_clock_status(emp, date_obj) if emp else ('Pending', None)
@@ -280,12 +280,11 @@ def _enrich(row, tenant):
 class WorkScheduleViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
-    def _tenant_emp_nos(self, tenant):
-        return set(Employee.objects.filter(tenant=tenant, is_active=True).values_list('emp_no', flat=True))
+    def _all_emp_nos(self):
+        return set(Employee.objects.filter(is_active=True).values_list('emp_no', flat=True))
 
     def list(self, request):
-        tenant = request.user.tenant
-        emp_nos = self._tenant_emp_nos(tenant)
+        emp_nos = self._all_emp_nos()
         rows = [r for r in fb_read_csv(CSV_PATH) if r.get('emp_no', '') in emp_nos]
 
         date_filter = request.query_params.get('date')
@@ -295,18 +294,17 @@ class WorkScheduleViewSet(viewsets.ViewSet):
             rows = [r for r in rows if r.get('date') == date_filter or
                     (lambda d: d.strftime('%d-%m-%Y') == date_filter if d else False)(_try_parse(r.get('date', '')))]
         if emp_filter:
-            emp = Employee.objects.filter(id=emp_filter, tenant=tenant).first()
+            emp = Employee.objects.filter(id=emp_filter).first()
             if emp:
                 rows = [r for r in rows if r.get('emp_no') == emp.emp_no]
 
         rows = sorted(rows, key=lambda r: (r.get('date', ''), r.get('shift_start', '')))
-        rows = [_enrich(r, tenant) for r in rows]
+        rows = [_enrich(r) for r in rows]
         return Response({'results': rows, 'count': len(rows)})
 
     def create(self, request):
-        tenant = request.user.tenant
         emp_id = request.data.get('employee')
-        emp = Employee.objects.filter(id=emp_id, tenant=tenant).first() if emp_id else None
+        emp = Employee.objects.filter(id=emp_id).first() if emp_id else None
         if not emp:
             return Response({'error': 'Employee not found'}, status=400)
 
@@ -335,10 +333,9 @@ class WorkScheduleViewSet(viewsets.ViewSet):
         }
         rows.append(new_row)
         fb_write_csv(CSV_PATH, rows, CSV_FIELDS)
-        return Response(_enrich(new_row, tenant), status=status.HTTP_201_CREATED)
+        return Response(_enrich(new_row), status=status.HTTP_201_CREATED)
 
     def update(self, request, pk=None):
-        tenant = request.user.tenant
         emp_no, date_str = pk.rsplit('_', 1)
         rows = fb_read_csv(CSV_PATH)
         updated = None
@@ -357,7 +354,7 @@ class WorkScheduleViewSet(viewsets.ViewSet):
         if not updated:
             return Response({'error': 'Schedule not found'}, status=404)
         fb_write_csv(CSV_PATH, rows, CSV_FIELDS)
-        return Response(_enrich(updated, tenant))
+        return Response(_enrich(updated))
 
     def destroy(self, request, pk=None):
         emp_no, date_str = pk.rsplit('_', 1)
@@ -368,10 +365,9 @@ class WorkScheduleViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def export_excel(self, request):
-        tenant = request.user.tenant
-        emp_nos = self._tenant_emp_nos(tenant)
+        emp_nos = self._all_emp_nos()
         rows = [r for r in fb_read_csv(CSV_PATH) if r.get('emp_no', '') in emp_nos]
-        rows = [_enrich(r, tenant) for r in rows]
+        rows = [_enrich(r) for r in rows]
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -418,8 +414,7 @@ class WorkScheduleViewSet(viewsets.ViewSet):
         if not incoming:
             return Response({'success': False, 'message': 'File is empty'}, status=400)
 
-        tenant = request.user.tenant
-        emp_nos = self._tenant_emp_nos(tenant)
+        emp_nos = self._all_emp_nos()
         existing = fb_read_csv(CSV_PATH)
         existing_keys = {(r.get('emp_no'), r.get('date')) for r in existing}
 
@@ -451,7 +446,7 @@ class WorkScheduleViewSet(viewsets.ViewSet):
                 errors.append(f'Row {i}: Schedule already exists for {emp_no} on {date_str}')
                 continue
 
-            emp = Employee.objects.filter(emp_no=emp_no, tenant=tenant).first()
+            emp = Employee.objects.filter(emp_no=emp_no).first()
             validated.append({
                 'emp_no': emp_no,
                 'first_name': emp.first_name if emp else '',
@@ -494,8 +489,7 @@ class PublicHolidayViewSet(viewsets.ReadOnlyModelViewSet):
 @permission_classes([permissions.IsAuthenticated])
 def org_tree(request):
     """Return recursive org chart tree from root(s)."""
-    tenant = request.user.tenant
-    roots = Employee.objects.filter(tenant=tenant, is_active=True, manager__isnull=True)
+    roots = Employee.objects.filter(is_active=True, manager__isnull=True)
     data = EmployeeTreeSerializer(roots, many=True, context={'request': request}).data
     if len(data) == 1:
         return Response(data[0])
