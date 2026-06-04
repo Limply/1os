@@ -60,6 +60,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     mfa_enabled = models.BooleanField(default=False)
     avatar = models.CharField(max_length=500, blank=True, null=True)
+    modules = models.JSONField(default=list, blank=True, help_text='List of module keys this user can access')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
