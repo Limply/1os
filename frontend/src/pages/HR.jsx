@@ -268,12 +268,13 @@ export default function HR() {
       {tab === 'Attendance' && (
         <div>
           <div className="space-y-4">
-              {!showAttendForm ? (
+              {isManager && !showAttendForm && (
                 <button onClick={() => setShowAttendForm(true)}
                   className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition">
                   + Log Attendance
                 </button>
-              ) : (
+              )}
+              {isManager && showAttendForm && (
                 <form onSubmit={handleLogAttendance} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
                   <p className="font-semibold text-gray-700 text-sm">Log Attendance</p>
                   <div>
