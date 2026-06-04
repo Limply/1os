@@ -2,6 +2,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group
+from shared.admin import _is_tenant_admin
 from .models import Tenant, User, PermissionGroup
 
 ALL_MODULES = [
@@ -51,8 +52,7 @@ class TenantAdmin(admin.ModelAdmin):
     list_filter = ['plan']
 
     def has_module_permission(self, request):
-        """Only superusers can see/manage tenants."""
-        return request.user.is_superuser
+        return request.user.is_authenticated and request.user.is_superuser
 
 
 @admin.register(User)
@@ -80,18 +80,14 @@ class UserAdmin(BaseUserAdmin):
         return qs.filter(tenant=request.user.tenant)
 
     def has_module_permission(self, request):
-        """Tenant admins can manage users in their tenant."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return False
+        return _is_tenant_admin(request.user)
 
     def get_model_perms(self, request):
-        """Grant all perms to tenant admins."""
         if request.user.is_superuser:
             return super().get_model_perms(request)
-        if request.user.role in ('admin', 'superadmin'):
+        if _is_tenant_admin(request.user):
             return {'add': True, 'change': True, 'delete': True, 'view': True}
         return super().get_model_perms(request)
 
@@ -103,8 +99,7 @@ class PermissionGroupAdmin(admin.ModelAdmin):
     list_filter = ['tenant', 'is_active']
 
     def has_module_permission(self, request):
-        """Only superusers can see/manage permission groups."""
-        return request.user.is_superuser
+        return request.user.is_authenticated and request.user.is_superuser
 
 
 # Unregister and re-register Django's Group with proper tenant permissions
@@ -117,17 +112,13 @@ class GroupAdmin(admin.ModelAdmin):
     search_fields = ['name']
 
     def has_module_permission(self, request):
-        """Tenant admins can manage groups in their tenant."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return False
+        return _is_tenant_admin(request.user)
 
     def get_model_perms(self, request):
-        """Grant all perms to tenant admins."""
         if request.user.is_superuser:
             return super().get_model_perms(request)
-        if request.user.role in ('admin', 'superadmin'):
+        if _is_tenant_admin(request.user):
             return {'add': True, 'change': True, 'delete': True, 'view': True}
         return super().get_model_perms(request)

@@ -1,6 +1,11 @@
 from django.contrib import admin
 
 
+def _is_tenant_admin(user):
+    """True if user is an authenticated tenant admin (not anonymous)."""
+    return user.is_authenticated and getattr(user, 'role', None) in ('admin', 'superadmin')
+
+
 class TenantModelAdmin(admin.ModelAdmin):
     """Base admin that auto-sets tenant from the logged-in user on save."""
 
@@ -16,66 +21,46 @@ class TenantModelAdmin(admin.ModelAdmin):
         return qs.filter(tenant=request.user.tenant)
 
     def has_module_perms(self, request):
-        """Legacy — Django 5.2+ uses has_module_permission."""
         return self.has_module_permission(request)
 
     def has_module_permission(self, request):
-        """Tenant admins (role='admin') see module if they have any perms."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return False
+        return _is_tenant_admin(request.user)
 
     def get_model_perms(self, request):
-        """Grant all perms to tenant admins without checking Django permissions."""
         if request.user.is_superuser:
             return super().get_model_perms(request)
-        if request.user.role in ('admin', 'superadmin'):
-            # Return all True for tenant admins, skip Django permission checks
+        if _is_tenant_admin(request.user):
             return {'add': True, 'change': True, 'delete': True, 'view': True}
         return super().get_model_perms(request)
 
     def has_view_permission(self, request, obj=None):
-        """Tenant admins can view all objects in their tenant."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return super().has_view_permission(request, obj)
+        return _is_tenant_admin(request.user)
 
     def has_add_permission(self, request):
-        """Tenant admins can add objects."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return super().has_add_permission(request)
+        return _is_tenant_admin(request.user)
 
     def has_change_permission(self, request, obj=None):
-        """Tenant admins can edit objects."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return super().has_change_permission(request, obj)
+        return _is_tenant_admin(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        """Tenant admins can delete objects."""
         if request.user.is_superuser:
             return True
-        if request.user.role in ('admin', 'superadmin'):
-            return True
-        return super().has_delete_permission(request, obj)
+        return _is_tenant_admin(request.user)
 
     def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
-        """Filter FK dropdowns to current tenant for non-superusers."""
-        if request and not request.user.is_superuser:
+        if request and request.user.is_authenticated and not request.user.is_superuser:
             model = db_field.remote_field.model
-            # Only filter if the remote model has a tenant field
             try:
                 model._meta.get_field('tenant')
                 kwargs['queryset'] = model.objects.filter(tenant=request.user.tenant)
-            except:
+            except Exception:
                 pass
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
