@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
+import api from '../api/axios'
 
 // module key maps to what's stored in user.modules
 const ALL_LINKS = [
@@ -84,12 +86,33 @@ export default function Sidebar({ onCollapse }) {
   const user = getUser()
   const allowed = user.modules || []
   const isAdminPlus = ['admin', 'superadmin'].includes(user.role)
-
   const visibleLinks = ALL_LINKS.filter(link => canSee(link.module, allowed, isAdminPlus))
+
+  const [showPwModal, setShowPwModal] = useState(false)
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwError, setPwError] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
 
   function handleLogout() {
     logout()
     navigate('/login')
+  }
+
+  async function handleChangePassword() {
+    setPwError('')
+    setPwMsg('')
+    setPwSaving(true)
+    try {
+      const res = await api.post('/auth/change-password/', pwForm)
+      setPwMsg(res.data.message)
+      setPwForm({ current_password: '', new_password: '', confirm_password: '' })
+      setTimeout(() => { setShowPwModal(false); setPwMsg('') }, 1500)
+    } catch (err) {
+      setPwError(err.response?.data?.error || 'Failed to change password')
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   return (
@@ -111,12 +134,58 @@ export default function Sidebar({ onCollapse }) {
           <p className="text-xs text-gray-400 truncate">{user.role}</p>
         </div>
         <button
+          onClick={() => { setShowPwModal(true); setPwError(''); setPwMsg('') }}
+          className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition"
+        >
+          Change Password
+        </button>
+        <button
           onClick={handleLogout}
           className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition"
         >
           Sign Out
         </button>
       </div>
+
+      {/* Change Password Modal */}
+      {showPwModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPwModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-800 mb-5">Change Password</h2>
+            <div className="space-y-3">
+              {[
+                { key: 'current_password', label: 'Current Password' },
+                { key: 'new_password',     label: 'New Password' },
+                { key: 'confirm_password', label: 'Confirm New Password' },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">{label}</label>
+                  <input
+                    type="password"
+                    value={pwForm[key]}
+                    onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+              ))}
+              {pwError && <p className="text-red-500 text-sm">{pwError}</p>}
+              {pwMsg   && <p className="text-green-600 text-sm">✓ {pwMsg}</p>}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowPwModal(false)}
+                className="flex-1 border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+                Cancel
+              </button>
+              <button onClick={handleChangePassword} disabled={pwSaving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 rounded-lg text-sm transition">
+                {pwSaving ? 'Saving...' : 'Change Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
