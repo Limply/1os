@@ -338,8 +338,6 @@ export default function HR() {
                 ))}
               </div>
             </div>
-          )}
-
         </div>
       )}
 
