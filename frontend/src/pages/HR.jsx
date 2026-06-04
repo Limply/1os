@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
-import ClockInWidget from '../components/ClockInWidget'
 
 const MANAGER_ROLES = ['superadmin', 'admin', 'manager']
 
@@ -52,8 +51,6 @@ export default function HR() {
   ]
   const [tab, setTab] = useState('My Leave')
 
-  // Attendance sub-tabs
-  const [attendSubTab, setAttendSubTab] = useState('Clock In')
 
   // Data
   const [employee, setEmployee] = useState(null)
@@ -270,15 +267,7 @@ export default function HR() {
       {/* ── ATTENDANCE ────────────────────────────── */}
       {tab === 'Attendance' && (
         <div>
-          <SubTabs
-            tabs={['Record', 'Clock In']}
-            active={attendSubTab}
-            onChange={setAttendSubTab}
-          />
-
-          {/* Record sub-tab */}
-          {attendSubTab === 'Record' && (
-            <div className="space-y-4">
+          <div className="space-y-4">
               {!showAttendForm ? (
                 <button onClick={() => setShowAttendForm(true)}
                   className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition">
@@ -350,10 +339,6 @@ export default function HR() {
             </div>
           )}
 
-          {/* Clock In sub-tab */}
-          {attendSubTab === 'Clock In' && (
-            <ClockInWidget employee={employee} compact />
-          )}
         </div>
       )}
 

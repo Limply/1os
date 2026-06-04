@@ -21,6 +21,7 @@ const ALL_LINKS = [
     module: 'hr', to: '/hr', label: 'HR',
     children: [
       { module: 'schedules', to: '/schedules', label: 'Schedules' },
+      { module: 'hr', to: '/clock-in', label: 'Clock In' },
     ],
   },
   { module: 'operations', to: '/operations', label: 'Operations' },
