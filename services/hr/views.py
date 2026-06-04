@@ -13,7 +13,7 @@ from .serializers import (
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
     ClockInResponseSerializer, WorkScheduleSerializer,
 )
-from shared.permissions import IsClockInAllowed
+from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
 from shared.filebrowser_csv import read_csv as fb_read_csv, write_csv as fb_write_csv
 
