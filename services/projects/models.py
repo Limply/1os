@@ -2,6 +2,7 @@ import datetime
 from django.db import models
 from django.utils import timezone
 from shared.models import BaseModel
+from shared.storage import FileBrowserStorage
 
 
 def _generate_project_no(tenant):
@@ -68,12 +69,13 @@ class Project(BaseModel):
         return f'{self.project_no} — {self.name}'
 
     def recalculate_progress(self):
-        total = self.tasks.count()
-        if total == 0:
+        from django.db.models import Sum
+        total_weight = self.tasks.aggregate(t=Sum('weightage'))['t'] or 0
+        if total_weight == 0:
             self.progress = 0
         else:
-            done = self.tasks.filter(status='done').count()
-            self.progress = round((done / total) * 100)
+            done_weight = self.tasks.filter(status='done').aggregate(t=Sum('weightage'))['t'] or 0
+            self.progress = round((done_weight / total_weight) * 100)
         self.save(update_fields=['progress'])
 
 
@@ -101,6 +103,9 @@ class Task(BaseModel):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    weightage = models.PositiveSmallIntegerField(default=1)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     photo = models.ImageField(upload_to='tasks/', null=True, blank=True)
@@ -118,3 +123,41 @@ class Task(BaseModel):
             self.completed_at = None
         super().save(*args, **kwargs)
         self.project.recalculate_progress()
+
+
+class TaskPhoto(BaseModel):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='photos')
+    photo = models.ImageField(upload_to='tasks/photos/', storage=FileBrowserStorage())
+    comment = models.TextField(blank=True, default='')
+    uploaded_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='task_photos'
+    )
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.task.title} — photo {self.id}"
+
+
+class TaskDocument(BaseModel):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='documents')
+    file = models.FileField(upload_to='tasks/documents/', storage=FileBrowserStorage())
+    filename = models.CharField(max_length=255, blank=True)
+    comment = models.TextField(blank=True, default='')
+    uploaded_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='task_documents'
+    )
+
+    class Meta:
+        ordering = ['created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.filename and self.file:
+            self.filename = self.file.name.split('/')[-1]
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.task.title} — {self.filename}"

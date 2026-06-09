@@ -58,14 +58,25 @@ Each service module is fully independent. A change in one module must never brea
 | Split settings | ✅ Done | `base.py` / `dev.py` / `prod.py`, secrets via `.env` |
 | GitHub repo | ✅ Done | `github.com/Limply/1os` (private) |
 | Frontend (React) | ✅ Done | Login, Dashboard, Projects, Files, Calendar — live at `https://ast1.sim-eng.com` |
-| Cloudflare Tunnel | ✅ Done | `ast1.sim-eng.com` → Vite; SSH tunnel at `ssh.ast1.sim-eng.com` |
+| Cloudflare Tunnel | ✅ Done | `ast1.sim-eng.com` → 5173 (1OS); `ast-iot.sim-eng.com` → 6123; SSH at `ssh.ast1.sim-eng.com` |
 | Calendar (Projects) | ✅ Done | Company calendar with dept filter, project bars, task dots, unscheduled summary |
 | CalendarView component | ✅ Done | Shared FullCalendar wrapper at `components/CalendarView.jsx` |
+| HR module (staff) | ✅ Done | My Leave, Attendance, My Profile, Courses — role-gated tabs |
+| HR module (manager) | ✅ Done | Employees, Approvals tabs; manager-only log attendance |
+| Clock-In | ✅ Done | Photo + GPS + geofence (200m), watermark, FileBrowser upload, sidebar sub-link |
+| Work Schedules | ✅ Done | CSV-backed schedules, import/export, geofence enforcement |
+| Module access control | ✅ Done | Per-user module list (JSONField), sidebar + route gating |
+| Change password | ✅ Done | Sidebar footer modal, all users |
+| User accounts (workers) | ✅ Done | 26 accounts created, password `Astronic.7890` |
+| Project tasks | ✅ Done | Groups, task rows, status/priority/weightage, start/end dates, delete (manager+) |
+| Task photos | ✅ Done | Multiple photos per task, comment, uploader, table view, lightbox, green dot indicator |
+| Task documents | ✅ Done | Multiple docs per task, comment, uploader, file type icons, download links, green dot indicator |
+| PDF/Excel export | ✅ Done | Task list export with groups, weightage, dates — jsPDF + xlsx |
 | Business logic | ❌ Not started | See task list below |
 | API contracts | ❌ Not started | Needed before more frontend work |
 | Tests | ❌ Not started | |
 | Docker | ❌ Not started | Needed for production deployment |
-| HR / Ops / Finance / Compliance pages | ❌ Not started | Placeholders only |
+| HR / Ops / Finance / Compliance pages | 🔄 In progress | HR done; others placeholders |
 | HR Calendar | ❌ Not started | Leave applications, public holidays — uses `CalendarView` |
 | Ops Calendar | ❌ Not started | Jobs, site visits — uses `CalendarView` |
 
@@ -157,13 +168,16 @@ Each service module is fully independent. A change in one module must never brea
 | Item | Value |
 |---|---|
 | Server (Django) | `http://192.168.1.71:8000` |
-| Server (Vite) | `http://192.168.1.71:5173` |
-| Public URL | `https://ast1.sim-eng.com` |
+| Server (1OS Vite) | `http://192.168.1.71:5173` |
+| Server (ast-iot Vite) | `http://192.168.1.71:6123` |
+| Public URL (1OS) | `https://ast1.sim-eng.com` |
+| Public URL (IoT) | `https://ast-iot.sim-eng.com` |
 | Admin (local) | `http://192.168.1.71:8000/admin/` |
 | Admin (remote) | SSH tunnel: `ssh -L 8000:localhost:8000 lucus@192.168.1.71` then `http://localhost:8000/admin/` |
-| Users | `admin@astronic.com` / `Astronic.2468` · `lucus@astronic.com.sg` / `Astronic.2468` |
+| Users | `admin@astronic.com.sg` / `Astronic.2468` · `lucus@astronic.com.sg` / `Astronic.2468` |
 | DB | PostgreSQL — database `astronic`, user `astronic_user` |
-| Code | `/opt/1os/` |
+| Code (1OS) | `/opt/1os/` |
+| Code (IoT) | `/home/lucus/astronic-iot/` |
 | GitHub | `https://github.com/Limply/1os` (private) |
 
 ---

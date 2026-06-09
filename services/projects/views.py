@@ -1,6 +1,9 @@
 from rest_framework import viewsets, permissions
-from .models import Project, Task
-from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer
+from rest_framework.exceptions import PermissionDenied
+from .models import Project, Task, TaskPhoto, TaskDocument
+from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer
+
+MANAGER_ROLES = {'manager', 'admin', 'superadmin'}
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -44,3 +47,46 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role not in MANAGER_ROLES:
+            raise PermissionDenied('Only managers can delete tasks.')
+        return super().destroy(request, *args, **kwargs)
+
+
+class TaskPhotoViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TaskPhotoSerializer
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        qs = TaskPhoto.objects.select_related('uploaded_by')
+        task_id = self.request.query_params.get('task')
+        if task_id:
+            qs = qs.filter(task_id=task_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(
+            tenant=self.request.user.tenant,
+            uploaded_by=self.request.user,
+        )
+
+
+class TaskDocumentViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TaskDocumentSerializer
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        qs = TaskDocument.objects.select_related('uploaded_by')
+        task_id = self.request.query_params.get('task')
+        if task_id:
+            qs = qs.filter(task_id=task_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(
+            tenant=self.request.user.tenant,
+            uploaded_by=self.request.user,
+        )

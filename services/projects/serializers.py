@@ -1,23 +1,55 @@
 from rest_framework import serializers
 from collections import defaultdict
-from .models import Project, Task
+from .models import Project, Task, TaskPhoto, TaskDocument
+
+
+class TaskPhotoSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskPhoto
+        fields = ['id', 'task', 'photo', 'comment', 'uploaded_by', 'uploaded_by_name', 'created_at']
+        read_only_fields = ['id', 'uploaded_by', 'created_at']
+
+    def get_uploaded_by_name(self, obj):
+        return obj.uploaded_by.full_name if obj.uploaded_by else None
+
+
+class TaskDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskDocument
+        fields = ['id', 'task', 'file', 'filename', 'comment', 'uploaded_by', 'uploaded_by_name', 'created_at']
+        read_only_fields = ['id', 'filename', 'uploaded_by', 'created_at']
+
+    def get_uploaded_by_name(self, obj):
+        return obj.uploaded_by.full_name if obj.uploaded_by else None
 
 
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
+    photo_count = serializers.SerializerMethodField()
+    doc_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = [
             'id', 'project', 'group', 'title', 'description',
             'assigned_to', 'assigned_to_name',
-            'status', 'priority', 'due_date', 'completed_at',
-            'photo', 'created_at', 'updated_at',
+            'status', 'priority', 'weightage', 'start_date', 'end_date', 'due_date', 'completed_at',
+            'photo', 'photo_count', 'doc_count', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'completed_at', 'created_at', 'updated_at']
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.full_name if obj.assigned_to else None
+
+    def get_photo_count(self, obj):
+        return obj.photos.count()
+
+    def get_doc_count(self, obj):
+        return obj.documents.count()
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
