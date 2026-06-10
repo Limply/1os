@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import ManpowerCalendar from '../components/ManpowerCalendar'
+import ManpowerSettings from '../components/ManpowerSettings'
+import { useManpowerSettings } from '../hooks/useManpowerSettings'
 
 const MANAGER_ROLES = ['superadmin', 'admin', 'manager']
 
@@ -40,6 +43,7 @@ function SubTabs({ tabs, active, onChange }) {
 export default function HR() {
   const currentUser = getUser()
   const isManager = MANAGER_ROLES.includes(currentUser?.role)
+  const { settings: manpowerSettings } = useManpowerSettings()
 
   // Main tabs
   const TABS = [
@@ -47,7 +51,7 @@ export default function HR() {
     'Attendance',
     'My Profile',
     'Courses',
-    ...(isManager ? ['Employees', 'Approvals'] : []),
+    ...(isManager ? ['Manpower', 'Manpower Settings', 'Employees', 'Approvals'] : []),
   ]
   const [tab, setTab] = useState('My Leave')
 
@@ -412,6 +416,16 @@ export default function HR() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── MANPOWER (manager+) ────────────────────── */}
+      {tab === 'Manpower' && (
+        <ManpowerCalendar settings={manpowerSettings} />
+      )}
+
+      {/* ── MANPOWER SETTINGS (manager+) ──────────── */}
+      {tab === 'Manpower Settings' && (
+        <ManpowerSettings />
       )}
 
       {/* ── EMPLOYEES (manager+) ──────────────────── */}

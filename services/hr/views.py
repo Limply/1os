@@ -7,15 +7,28 @@ from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
-    ClockInResponseSerializer, WorkScheduleSerializer,
+    ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer,
 )
 from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
-from shared.filebrowser_csv import read_csv as fb_read_csv, write_csv as fb_write_csv
+import os as _os
+
+def fb_read_csv(path):
+    if not _os.path.exists(path):
+        return []
+    with open(path, newline='', encoding='utf-8') as f:
+        return list(csv.DictReader(f))
+
+def fb_write_csv(path, rows, fields):
+    _os.makedirs(_os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
+        w.writeheader()
+        w.writerows(rows)
 
 
 class TenantScopedMixin:
@@ -228,7 +241,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             )
 
 
-CSV_PATH = '1os/database/Work_schedule.csv'
+CSV_PATH = '/mnt/data/1os/database/Work_schedule.csv'
 
 
 def _try_parse(val):
@@ -288,7 +301,38 @@ class WorkScheduleViewSet(viewsets.ViewSet):
         rows = [r for r in fb_read_csv(CSV_PATH) if r.get('emp_no', '') in emp_nos]
 
         date_filter = request.query_params.get('date')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
         emp_filter = request.query_params.get('employee')
+
+        month_filter = request.query_params.get('month')  # YYYY-MM
+        if month_filter:
+            try:
+                y, m = month_filter.split('-')
+                rows = [r for r in rows if r.get('date', '').endswith(f'-{m}-{y}') or
+                        (lambda d: d.year == int(y) and d.month == int(m) if d else False)(_try_parse(r.get('date', '')))]
+            except Exception:
+                pass
+
+        # Date range filtering
+        if date_from or date_to:
+            try:
+                from_date = _parse_date(date_from) if date_from else None
+                to_date = _parse_date(date_to) if date_to else None
+                filtered = []
+                for r in rows:
+                    try:
+                        r_date = _parse_date(r.get('date', ''))
+                        if from_date and r_date < from_date:
+                            continue
+                        if to_date and r_date > to_date:
+                            continue
+                        filtered.append(r)
+                    except ValueError:
+                        pass
+                rows = filtered
+            except Exception:
+                pass
 
         if date_filter:
             rows = [r for r in rows if r.get('date') == date_filter or
@@ -507,3 +551,27 @@ def employee_me(request):
         return Response(EmployeeSerializer(employee).data)
     except Employee.DoesNotExist:
         return Response({'detail': 'No employee profile found.'}, status=404)
+
+
+class ManpowerSettingsViewSet(viewsets.ModelViewSet):
+    serializer_class = ManpowerSettingsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = ManpowerSettings.objects.all()
+
+    def get_queryset(self):
+        return ManpowerSettings.objects.filter(tenant=self.request.user.tenant)
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.user.tenant)
+
+    @action(detail=False, methods=['get', 'post'])
+    def settings(self, request):
+        """Get or create/update tenant's manpower settings."""
+        settings, created = ManpowerSettings.objects.get_or_create(tenant=request.user.tenant)
+        if request.method == 'POST':
+            serializer = self.get_serializer(settings, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        serializer = self.get_serializer(settings)
+        return Response(serializer.data)

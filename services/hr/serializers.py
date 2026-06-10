@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -154,3 +154,10 @@ class ClockInResponseSerializer(serializers.Serializer):
     hours_worked = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, allow_null=True)
     photo_url = serializers.URLField(required=False, allow_null=True)
     gps_location = serializers.JSONField(required=False, allow_null=True)
+
+
+class ManpowerSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ManpowerSettings
+        exclude = ['tenant']
+        read_only_fields = ['id', 'created_at', 'updated_at']

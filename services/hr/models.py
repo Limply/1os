@@ -49,7 +49,7 @@ class Employee(BaseModel):
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates',
         verbose_name='Supervisor'
     )
-    photo = models.ImageField(upload_to='staff/photos/', storage=FileBrowserStorage(), null=True, blank=True)
+    photo = models.ImageField(storage=FileBrowserStorage(subfolder='database'), null=True, blank=True)
     can_clock_in = models.BooleanField(default=False, help_text='Employee can use clock-in/out feature')
 
     def __str__(self):
@@ -136,8 +136,8 @@ class Attendance(BaseModel):
     overtime = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
     notes = models.TextField(blank=True, null=True)
-    clock_in_photo = models.ImageField(upload_to='attendance/photos/', storage=FileBrowserStorage(), null=True, blank=True)
-    clock_out_photo = models.ImageField(upload_to='attendance/photos/', storage=FileBrowserStorage(), null=True, blank=True)
+    clock_in_photo = models.ImageField(storage=FileBrowserStorage(subfolder='attendance'), null=True, blank=True)
+    clock_out_photo = models.ImageField(storage=FileBrowserStorage(subfolder='attendance'), null=True, blank=True)
     clock_in_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-in: {"lat": x, "lng": y}')
     clock_out_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-out: {"lat": x, "lng": y}')
     clock_in_address = models.CharField(max_length=500, blank=True, null=True)
@@ -194,3 +194,38 @@ class PublicHoliday(models.Model):
 
     def __str__(self):
         return f"{self.date} — {self.name}"
+
+
+class ManpowerSettings(BaseModel):
+    """Manpower module visibility settings per tenant."""
+    ROLE_CHOICES = [
+        ('director', 'Director'),
+        ('manager', 'Manager'),
+        ('senior_supervisor', 'Senior Supervisor'),
+        ('supervisor', 'Supervisor'),
+        ('technician', 'Technician'),
+        ('helper', 'Helper'),
+        ('staff', 'Staff'),
+    ]
+
+    # Role visibility: which roles to show on calendar
+    show_directors = models.BooleanField(default=False)
+    show_managers = models.BooleanField(default=False)
+    show_senior_supervisors = models.BooleanField(default=True)
+    show_supervisors = models.BooleanField(default=True)
+    show_technicians = models.BooleanField(default=True)
+    show_helpers = models.BooleanField(default=True)
+    show_staff = models.BooleanField(default=True)
+
+    # Feature toggles
+    show_on_site_indicator = models.BooleanField(default=True, help_text='Show green glow for on-site staff')
+    show_leave_status = models.BooleanField(default=True, help_text='Show leave status on calendar')
+    show_unassigned = models.BooleanField(default=True, help_text='Show unassigned staff')
+    show_teams = models.BooleanField(default=True, help_text='Show staff grouped by supervisor')
+
+    class Meta:
+        verbose_name = "Manpower Settings"
+        verbose_name_plural = "Manpower Settings"
+
+    def __str__(self):
+        return f"Manpower Settings — {self.tenant}"

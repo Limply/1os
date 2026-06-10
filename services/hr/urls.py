@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     EmployeeViewSet, LeaveTypeViewSet, LeaveBalanceViewSet,
     LeaveApplicationViewSet, AttendanceViewSet, CertificationViewSet, PublicHolidayViewSet,
-    WorkScheduleViewSet, employee_me, org_tree,
+    WorkScheduleViewSet, ManpowerSettingsViewSet, employee_me, org_tree,
 )
 
 router = DefaultRouter()
@@ -15,6 +15,7 @@ router.register('attendance', AttendanceViewSet, basename='attendance')
 router.register('certifications', CertificationViewSet, basename='certification')
 router.register('public-holidays', PublicHolidayViewSet, basename='public-holiday')
 router.register('work-schedules', WorkScheduleViewSet, basename='work-schedule')
+router.register('manpower-settings', ManpowerSettingsViewSet, basename='manpower-settings')
 
 urlpatterns = [
     path('employees/me/', employee_me, name='employee-me'),
