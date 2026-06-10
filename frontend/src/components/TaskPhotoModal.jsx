@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
+import AuthImage from './AuthImage'
 
 export default function TaskPhotoModal({ task, onClose }) {
   const [photos, setPhotos] = useState([])
@@ -9,6 +10,7 @@ export default function TaskPhotoModal({ task, onClose }) {
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState(null)
   const fileRef = useRef()
+  const cameraRef = useRef()
 
   useEffect(() => {
     fetchPhotos()
@@ -90,11 +92,11 @@ export default function TaskPhotoModal({ task, onClose }) {
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-gray-400">{i + 1}</td>
                     <td className="px-4 py-2">
-                      <img
-                        src={p.photo}
+                      <AuthImage
+                        src={p.photo_url}
                         alt="task"
                         className="w-14 h-14 object-cover rounded-lg cursor-pointer hover:opacity-80 transition"
-                        onClick={() => setLightbox(p.photo)}
+                        onClick={() => setLightbox(p.photo_url)}
                       />
                     </td>
                     <td className="px-4 py-2 text-gray-700 whitespace-pre-wrap">
@@ -118,7 +120,8 @@ export default function TaskPhotoModal({ task, onClose }) {
         <form onSubmit={handleUpload} className="border-t border-gray-100 px-5 py-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase">Add Photo</p>
           <div className="flex gap-3 items-start">
-            <div className="shrink-0">
+            <div className="shrink-0 flex flex-col gap-1.5">
+              {/* Gallery picker */}
               <label className="cursor-pointer">
                 <div className={`w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center text-2xl transition
                   ${preview ? 'border-transparent p-0' : 'border-gray-300 hover:border-blue-400 text-gray-300 hover:text-blue-400'}`}>
@@ -128,6 +131,16 @@ export default function TaskPhotoModal({ task, onClose }) {
                 </div>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
               </label>
+              {/* Camera button */}
+              <button type="button"
+                onClick={() => cameraRef.current?.click()}
+                className="w-20 flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-blue-500 border border-gray-200 hover:border-blue-400 rounded-lg py-1 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+                </svg>
+                Camera
+              </button>
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
             </div>
             <textarea
               value={comment}
@@ -152,7 +165,7 @@ export default function TaskPhotoModal({ task, onClose }) {
       {lightbox && (
         <div className="fixed inset-0 bg-black/85 z-60 flex items-center justify-center"
           onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="full" className="max-w-full max-h-full object-contain rounded-lg" />
+          <AuthImage src={lightbox} alt="full" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" />
         </div>
       )}
     </div>

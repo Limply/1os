@@ -3,9 +3,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { isLoggedIn, getUser } from '../api/auth'
 
-// Maps URL path → module key
+// Maps URL path → module key (dashboard '/' is always accessible — no entry)
 const ROUTE_MODULE = {
-  '/':           'dashboard',
   '/orgchart':   'orgchart',
   '/projects':   'projects',
   '/calendar':   'calendar',

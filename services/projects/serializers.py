@@ -5,26 +5,34 @@ from .models import Project, Task, TaskPhoto, TaskDocument
 
 class TaskPhotoSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskPhoto
-        fields = ['id', 'task', 'photo', 'comment', 'uploaded_by', 'uploaded_by_name', 'created_at']
+        fields = ['id', 'task', 'photo', 'photo_url', 'comment', 'uploaded_by', 'uploaded_by_name', 'created_at']
         read_only_fields = ['id', 'uploaded_by', 'created_at']
 
     def get_uploaded_by_name(self, obj):
         return obj.uploaded_by.full_name if obj.uploaded_by else None
 
+    def get_photo_url(self, obj):
+        return obj.photo.url if obj.photo else None
+
 
 class TaskDocumentSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskDocument
-        fields = ['id', 'task', 'file', 'filename', 'comment', 'uploaded_by', 'uploaded_by_name', 'created_at']
+        fields = ['id', 'task', 'file', 'file_url', 'filename', 'comment', 'uploaded_by', 'uploaded_by_name', 'created_at']
         read_only_fields = ['id', 'filename', 'uploaded_by', 'created_at']
 
     def get_uploaded_by_name(self, obj):
         return obj.uploaded_by.full_name if obj.uploaded_by else None
+
+    def get_file_url(self, obj):
+        return obj.file.url if obj.file else None
 
 
 class TaskSerializer(serializers.ModelSerializer):

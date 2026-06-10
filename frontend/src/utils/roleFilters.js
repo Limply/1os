@@ -9,13 +9,14 @@ const POSITION_TO_ROLE = {
   'supervisor': 'supervisor',
   'technician': 'technician',
   'construction worker': 'technician',
+  'construction worker cum driver': 'technician',
   'engineer': 'technician',
   'project engineer': 'technician',
   'helper': 'helper',
   'driver': 'helper',
-  'admin': 'staff',
-  'business development': 'staff',
-  'advisor': 'staff',
+  'admin': 'worker',
+  'business development': 'worker',
+  'advisor': 'worker',
 };
 
 /**
@@ -46,10 +47,17 @@ export function shouldShowEmployee(employee, settings) {
     supervisor: settings.show_supervisors,
     technician: settings.show_technicians,
     helper: settings.show_helpers,
-    staff: settings.show_staff,
+    worker: settings.show_workers,
   };
 
-  return visibilityMap[role] ?? settings.show_staff;
+  const visible = visibilityMap[role] ?? settings.show_workers;
+
+  // Debug log
+  if (!visible) {
+    console.debug(`Filtering out: ${employee.first_name} ${employee.last_name} (${employee.position_name} → ${role})`);
+  }
+
+  return visible;
 }
 
 /**
@@ -63,10 +71,11 @@ export function getDefaultSettings() {
     show_supervisors: true,
     show_technicians: true,
     show_helpers: true,
-    show_staff: true,
+    show_workers: true,
     show_on_site_indicator: true,
     show_leave_status: true,
     show_unassigned: true,
     show_teams: true,
   };
 }
+

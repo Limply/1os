@@ -2,7 +2,7 @@ import datetime
 from django.db import models
 from django.utils import timezone
 from shared.models import BaseModel
-from shared.storage import FileBrowserStorage
+from shared.storage import FileBrowserStorage  # used by HR attendance/employee photos
 
 
 def _generate_project_no(tenant):
@@ -127,7 +127,7 @@ class Task(BaseModel):
 
 class TaskPhoto(BaseModel):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='photos')
-    photo = models.ImageField(upload_to='tasks/photos/', storage=FileBrowserStorage())
+    photo = models.ImageField(upload_to='tasks/photos/')
     comment = models.TextField(blank=True, default='')
     uploaded_by = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
@@ -143,7 +143,7 @@ class TaskPhoto(BaseModel):
 
 class TaskDocument(BaseModel):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='documents')
-    file = models.FileField(upload_to='tasks/documents/', storage=FileBrowserStorage())
+    file = models.FileField(upload_to='tasks/documents/')
     filename = models.CharField(max_length=255, blank=True)
     comment = models.TextField(blank=True, default='')
     uploaded_by = models.ForeignKey(

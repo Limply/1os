@@ -205,7 +205,7 @@ class ManpowerSettings(BaseModel):
         ('supervisor', 'Supervisor'),
         ('technician', 'Technician'),
         ('helper', 'Helper'),
-        ('staff', 'Staff'),
+        ('worker', 'Worker'),
     ]
 
     # Role visibility: which roles to show on calendar
@@ -215,7 +215,7 @@ class ManpowerSettings(BaseModel):
     show_supervisors = models.BooleanField(default=True)
     show_technicians = models.BooleanField(default=True)
     show_helpers = models.BooleanField(default=True)
-    show_staff = models.BooleanField(default=True)
+    show_workers = models.BooleanField(default=True)
 
     # Feature toggles
     show_on_site_indicator = models.BooleanField(default=True, help_text='Show green glow for on-site staff')

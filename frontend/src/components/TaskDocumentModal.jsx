@@ -110,7 +110,7 @@ export default function TaskDocumentModal({ task, onClose }) {
                     <tr key={d.id} className="hover:bg-gray-50">
                       <td className="px-4 py-2 text-gray-400">{i + 1}</td>
                       <td className="px-4 py-2">
-                        <a href={d.file} target="_blank" rel="noopener noreferrer"
+                        <a href={d.file_url} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-2 hover:text-blue-600 transition">
                           <span className={`text-lg ${color}`}>{icon}</span>
                           <span className="text-sm text-gray-700 hover:underline">{d.filename}</span>

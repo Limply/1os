@@ -40,7 +40,7 @@ export default function ManpowerSettings() {
     { label: 'Supervisors', field: 'show_supervisors' },
     { label: 'Technicians', field: 'show_technicians' },
     { label: 'Helpers', field: 'show_helpers' },
-    { label: 'Staff', field: 'show_staff' },
+    { label: 'Workers', field: 'show_workers' },
   ];
 
   const featureToggles = [

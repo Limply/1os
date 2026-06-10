@@ -1,7 +1,54 @@
+import os
+import re
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
 from .models import Project, Task, TaskPhoto, TaskDocument
 from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer
+
+TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
+
+
+def _parse_template(filepath):
+    """Parse a .md template file into name + groups + tasks."""
+    with open(filepath, encoding='utf-8') as f:
+        content = f.read()
+    name = ''
+    groups = []
+    current_group = None
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith('# '):
+            name = line[2:].strip()
+        elif line.startswith('## '):
+            if current_group is not None:
+                groups.append(current_group)
+            current_group = {'group': line[3:].strip(), 'tasks': []}
+        elif current_group is not None and line:
+            m = re.match(r'^\d+\.\s+(.+)', line)
+            if m:
+                current_group['tasks'].append(m.group(1))
+    if current_group is not None:
+        groups.append(current_group)
+    return {'name': name, 'groups': groups}
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def task_templates(request):
+    """Return all parsed task templates from the template directory."""
+    templates = []
+    if os.path.isdir(TEMPLATE_DIR):
+        for fname in sorted(os.listdir(TEMPLATE_DIR)):
+            if fname.endswith('.md'):
+                try:
+                    data = _parse_template(os.path.join(TEMPLATE_DIR, fname))
+                    data['slug'] = fname[:-3]
+                    templates.append(data)
+                except Exception:
+                    pass
+    return Response(templates)
 
 MANAGER_ROLES = {'manager', 'admin', 'superadmin'}
 
@@ -73,6 +120,7 @@ class TaskPhotoViewSet(viewsets.ModelViewSet):
         )
 
 
+
 class TaskDocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskDocumentSerializer
@@ -90,3 +138,4 @@ class TaskDocumentViewSet(viewsets.ModelViewSet):
             tenant=self.request.user.tenant,
             uploaded_by=self.request.user,
         )
+

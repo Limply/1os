@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from shared.storage import filebrowser_proxy
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -14,4 +15,5 @@ urlpatterns = [
     path('api/notify/', include('services.notifications.urls')),
     path('api/dashboard/', include('services.dashboard.urls')),
     path('api/projects/', include('services.projects.urls')),
+    path('api/files/proxy/', filebrowser_proxy),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

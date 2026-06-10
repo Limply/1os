@@ -42,9 +42,10 @@ class UserViewSet(viewsets.ModelViewSet):
     """List and manage users within the current tenant."""
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
-        return User.objects.all()
+        return User.objects.all().order_by('first_name', 'last_name')
 
     def get_serializer_class(self):
         if self.action == 'create':
