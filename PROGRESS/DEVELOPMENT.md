@@ -1,7 +1,68 @@
 # 1OS — Development Tracker
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-05-28 (session 3)
+**Last Updated:** 2026-06-10
+
+---
+
+## Dev / Prod Workflow
+
+### Environments
+
+| | Dev | Prod |
+|---|---|---|
+| **Path** | `/opt/1os/` | `/home/lucus/1os-prod/` |
+| **Branch** | `dev` | `main` |
+| **Frontend** | Vite dev server `:5173` (hot reload) | Built `dist/` served by WhiteNoise |
+| **Backend** | `runserver :8000` | Gunicorn `:8000` (3 workers) |
+| **DEBUG** | `True` | `False` |
+| **Start** | `./start_dev.sh` | `./start_prod.sh` |
+| **URL** | `http://localhost:5173` | `https://ast1.sim-eng.com` |
+
+> **Always code in `/opt/1os/`** — never edit files directly in `/home/lucus/1os-prod/`
+
+### Daily Dev Flow
+
+```bash
+cd /opt/1os
+./start_dev.sh                          # starts Django :8000 + Vite :5173
+
+# make changes, then commit
+git add <files>
+git commit -m "Feature: ..."
+git push origin dev
+```
+
+### Deploy to Production
+
+```bash
+# 1. Merge and push
+git checkout main
+git merge dev
+git push origin main
+
+# 2. Pull in prod
+cd /home/lucus/1os-prod
+git pull origin main
+
+# 3. Rebuild frontend
+cd frontend && npm run build && cd ..
+
+# 4. Apply migrations + collectstatic
+source venv/bin/activate
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
+
+# 5. Restart Gunicorn
+pkill gunicorn
+./start_prod.sh &
+```
+
+### Git Rules
+- All code changes on `dev` branch — merge to `main` only when tested
+- Never edit files in `/home/lucus/1os-prod/` directly
+- Never force push to `main`
+- Commit after every completed feature
 
 ---
 
