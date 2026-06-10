@@ -1,5 +1,6 @@
 from django.db import migrations, models
 import django.db.models.deletion
+import uuid
 
 
 class Migration(migrations.Migration):
@@ -13,7 +14,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ManpowerSettings',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('is_active', models.BooleanField(default=True)),
@@ -28,8 +29,11 @@ class Migration(migrations.Migration):
                 ('show_leave_status', models.BooleanField(default=True, help_text='Show leave status on calendar')),
                 ('show_unassigned', models.BooleanField(default=True, help_text='Show unassigned staff')),
                 ('show_teams', models.BooleanField(default=True, help_text='Show staff grouped by supervisor')),
-                ('tenant', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='accounts.tenant')),
+                ('tenant', models.OneToOneField(db_column='tenant_id', on_delete=django.db.models.deletion.CASCADE, related_name='+', to='accounts.tenant')),
             ],
+            options={
+                'abstract': False,
+            },
         ),
     ]
 
