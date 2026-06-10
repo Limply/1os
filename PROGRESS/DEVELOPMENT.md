@@ -1,7 +1,7 @@
 # 1OS — Development Tracker
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-10 (session 6)
 
 ---
 
@@ -13,50 +13,84 @@
 |---|---|---|
 | **Path** | `/opt/1os/` | `/home/lucus/1os-prod/` |
 | **Branch** | `dev` | `main` |
-| **Frontend** | Vite dev server `:5173` (hot reload) | Built `dist/` served by WhiteNoise |
-| **Backend** | `runserver :8000` | Gunicorn `:8000` (3 workers) |
+| **Frontend** | Vite `:8100` (hot reload, proxies API to :8001) | Nginx `:8000` serves `frontend/dist/` directly |
+| **Backend** | Django `runserver :8001` | Gunicorn `:8002` (internal, Nginx proxies) |
 | **DEBUG** | `True` | `False` |
-| **Start** | `./start_dev.sh` | `./start_prod.sh` |
-| **URL** | `http://localhost:5173` | `https://ast1.sim-eng.com` |
+| **Public URL** | `https://ast2.sim-eng.com` | `https://ast1.sim-eng.com` |
+| **Start** | `./start_dev.sh` | systemd manages Nginx + Gunicorn automatically |
 
 > **Always code in `/opt/1os/`** — never edit files directly in `/home/lucus/1os-prod/`
+
+### Port Map
+
+| Port | Process | Purpose |
+|---|---|---|
+| `:8000` | Nginx (prod) | Public — `ast1.sim-eng.com` via Cloudflare |
+| `:8001` | Django `runserver` (dev) | Internal — dev API backend |
+| `:8002` | Gunicorn (prod) | Internal — prod API backend, Nginx proxies here |
+| `:8100` | Vite (dev) | Public — `ast2.sim-eng.com` via Cloudflare |
+
+### Stack
+
+| Layer | Dev | Prod |
+|---|---|---|
+| Web server | — | Nginx (serves static files + proxies `/api/`, `/admin/`) |
+| App server | Django `runserver` | Gunicorn (3 workers) |
+| Static files | Vite HMR | Nginx serves `frontend/dist/` directly |
+| Admin static | Django staticfiles | Nginx serves `staticfiles/` at `/static/` |
+| Process mgmt | manual / `start_dev.sh` | systemd (`gunicorn-1os`, `nginx`) |
 
 ### Daily Dev Flow
 
 ```bash
 cd /opt/1os
-./start_dev.sh                          # starts Django :8000 + Vite :5173
+./start_dev.sh          # starts Django :8001 + Vite :8100
 
-# make changes, then commit
+# make changes (Vite hot-reloads instantly)
+# then commit:
 git add <files>
 git commit -m "Feature: ..."
 git push origin dev
 ```
 
+Access dev at `https://ast2.sim-eng.com` or `http://192.168.1.71:8100`
+
 ### Deploy to Production
 
 ```bash
-# 1. Merge and push
+# 1. Merge dev → main and push
 git checkout main
 git merge dev
 git push origin main
 
-# 2. Pull in prod
+# 2. Pull in prod folder
 cd /home/lucus/1os-prod
 git pull origin main
 
 # 3. Rebuild frontend
 cd frontend && npm run build && cd ..
 
-# 4. Apply migrations + collectstatic
+# 4. Apply migrations + collect admin static files
 source venv/bin/activate
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 
-# 5. Restart Gunicorn
-pkill gunicorn
-./start_prod.sh &
+# 5. Restart Gunicorn (Nginx stays running — no restart needed for code changes)
+sudo systemctl restart gunicorn-1os
 ```
+
+### Nginx Config
+File: `/etc/nginx/sites-available/1os-prod`
+- Serves `frontend/dist/` at root — `try_files $uri /index.html` for SPA routing
+- Serves `staticfiles/` at `/static/` — Django admin CSS/JS
+- Proxies `/api/` and `/admin/` to Gunicorn at `127.0.0.1:8002`
+
+### systemd Services
+| Service | Command | Purpose |
+|---|---|---|
+| `gunicorn-1os` | `sudo systemctl restart gunicorn-1os` | Prod Django app server |
+| `nginx` | `sudo systemctl restart nginx` | Prod web server |
+| `cloudflared` | `sudo systemctl restart cloudflared` | Cloudflare tunnel |
 
 ### Git Rules
 - All code changes on `dev` branch — merge to `main` only when tested
@@ -228,17 +262,22 @@ Each service module is fully independent. A change in one module must never brea
 
 | Item | Value |
 |---|---|
-| Server (Django) | `http://192.168.1.71:8000` |
-| Server (1OS Vite) | `http://192.168.1.71:5173` |
-| Server (ast-iot Vite) | `http://192.168.1.71:6123` |
-| Public URL (1OS) | `https://ast1.sim-eng.com` |
-| Public URL (IoT) | `https://ast-iot.sim-eng.com` |
-| Admin (local) | `http://192.168.1.71:8000/admin/` |
-| Admin (remote) | SSH tunnel: `ssh -L 8000:localhost:8000 lucus@192.168.1.71` then `http://localhost:8000/admin/` |
+| Dev URL (1OS) | `https://ast2.sim-eng.com` or `http://192.168.1.71:8100` |
+| Prod URL (1OS) | `https://ast1.sim-eng.com` |
+| Dev backend | `http://192.168.1.71:8001` (Django runserver) |
+| Prod backend | `http://192.168.1.71:8002` (Gunicorn, internal only) |
+| IoT app | `https://ast-iot.sim-eng.com` → `:6123` |
+| Files | `https://files.sim-eng.com` → FileBrowser `:8088` |
+| Django Admin (prod) | SSH tunnel: `ssh -L 8002:localhost:8002 lucus@192.168.1.71` then `http://localhost:8002/admin/` |
+| Django Admin (direct) | `https://ast1.sim-eng.com/admin/` (proxied via Nginx) |
 | Users | `admin@astronic.com.sg` / `Astronic.2468` · `lucus@astronic.com.sg` / `Astronic.2468` |
-| DB | PostgreSQL — database `astronic`, user `astronic_user` |
-| Code (1OS) | `/opt/1os/` |
+| DB | PostgreSQL — database `astronic`, user `astronic_user` (shared between dev and prod) |
+| Code (1OS dev) | `/opt/1os/` (`dev` branch) |
+| Code (1OS prod) | `/home/lucus/1os-prod/` (`main` branch) |
 | Code (IoT) | `/home/lucus/astronic-iot/` |
+| Nginx config | `/etc/nginx/sites-available/1os-prod` |
+| Gunicorn service | `/etc/systemd/system/gunicorn-1os.service` |
+| Cloudflare config | `/etc/cloudflared/config.yml` |
 | GitHub | `https://github.com/Limply/1os` (private) |
 
 ---

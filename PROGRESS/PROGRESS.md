@@ -1,7 +1,7 @@
 # 1OS — Project Progress Log
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-10 (session 6)
 
 ---
 
@@ -10,11 +10,12 @@
 | | Dev | Prod |
 |---|---|---|
 | **Code here** | `/opt/1os/` (`dev` branch) | `/home/lucus/1os-prod/` (`main` branch) |
-| **Start** | `./start_dev.sh` | `./start_prod.sh` |
-| **URL** | `http://localhost:5173` | `https://ast1.sim-eng.com` |
+| **Frontend** | Vite `:8100` → `ast2.sim-eng.com` | Nginx `:8000` → `ast1.sim-eng.com` |
+| **Backend** | Django `runserver :8001` | Gunicorn `:8002` (internal) |
+| **Start dev** | `./start_dev.sh` | systemd auto-manages |
 
-**Deploy:** merge `dev` → `main`, `git pull` in prod, `npm run build`, restart Gunicorn.
-See `DEVELOPMENT.md` for full deploy steps.
+**Deploy:** merge `dev` → `main`, `git pull` in prod, `npm run build`, `collectstatic`, `sudo systemctl restart gunicorn-1os`.
+See `DEVELOPMENT.md` for full steps.
 
 ---
 
@@ -106,11 +107,17 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 
 ### 6. Production Deployment (June 2026)
 
-- **WhiteNoise** serves built React `dist/` from Django (no Nginx needed)
-- **Gunicorn** (3 workers) replaces `runserver` in production
-- **Cloudflare Tunnel:** `ast1.sim-eng.com` → `:8000` (single rule, covers all traffic)
+- **Nginx** (`:8000`) serves `frontend/dist/` directly — no WhiteNoise
+- **Gunicorn** (`:8002`, 3 workers) handles Django API only — managed by systemd (`gunicorn-1os`)
+- **Cloudflare Tunnel:**
+  - `ast1.sim-eng.com` → Nginx `:8000` (prod)
+  - `ast2.sim-eng.com` → Vite `:8100` (dev)
+  - `ssh.ast1.sim-eng.com` → SSH `:22`
+  - `ast-iot.sim-eng.com` → IoT `:6123`
+  - `files.sim-eng.com` → FileBrowser `:8088`
 - **Separate prod folder:** `/home/lucus/1os-prod/` on `main` branch
 - **Dev/prod isolation:** dev at `/opt/1os/` (`dev` branch), prod at `/home/lucus/1os-prod/` (`main` branch)
+- **Nginx user:** `lucus` (set in `/etc/nginx/nginx.conf`) — avoids permission issues with home dir
 
 ---
 
@@ -120,11 +127,10 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 |---|---|---|
 | Path | `/opt/1os/` | `/home/lucus/1os-prod/` |
 | Branch | `dev` | `main` |
-| Backend | `runserver :8000` | Gunicorn `:8000` |
-| Frontend | Vite `:5173` (hot reload) | Built `dist/` via WhiteNoise |
-| URL | `http://localhost:5173` | `https://ast1.sim-eng.com` |
+| Frontend | Vite `:8100` → `ast2.sim-eng.com` | Nginx `:8000` → `ast1.sim-eng.com` |
+| Backend | Django `runserver :8001` | Gunicorn `:8002` (internal) |
 | DB | PostgreSQL `astronic` (shared) | ← same |
-| Admin | `http://localhost:8000/admin/` | SSH tunnel only |
+| Admin | `https://ast1.sim-eng.com/admin/` (via Nginx) | ← same |
 | GitHub | `github.com/Limply/1os` (private) | ← same |
 
 ---
