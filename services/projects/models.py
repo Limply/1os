@@ -54,6 +54,10 @@ class Project(BaseModel):
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='managed_projects'
     )
+    supervisor = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='supervised_projects'
+    )
     members  = models.JSONField(default=list, blank=True)
     progress = models.IntegerField(default=0)
 

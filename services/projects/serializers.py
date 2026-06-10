@@ -37,6 +37,7 @@ class TaskDocumentSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
+    assigned_to_phone = serializers.SerializerMethodField()
     photo_count = serializers.SerializerMethodField()
     doc_count = serializers.SerializerMethodField()
 
@@ -44,7 +45,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'project', 'group', 'title', 'description',
-            'assigned_to', 'assigned_to_name',
+            'assigned_to', 'assigned_to_name', 'assigned_to_phone',
             'status', 'priority', 'weightage', 'start_date', 'end_date', 'due_date', 'completed_at',
             'photo', 'photo_count', 'doc_count', 'created_at', 'updated_at',
         ]
@@ -52,6 +53,14 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.full_name if obj.assigned_to else None
+
+    def get_assigned_to_phone(self, obj):
+        if not obj.assigned_to:
+            return None
+        try:
+            return obj.assigned_to.employee_profile.phone
+        except Exception:
+            return None
 
     def get_photo_count(self, obj):
         return obj.photos.count()
@@ -63,13 +72,15 @@ class TaskSerializer(serializers.ModelSerializer):
 class ProjectListSerializer(serializers.ModelSerializer):
     task_count = serializers.SerializerMethodField()
     manager_name = serializers.SerializerMethodField()
+    supervisor_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
         fields = [
             'id', 'project_no', 'name', 'type', 'status', 'priority',
             'client_name', 'client_contact', 'client_email', 'client_phone',
-            'start_date', 'end_date', 'manager', 'manager_name', 'progress', 'task_count',
+            'start_date', 'end_date', 'manager', 'manager_name',
+            'supervisor', 'supervisor_name', 'progress', 'task_count',
         ]
 
     def get_task_count(self, obj):
@@ -78,11 +89,15 @@ class ProjectListSerializer(serializers.ModelSerializer):
     def get_manager_name(self, obj):
         return obj.manager.full_name if obj.manager else None
 
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.full_name if obj.supervisor else None
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     task_groups = serializers.SerializerMethodField()
     task_count = serializers.SerializerMethodField()
     manager_name = serializers.SerializerMethodField()
+    supervisor_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -91,7 +106,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             'description',
             'client_name', 'client_contact', 'client_email', 'client_phone', 'client_address',
             'start_date', 'end_date',
-            'manager', 'manager_name', 'members', 'progress', 'ref_type', 'ref_id',
+            'manager', 'manager_name', 'supervisor', 'supervisor_name',
+            'members', 'progress', 'ref_type', 'ref_id',
             'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'tenant', 'project_no', 'progress', 'created_at', 'updated_at']
@@ -101,6 +117,9 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_manager_name(self, obj):
         return obj.manager.full_name if obj.manager else None
+
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.full_name if obj.supervisor else None
 
     def get_task_groups(self, obj):
         groups = defaultdict(list)

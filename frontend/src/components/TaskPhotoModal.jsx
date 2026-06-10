@@ -9,6 +9,8 @@ export default function TaskPhotoModal({ task, onClose }) {
   const [preview, setPreview] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editComment, setEditComment] = useState('')
   const fileRef = useRef()
   const cameraRef = useRef()
 
@@ -56,6 +58,21 @@ export default function TaskPhotoModal({ task, onClose }) {
     fetchPhotos()
   }
 
+  function startEditComment(p) {
+    setEditingId(p.id)
+    setEditComment(p.comment || '')
+  }
+
+  async function saveComment(id) {
+    await api.patch(`/projects/task-photos/${id}/`, { comment: editComment })
+    setEditingId(null)
+    fetchPhotos()
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
       onClick={onClose}>
@@ -99,8 +116,33 @@ export default function TaskPhotoModal({ task, onClose }) {
                         onClick={() => setLightbox(p.photo_url)}
                       />
                     </td>
-                    <td className="px-4 py-2 text-gray-700 whitespace-pre-wrap">
-                      {p.comment || <span className="text-gray-300 italic">—</span>}
+                    <td className="px-4 py-2" onClick={() => !editingId && startEditComment(p)}>
+                      {editingId === p.id ? (
+                        <div onClick={e => e.stopPropagation()}>
+                          <textarea
+                            autoFocus
+                            value={editComment}
+                            onChange={e => setEditComment(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
+                            rows={2}
+                            className="w-full border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none resize-none"
+                          />
+                          <div className="flex gap-2 mt-1">
+                            <button onClick={() => saveComment(p.id)}
+                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1 rounded transition">
+                              Save
+                            </button>
+                            <button onClick={cancelEdit}
+                              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-700 whitespace-pre-wrap cursor-pointer hover:text-blue-600 group">
+                          {p.comment || <span className="text-gray-300 italic group-hover:text-blue-300">click to add comment</span>}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{p.uploaded_by_name || '—'}</td>
                     <td className="px-4 py-2 text-gray-400 whitespace-nowrap text-xs">{new Date(p.created_at).toLocaleString()}</td>

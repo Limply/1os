@@ -258,7 +258,7 @@ function Legend() {
  * DECOUPLED: Accepts settings as props, no internal fetching
  * Uses utility functions for filtering logic
  */
-function ManpowerCalendarView({ settings }) {
+function ManpowerCalendarView({ settings, onSettingsClick }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [teams, setTeams] = useState([]);
   const [unassigned, setUnassigned] = useState([]);
@@ -287,8 +287,10 @@ function ManpowerCalendarView({ settings }) {
       const employees = empRes.data.results || empRes.data;
       const schedules = schedRes.data.results || schedRes.data || [];
 
-      // Use utility function to filter employees
+      // Role filter applies to workers; supervisors always appear as team headers
       const filteredEmployees = employees.filter(emp => shouldShowEmployee(emp, settings));
+      const filteredEmpIdSet = new Set(filteredEmployees.map(e => e.id));
+      const allEmpById = Object.fromEntries(employees.map(e => [e.id, e]));
 
       const teamsMap = {};
       const unassignedList = [];
@@ -313,21 +315,28 @@ function ManpowerCalendarView({ settings }) {
         }
       });
 
-      filteredEmployees.forEach(emp => {
-        if (teamsMap[emp.id]) {
-          const initials = `${emp.first_name?.[0] || ''}${emp.last_name?.[0] || ''}`.toUpperCase();
-          teamsMap[emp.id].supervisor = {
-            id: emp.id,
-            name: `${emp.first_name} ${emp.last_name}`,
+      // Resolve supervisor — only if they also pass the role filter
+      // If hidden, their members fall to unassigned instead
+      Object.keys(teamsMap).forEach(managerId => {
+        const mgr = allEmpById[managerId];
+        if (mgr && shouldShowEmployee(mgr, settings)) {
+          const initials = `${mgr.first_name?.[0] || ''}${mgr.last_name?.[0] || ''}`.toUpperCase();
+          teamsMap[managerId].supervisor = {
+            id: mgr.id,
+            name: `${mgr.first_name} ${mgr.last_name}`,
             initials,
           };
+        } else {
+          // Supervisor hidden — move their members to unassigned
+          teamsMap[managerId].members.forEach(m => unassignedList.push(m));
+          delete teamsMap[managerId];
         }
       });
 
-      const filteredEmpIds = new Set(filteredEmployees.map(e => e.id));
+      const visibleEmpIds = new Set(filteredEmpIdSet);
       schedules.forEach(schedule => {
         const empId = schedule.employee_id;
-        if (!filteredEmpIds.has(empId)) return;
+        if (!visibleEmpIds.has(empId)) return;
 
         if (!assignmentsMap[empId]) {
           assignmentsMap[empId] = [];
@@ -355,7 +364,7 @@ function ManpowerCalendarView({ settings }) {
         }
       });
 
-      let teamsList = Object.values(teamsMap).filter(t => t.supervisor);
+      let teamsList = Object.values(teamsMap).filter(t => t.supervisor && t.members.length > 0);
       if (!settings?.show_teams) {
         teamsList = [];
       }
@@ -399,6 +408,12 @@ function ManpowerCalendarView({ settings }) {
             Weekly Deployment
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={onSettingsClick} title="Display settings" style={{
+              width: 28, height: 28, borderRadius: 6,
+              background: C.surface, border: `1px solid ${C.border2}`,
+              color: C.textSec, cursor: "pointer", fontSize: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>⚙</button>
             <button onClick={() => setWeekOffset(w => w - 1)} style={{
               width: 28, height: 28, borderRadius: 6,
               background: C.surface, border: `1px solid ${C.border2}`,

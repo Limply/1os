@@ -15,7 +15,7 @@ export function useManpowerSettings() {
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get('/hr/manpower-settings/settings/');
+      const res = await api.get('/hr/manpower-settings/current/');
       setSettings(res.data);
     } catch (err) {
       console.error('Failed to fetch settings:', err);
@@ -30,12 +30,13 @@ export function useManpowerSettings() {
     try {
       setError(null);
       const updated = { ...settings, ...updates };
-      const res = await api.post('/hr/manpower-settings/settings/', updated);
+      const res = await api.post('/hr/manpower-settings/current/', updated);
       setSettings(res.data);
       return res.data;
     } catch (err) {
-      console.error('Failed to update settings:', err);
-      setError(err);
+      console.error('Failed to update settings:', err.response?.data || err.message);
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Unknown error';
+      setError(errorMsg);
       throw err;
     }
   }, [settings]);

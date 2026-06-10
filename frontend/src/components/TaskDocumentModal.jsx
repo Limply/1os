@@ -32,6 +32,8 @@ export default function TaskDocumentModal({ task, onClose }) {
   const [comment, setComment] = useState('')
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editComment, setEditComment] = useState('')
   const fileRef = useRef()
 
   useEffect(() => { fetchDocs() }, [task.id])
@@ -70,6 +72,21 @@ export default function TaskDocumentModal({ task, onClose }) {
     if (!confirm('Delete this document?')) return
     await api.delete(`/projects/task-documents/${id}/`)
     fetchDocs()
+  }
+
+  function startEditComment(d) {
+    setEditingId(d.id)
+    setEditComment(d.comment || '')
+  }
+
+  async function saveComment(id) {
+    await api.patch(`/projects/task-documents/${id}/`, { comment: editComment })
+    setEditingId(null)
+    fetchDocs()
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
   }
 
   return (
@@ -116,8 +133,33 @@ export default function TaskDocumentModal({ task, onClose }) {
                           <span className="text-sm text-gray-700 hover:underline">{d.filename}</span>
                         </a>
                       </td>
-                      <td className="px-4 py-2 text-gray-600 whitespace-pre-wrap">
-                        {d.comment || <span className="text-gray-300 italic">—</span>}
+                      <td className="px-4 py-2" onClick={() => !editingId && startEditComment(d)}>
+                        {editingId === d.id ? (
+                          <div onClick={e => e.stopPropagation()}>
+                            <textarea
+                              autoFocus
+                              value={editComment}
+                              onChange={e => setEditComment(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
+                              rows={2}
+                              className="w-full border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none resize-none"
+                            />
+                            <div className="flex gap-2 mt-1">
+                              <button onClick={() => saveComment(d.id)}
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1 rounded transition">
+                                Save
+                              </button>
+                              <button onClick={cancelEdit}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-600 whitespace-pre-wrap cursor-pointer hover:text-blue-600 group">
+                            {d.comment || <span className="text-gray-300 italic group-hover:text-blue-300">click to add comment</span>}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{d.uploaded_by_name || '—'}</td>
                       <td className="px-4 py-2 text-gray-400 whitespace-nowrap text-xs">{new Date(d.created_at).toLocaleString()}</td>

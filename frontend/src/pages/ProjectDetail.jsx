@@ -8,6 +8,25 @@ import TaskPhotoModal from '../components/TaskPhotoModal'
 import TaskDocumentModal from '../components/TaskDocumentModal'
 
 const STATUS_ICONS = { todo: '⬜', in_progress: '🔄', review: '👁️', done: '✅' }
+
+function buildWhatsAppLink(project, task) {
+  const text = [
+    `Project: ${project.name}`,
+    `Task: ${task.title}`,
+    `Assigned to: ${task.assigned_to_name || 'Unassigned'}`,
+    taskUrl(project.id, task.id),
+  ].join('\n')
+  const encoded = encodeURIComponent(text)
+  const raw = task.assigned_to_phone || ''
+  const phone = raw.replace(/\D/g, '')
+  const sgPhone = phone.length === 8 ? `65${phone}` : phone
+  return sgPhone ? `https://wa.me/${sgPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`
+}
+
+function taskUrl(projectId, taskId) {
+  return `${window.location.origin}/projects?project=${projectId}#task-${taskId}`
+}
+
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
 const PRIORITY_COLORS = { low: 'text-gray-400', medium: 'text-blue-500', high: 'text-orange-500', urgent: 'text-red-500' }
 
@@ -31,16 +50,30 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const [templates, setTemplates] = useState([])
   const [applyingTemplate, setApplyingTemplate] = useState(false)
+  const [showEditProject, setShowEditProject] = useState(false)
+  const [editProject, setEditProject] = useState({})
+  const [savingProject, setSavingProject] = useState(false)
+  const [foremen, setForemen] = useState([])
+  const [managers, setManagers] = useState([])
 
   useEffect(() => {
     fetchProject()
     fetchUsers()
     fetchTemplates()
+    fetchForemen()
+    fetchManagers()
   }, [projectId])
 
   async function fetchProject() {
     const res = await api.get(`/projects/projects/${projectId}/`)
     setProject(res.data)
+    const hash = window.location.hash
+    if (hash) {
+      setTimeout(() => {
+        const el = document.querySelector(hash)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 300)
+    }
     setLoading(false)
   }
 
@@ -49,12 +82,78 @@ export default function ProjectDetail({ projectId, onBack }) {
     setUsers(res.data.results || res.data)
   }
 
+  async function fetchManagers() {
+    try {
+      const res = await api.get('/hr/employees/?is_active=true')
+      const emps = res.data.results || res.data
+      const MANAGER_TITLES = ['manager', 'director', 'admin', 'advisor', 'business development', 'it developer']
+      setManagers(emps.filter(e =>
+        e.user && MANAGER_TITLES.some(t => (e.position_name || '').toLowerCase().includes(t))
+      ))
+    } catch {
+      setManagers([])
+    }
+  }
+
+  async function fetchForemen() {
+    try {
+      const res = await api.get('/hr/employees/?is_active=true')
+      const emps = res.data.results || res.data
+      const FOREMAN_TITLES = ['foremen', 'supervisor', 'senior supervisor']
+      setForemen(emps.filter(e =>
+        e.user && FOREMAN_TITLES.some(t => (e.position_name || '').toLowerCase().includes(t))
+      ))
+    } catch {
+      setForemen([])
+    }
+  }
+
   async function fetchTemplates() {
     try {
       const res = await api.get('/projects/task-templates/')
       setTemplates(res.data)
     } catch {
       setTemplates([])
+    }
+  }
+
+  function openEditProject() {
+    setEditProject({
+      name:           project.name || '',
+      type:           project.type || '',
+      status:         project.status || '',
+      priority:       project.priority || '',
+      description:    project.description || '',
+      client_name:    project.client_name || '',
+      client_contact: project.client_contact || '',
+      client_email:   project.client_email || '',
+      client_phone:   project.client_phone || '',
+      client_address: project.client_address || '',
+      start_date:     project.start_date || '',
+      end_date:       project.end_date || '',
+      manager:        project.manager || '',
+      supervisor:     project.supervisor || '',
+    })
+    setShowEditProject(true)
+  }
+
+  async function saveEditProject() {
+    setSavingProject(true)
+    try {
+      const payload = { ...editProject }
+      if (!payload.manager) payload.manager = null
+      if (!payload.supervisor) payload.supervisor = null
+      if (!payload.start_date) payload.start_date = null
+      if (!payload.end_date) payload.end_date = null
+      await api.patch(`/projects/projects/${project.id}/`, payload)
+      await fetchProject()
+      setShowEditProject(false)
+    } catch (err) {
+      const detail = err.response?.data
+      console.error('PATCH error:', err.response?.status, detail)
+      alert('Save failed: ' + (typeof detail === 'object' ? JSON.stringify(detail) : detail))
+    } finally {
+      setSavingProject(false)
     }
   }
 
@@ -244,9 +343,16 @@ export default function ProjectDetail({ projectId, onBack }) {
             {project.client_name && <span className="mr-2">{project.client_name} ·</span>}
             <span>{project.status.replace('_', ' ')}</span>
             <span className="ml-2 font-semibold text-blue-600">{project.progress}% complete</span>
+            {project.supervisor_name && <span className="ml-2">· Foreman: {project.supervisor_name}</span>}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
+          {isManager && (
+            <button onClick={openEditProject}
+              className="text-sm bg-gray-700 hover:bg-gray-900 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+              ✎ Edit
+            </button>
+          )}
           <button onClick={exportExcel}
             className="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg transition">
             ↓ Excel
@@ -285,7 +391,7 @@ export default function ProjectDetail({ projectId, onBack }) {
             {/* Tasks */}
             <div className="divide-y divide-gray-100">
               {grp.tasks.map((task, ti) => (
-                <div key={task.id} className="px-3 py-1 hover:bg-gray-50 transition">
+                <div key={task.id} id={`task-${task.id}`} className="px-3 py-1 hover:bg-gray-50 transition">
 
                   {/* Row 1: SN + status + title + action icons */}
                   <div className="flex items-center gap-2">
@@ -319,6 +425,14 @@ export default function ProjectDetail({ projectId, onBack }) {
 
                     {/* Icons always on the right */}
                     <div className="flex items-center gap-2 shrink-0">
+                      <a href={buildWhatsAppLink(project, task)} target="_blank" rel="noopener noreferrer"
+                        className="text-gray-300 hover:text-green-500 transition"
+                        title={`Send WhatsApp reminder${task.assigned_to_name ? ' to ' + task.assigned_to_name : ''}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.564 4.14 1.547 5.874L0 24l6.302-1.519A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 0 1-5.001-1.374l-.36-.214-3.733.9.942-3.64-.235-.374A9.787 9.787 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                        </svg>
+                      </a>
                       <button onClick={() => setPhotoModalTask(task)}
                         className="relative text-gray-300 hover:text-blue-500 transition"
                         title={task.photo_count > 0 ? `${task.photo_count} photo(s)` : 'Add photos'}>
@@ -512,6 +626,125 @@ export default function ProjectDetail({ projectId, onBack }) {
             {applyingTemplate && (
               <div className="px-6 pb-4 text-sm text-purple-600 text-center">Creating tasks...</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {showEditProject && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-800">Edit Project</h2>
+              <button onClick={() => setShowEditProject(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase">Project Name</label>
+                <input value={editProject.name} onChange={e => setEditProject(p => ({ ...p, name: e.target.value }))}
+                  className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Type</label>
+                  <select value={editProject.type} onChange={e => setEditProject(p => ({ ...p, type: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                    <option value="client">Client Project</option>
+                    <option value="internal">Internal Project</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Status</label>
+                  <select value={editProject.status} onChange={e => setEditProject(p => ({ ...p, status: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                    <option value="planning">Planning</option>
+                    <option value="active">Active</option>
+                    <option value="on_hold">On Hold</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Priority</label>
+                  <select value={editProject.priority} onChange={e => setEditProject(p => ({ ...p, priority: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Manager</label>
+                  <select value={editProject.manager} onChange={e => setEditProject(p => ({ ...p, manager: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                    <option value="">— None —</option>
+                    {managers.map(e => <option key={e.user} value={e.user}>{e.full_name} ({e.position_name})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Supervisor (Foreman)</label>
+                  <select value={editProject.supervisor} onChange={e => setEditProject(p => ({ ...p, supervisor: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                    <option value="">— None —</option>
+                    {foremen.map(e => <option key={e.user} value={e.user}>{e.full_name} ({e.position_name})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Start Date</label>
+                  <input type="date" value={editProject.start_date} onChange={e => setEditProject(p => ({ ...p, start_date: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">End Date</label>
+                  <input type="date" value={editProject.end_date} onChange={e => setEditProject(p => ({ ...p, end_date: e.target.value }))}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase">Description</label>
+                <textarea value={editProject.description} onChange={e => setEditProject(p => ({ ...p, description: e.target.value }))}
+                  rows={2} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Client</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400">Name</label>
+                    <input value={editProject.client_name} onChange={e => setEditProject(p => ({ ...p, client_name: e.target.value }))}
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400">Contact Person</label>
+                    <input value={editProject.client_contact} onChange={e => setEditProject(p => ({ ...p, client_contact: e.target.value }))}
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400">Email</label>
+                    <input type="email" value={editProject.client_email} onChange={e => setEditProject(p => ({ ...p, client_email: e.target.value }))}
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400">Phone</label>
+                    <input value={editProject.client_phone} onChange={e => setEditProject(p => ({ ...p, client_phone: e.target.value }))}
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-gray-400">Address</label>
+                    <input value={editProject.client_address} onChange={e => setEditProject(p => ({ ...p, client_address: e.target.value }))}
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setShowEditProject(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Cancel</button>
+              <button onClick={saveEditProject} disabled={savingProject}
+                className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg transition disabled:opacity-50">
+                {savingProject ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
           </div>
         </div>
       )}

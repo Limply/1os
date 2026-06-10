@@ -104,7 +104,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 class TaskPhotoViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskPhotoSerializer
-    http_method_names = ['get', 'post', 'delete']
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
         qs = TaskPhoto.objects.select_related('uploaded_by')
@@ -124,7 +124,7 @@ class TaskPhotoViewSet(viewsets.ModelViewSet):
 class TaskDocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskDocumentSerializer
-    http_method_names = ['get', 'post', 'delete']
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
         qs = TaskDocument.objects.select_related('uploaded_by')

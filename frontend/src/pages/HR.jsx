@@ -43,7 +43,8 @@ function SubTabs({ tabs, active, onChange }) {
 export default function HR() {
   const currentUser = getUser()
   const isManager = MANAGER_ROLES.includes(currentUser?.role)
-  const { settings: manpowerSettings } = useManpowerSettings()
+  const { settings: manpowerSettings, updateSettings: updateManpowerSettings } = useManpowerSettings()
+  const [showManpowerSettings, setShowManpowerSettings] = useState(false)
 
   // Main tabs
   const TABS = [
@@ -51,7 +52,7 @@ export default function HR() {
     'Attendance',
     'My Profile',
     'Courses',
-    ...(isManager ? ['Manpower', 'Manpower Settings', 'Employees', 'Approvals'] : []),
+    ...(isManager ? ['Manpower', 'Employees', 'Approvals'] : []),
   ]
   const [tab, setTab] = useState('My Leave')
 
@@ -420,12 +421,24 @@ export default function HR() {
 
       {/* ── MANPOWER (manager+) ────────────────────── */}
       {tab === 'Manpower' && (
-        <ManpowerCalendar settings={manpowerSettings} />
-      )}
-
-      {/* ── MANPOWER SETTINGS (manager+) ──────────── */}
-      {tab === 'Manpower Settings' && (
-        <ManpowerSettings />
+        <div style={{ position: 'relative' }}>
+          <ManpowerCalendar settings={manpowerSettings} onSettingsClick={() => setShowManpowerSettings(v => !v)} />
+          {showManpowerSettings && (
+            <div style={{
+              position: 'absolute', top: 0, right: 0, zIndex: 100,
+              background: '#0f172a', border: '1px solid #1e293b',
+              borderRadius: 12, padding: 20, width: 280,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 14 }}>Display Settings</span>
+                <button onClick={() => setShowManpowerSettings(false)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16 }}>✕</button>
+              </div>
+              <ManpowerSettings settings={manpowerSettings} updateSettings={updateManpowerSettings} />
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── EMPLOYEES (manager+) ──────────────────── */}

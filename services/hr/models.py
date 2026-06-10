@@ -198,30 +198,19 @@ class PublicHoliday(models.Model):
 
 class ManpowerSettings(BaseModel):
     """Manpower module visibility settings per tenant."""
-    ROLE_CHOICES = [
-        ('director', 'Director'),
-        ('manager', 'Manager'),
-        ('senior_supervisor', 'Senior Supervisor'),
-        ('supervisor', 'Supervisor'),
-        ('technician', 'Technician'),
-        ('helper', 'Helper'),
-        ('worker', 'Worker'),
-    ]
 
-    # Role visibility: which roles to show on calendar
-    show_directors = models.BooleanField(default=False)
-    show_managers = models.BooleanField(default=False)
-    show_senior_supervisors = models.BooleanField(default=True)
-    show_supervisors = models.BooleanField(default=True)
-    show_technicians = models.BooleanField(default=True)
-    show_helpers = models.BooleanField(default=True)
-    show_workers = models.BooleanField(default=True)
+    # Level visibility
+    show_superadmin = models.BooleanField(default=False, help_text='IT Developer')
+    show_admin      = models.BooleanField(default=True,  help_text='Admin, Director')
+    show_manager    = models.BooleanField(default=True,  help_text='Manager, Business Development, Advisor')
+    show_supervisor = models.BooleanField(default=True,  help_text='Senior Supervisor, Foremen, Supervisor')
+    show_worker     = models.BooleanField(default=True,  help_text='Construction Worker, Engineer, Project Engineer, Helper')
 
     # Feature toggles
-    show_on_site_indicator = models.BooleanField(default=True, help_text='Show green glow for on-site staff')
-    show_leave_status = models.BooleanField(default=True, help_text='Show leave status on calendar')
-    show_unassigned = models.BooleanField(default=True, help_text='Show unassigned staff')
-    show_teams = models.BooleanField(default=True, help_text='Show staff grouped by supervisor')
+    show_on_site_indicator = models.BooleanField(default=True)
+    show_leave_status      = models.BooleanField(default=True)
+    show_unassigned        = models.BooleanField(default=True)
+    show_teams             = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Manpower Settings"

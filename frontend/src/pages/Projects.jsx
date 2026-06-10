@@ -62,7 +62,12 @@ export default function Projects() {
   const [saving, setSaving] = useState(false)
   const [widths, setWidths] = useState(DEFAULT_WIDTHS)
 
-  useEffect(() => { fetchProjects() }, [])
+  useEffect(() => {
+    fetchProjects()
+    const params = new URLSearchParams(window.location.search)
+    const pid = params.get('project')
+    if (pid) setSelected(pid)
+  }, [])
 
   async function fetchProjects() {
     try {
@@ -202,7 +207,10 @@ export default function Projects() {
                 <tr key={p.id} onClick={() => setSelected(p.id)}
                   className="hover:bg-blue-50 cursor-pointer transition">
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.project_no}</td>
-                  <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-gray-800">{p.name}</div>
+                    {p.supervisor_name && <div className="text-xs text-gray-400">{p.supervisor_name}</div>}
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{p.client_name || '—'}</td>
                   <td className="px-4 py-3 text-gray-500">{p.client_contact || '—'}</td>
                   <td className="px-4 py-3">

@@ -1,7 +1,8 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 from shared.storage import filebrowser_proxy
 
 urlpatterns = [
@@ -17,3 +18,8 @@ urlpatterns = [
     path('api/projects/', include('services.projects.urls')),
     path('api/files/proxy/', filebrowser_proxy),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Serve React frontend for all non-API routes (must be last)
+urlpatterns += [
+    re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
+]

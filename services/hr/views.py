@@ -44,6 +44,7 @@ class TenantScopedMixin:
 class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Employee.objects.select_related('department', 'position')
     serializer_class = EmployeeSerializer
+    pagination_class = None
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -283,6 +284,7 @@ def _enrich(row):
 
     emp = Employee.objects.filter(emp_no=row.get('emp_no', '')).first()
     row['id'] = f"{row['emp_no']}_{date_obj.strftime('%d-%m-%Y')}"
+    row['employee_id'] = str(emp.id) if emp else None
     row['employee_name'] = emp.full_name if emp else f"{row.get('first_name','')} {row.get('last_name','')}".strip()
     clock_status, clock_time = _row_clock_status(emp, date_obj) if emp else ('Pending', None)
     row['clock_status'] = clock_status
@@ -564,14 +566,13 @@ class ManpowerSettingsViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
 
-    @action(detail=False, methods=['get', 'post'])
-    def settings(self, request):
+    @action(detail=False, methods=['get', 'post'], url_path='current')
+    def current(self, request):
         """Get or create/update tenant's manpower settings."""
-        settings, created = ManpowerSettings.objects.get_or_create(tenant=request.user.tenant)
+        obj, _ = ManpowerSettings.objects.get_or_create(tenant=request.user.tenant)
         if request.method == 'POST':
-            serializer = self.get_serializer(settings, data=request.data, partial=True)
+            serializer = self.get_serializer(obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
-        serializer = self.get_serializer(settings)
-        return Response(serializer.data)
+        return Response(self.get_serializer(obj).data)

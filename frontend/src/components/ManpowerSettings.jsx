@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import { useManpowerSettings } from '../hooks/useManpowerSettings';
 
 /**
  * ManpowerSettings - Manage visibility and feature toggles
- * Decoupled: Uses hook for data management, no internal fetching
+ * Decoupled: accepts settings + updateSettings as props
  */
-export default function ManpowerSettings() {
-  const { settings, loading, error, updateSettings } = useManpowerSettings();
+export default function ManpowerSettings({ settings, updateSettings }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -25,22 +23,13 @@ export default function ManpowerSettings() {
     }
   }
 
-  if (loading) {
-    return <div className="p-4 text-gray-500">Loading settings...</div>;
-  }
-
-  if (error && !settings) {
-    return <div className="p-4 text-red-500">Failed to load settings</div>;
-  }
+  if (!settings) return null;
 
   const roleToggles = [
-    { label: 'Directors', field: 'show_directors' },
-    { label: 'Managers', field: 'show_managers' },
-    { label: 'Senior Supervisors', field: 'show_senior_supervisors' },
-    { label: 'Supervisors', field: 'show_supervisors' },
-    { label: 'Technicians', field: 'show_technicians' },
-    { label: 'Helpers', field: 'show_helpers' },
-    { label: 'Workers', field: 'show_workers' },
+    { label: 'Admin',       field: 'show_admin',      hint: 'Admin, Director' },
+    { label: 'Manager',     field: 'show_manager',    hint: 'Manager, Business Development, Advisor' },
+    { label: 'Supervisor',  field: 'show_supervisor', hint: 'Senior Supervisor, Foremen, Supervisor' },
+    { label: 'Worker',      field: 'show_worker',     hint: 'Construction Worker, Engineer, Helper' },
   ];
 
   const featureToggles = [
@@ -67,15 +56,18 @@ export default function ManpowerSettings() {
         <p className="text-xs text-gray-500 mb-4">Select which staff roles appear on the calendar</p>
         <div className="space-y-3">
           {roleToggles.map(toggle => (
-            <label key={toggle.field} className="flex items-center gap-3 cursor-pointer">
+            <label key={toggle.field} className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={settings[toggle.field]}
                 onChange={() => handleToggle(toggle.field)}
                 disabled={saving}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600"
               />
-              <span className="text-sm text-gray-700">{toggle.label}</span>
+              <div>
+                <span className="text-sm text-gray-700">{toggle.label}</span>
+                {toggle.hint && <p className="text-xs text-gray-400">{toggle.hint}</p>}
+              </div>
             </label>
           ))}
         </div>
