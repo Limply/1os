@@ -34,7 +34,7 @@ class Project(BaseModel):
         ('urgent', 'Urgent'),
     ]
 
-    project_no    = models.CharField(max_length=20, unique=True, blank=True)
+    project_no    = models.CharField(max_length=30, unique=True, blank=True)
     name          = models.CharField(max_length=255)
     type          = models.CharField(max_length=20, choices=TYPE_CHOICES, default='client')
     status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
@@ -60,6 +60,15 @@ class Project(BaseModel):
     )
     members  = models.JSONField(default=list, blank=True)
     progress = models.IntegerField(default=0)
+
+    # Additional project tracking fields
+    remarks          = models.TextField(blank=True, null=True)
+    partner          = models.CharField(max_length=255, blank=True, null=True)
+    expenses         = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    quoted_amount    = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    payment_received = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    payment_record   = models.TextField(blank=True, null=True)
+    external_link    = models.CharField(max_length=1000, blank=True, null=True)
 
     ref_type = models.CharField(max_length=50, blank=True, null=True)
     ref_id   = models.UUIDField(null=True, blank=True)

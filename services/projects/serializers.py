@@ -103,11 +103,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             'id', 'tenant', 'project_no', 'name', 'type', 'status', 'priority',
-            'description',
+            'description', 'remarks',
             'client_name', 'client_contact', 'client_email', 'client_phone', 'client_address',
             'start_date', 'end_date',
             'manager', 'manager_name', 'supervisor', 'supervisor_name',
-            'members', 'progress', 'ref_type', 'ref_id',
+            'members', 'progress',
+            'partner', 'expenses', 'quoted_amount', 'payment_received', 'payment_record', 'external_link',
+            'ref_type', 'ref_id',
             'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'tenant', 'project_no', 'progress', 'created_at', 'updated_at']
