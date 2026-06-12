@@ -55,6 +55,7 @@ MANAGER_ROLES = {'manager', 'admin', 'superadmin'}
 
 class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         qs = Project.objects.order_by('-created_at')
