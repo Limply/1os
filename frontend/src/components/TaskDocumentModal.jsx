@@ -3,8 +3,8 @@ import api from '../api/axios'
 
 const EXT_ICONS = {
   pdf:  { icon: '📄', color: 'text-red-500' },
-  doc:  { icon: '📝', color: 'text-blue-600' },
-  docx: { icon: '📝', color: 'text-blue-600' },
+  doc:  { icon: '📝', color: 'text-primary-600' },
+  docx: { icon: '📝', color: 'text-primary-600' },
   xls:  { icon: '📊', color: 'text-green-600' },
   xlsx: { icon: '📊', color: 'text-green-600' },
   ppt:  { icon: '📋', color: 'text-orange-500' },
@@ -128,7 +128,7 @@ export default function TaskDocumentModal({ task, onClose }) {
                       <td className="px-4 py-2 text-gray-400">{i + 1}</td>
                       <td className="px-4 py-2">
                         <a href={d.file_url} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-2 hover:text-blue-600 transition">
+                          className="flex items-center gap-2 hover:text-primary-600 transition">
                           <span className={`text-lg ${color}`}>{icon}</span>
                           <span className="text-sm text-gray-700 hover:underline">{d.filename}</span>
                         </a>
@@ -142,11 +142,11 @@ export default function TaskDocumentModal({ task, onClose }) {
                               onChange={e => setEditComment(e.target.value)}
                               onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
                               rows={2}
-                              className="w-full border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none resize-none"
+                              className="w-full border border-primary-400 rounded px-2 py-1 text-sm focus:outline-none resize-none"
                             />
                             <div className="flex gap-2 mt-1">
                               <button onClick={() => saveComment(d.id)}
-                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1 rounded transition">
+                                className="text-xs bg-primary-600 hover:bg-primary-700 text-white font-semibold px-3 py-1 rounded transition">
                                 Save
                               </button>
                               <button onClick={cancelEdit}
@@ -156,8 +156,8 @@ export default function TaskDocumentModal({ task, onClose }) {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-gray-600 whitespace-pre-wrap cursor-pointer hover:text-blue-600 group">
-                            {d.comment || <span className="text-gray-300 italic group-hover:text-blue-300">click to add comment</span>}
+                          <span className="text-gray-600 whitespace-pre-wrap cursor-pointer hover:text-primary-600 group">
+                            {d.comment || <span className="text-gray-300 italic group-hover:text-primary-300">click to add comment</span>}
                           </span>
                         )}
                       </td>
@@ -184,7 +184,7 @@ export default function TaskDocumentModal({ task, onClose }) {
               <label className="block text-xs text-gray-400 mb-1">File</label>
               <input ref={fileRef} type="file" onChange={handleFileChange}
                 className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
-                  file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100" />
+                  file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-600 hover:file:bg-primary-100" />
               {file && <p className="text-xs text-gray-400 mt-1">{file.name} · {fileSize(file.size)}</p>}
             </div>
             <div className="flex-1">
@@ -192,14 +192,14 @@ export default function TaskDocumentModal({ task, onClose }) {
               <textarea value={comment} onChange={e => setComment(e.target.value)}
                 placeholder="Write a comment..."
                 rows={3}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none" />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 resize-none" />
             </div>
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose}
               className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">Cancel</button>
             <button type="submit" disabled={!file || uploading}
-              className="text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold px-4 py-1.5 rounded-lg transition">
+              className="text-sm bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white font-semibold px-4 py-1.5 rounded-lg transition">
               {uploading ? 'Uploading...' : 'Upload'}
             </button>
           </div>

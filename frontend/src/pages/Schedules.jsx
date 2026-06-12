@@ -30,7 +30,7 @@ const STATUS_COLOR = {
 
 // Palette for employee name chips in calendar
 const CHIP_COLORS = [
-  'bg-blue-100 text-blue-700',
+  'bg-primary-100 text-primary-700',
   'bg-purple-100 text-purple-700',
   'bg-emerald-100 text-emerald-700',
   'bg-orange-100 text-orange-700',
@@ -257,12 +257,12 @@ export default function Schedules() {
             ↓ Excel
           </button>
           <button onClick={() => fileInputRef.current.click()}
-            className="border border-blue-300 text-blue-600 hover:bg-blue-50 font-semibold px-3 py-2 rounded-lg text-sm transition">
+            className="border border-primary-300 text-primary-600 hover:bg-primary-50 font-semibold px-3 py-2 rounded-lg text-sm transition">
             ↑ Import
           </button>
           <input ref={fileInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleImport} />
           <button onClick={() => openAdd()}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+            className="bg-primary-600 hover:bg-primary-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
             + Add Schedule
           </button>
         </div>
@@ -311,7 +311,7 @@ export default function Schedules() {
               setMonthISO(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)
             }} className="px-2 py-1 rounded hover:bg-gray-100 text-gray-500 text-sm">›</button>
             <button onClick={() => setMonthISO(todayISO().slice(0,7))}
-              className="text-xs text-blue-600 hover:underline ml-1">Today</button>
+              className="text-xs text-primary-600 hover:underline ml-1">Today</button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -319,9 +319,9 @@ export default function Schedules() {
             <input type="date"
               value={displayToISO(date)}
               onChange={e => setDate(isoToDisplay(e.target.value))}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary-400" />
             <button onClick={() => setDate(todayStr())}
-              className="text-xs text-blue-600 hover:underline">Today</button>
+              className="text-xs text-primary-600 hover:underline">Today</button>
           </div>
         )}
       </div>
@@ -348,9 +348,9 @@ export default function Schedules() {
                 return (
                   <div key={day}
                     onClick={() => clickCalDay(day)}
-                    className="min-h-[80px] p-1.5 cursor-pointer hover:bg-blue-50 transition group">
+                    className="min-h-[80px] p-1.5 cursor-pointer hover:bg-primary-50 transition group">
                     <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full
-                      ${isToday ? 'bg-blue-600 text-white' : 'text-gray-600 group-hover:text-blue-600'}`}>
+                      ${isToday ? 'bg-primary-600 text-white' : 'text-gray-600 group-hover:text-primary-600'}`}>
                       {day}
                     </div>
                     <div className="space-y-0.5">
@@ -381,7 +381,7 @@ export default function Schedules() {
           <div className="bg-gray-50 rounded-xl p-10 text-center">
             <p className="text-gray-400">No schedules for {date}</p>
             <button onClick={() => openAdd(displayToISO(date))}
-              className="mt-3 text-blue-600 hover:underline text-sm">+ Add one</button>
+              className="mt-3 text-primary-600 hover:underline text-sm">+ Add one</button>
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -414,7 +414,7 @@ export default function Schedules() {
                     </td>
                     <td className="px-4 py-3 flex gap-2 justify-end">
                       <button onClick={() => openEdit(s)}
-                        className="text-xs text-blue-600 hover:underline">Edit</button>
+                        className="text-xs text-primary-600 hover:underline">Edit</button>
                       <button onClick={() => handleDelete(s.id)}
                         className="text-xs text-red-500 hover:underline">Delete</button>
                     </td>
@@ -440,7 +440,7 @@ export default function Schedules() {
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase">Employee *</label>
                 <select value={form.employee} onChange={e => setForm(f => ({ ...f, employee: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400">
                   <option value="">Select employee...</option>
                   {employees.map(e => (
                     <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
@@ -452,7 +452,7 @@ export default function Schedules() {
                 <label className="text-xs font-semibold text-gray-500 uppercase">Date *</label>
                 <input type="date" value={form.date}
                   onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
               </div>
 
               <div className="flex gap-3">
@@ -460,13 +460,13 @@ export default function Schedules() {
                   <label className="text-xs font-semibold text-gray-500 uppercase">Shift Start</label>
                   <input type="time" value={form.shift_start}
                     onChange={e => setForm(f => ({ ...f, shift_start: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
                 </div>
                 <div className="flex-1">
                   <label className="text-xs font-semibold text-gray-500 uppercase">Shift End</label>
                   <input type="time" value={form.shift_end}
                     onChange={e => setForm(f => ({ ...f, shift_end: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
                 </div>
               </div>
 
@@ -474,22 +474,22 @@ export default function Schedules() {
                 <label className="text-xs font-semibold text-gray-500 uppercase">Location Name *</label>
                 <input type="text" placeholder="e.g. Raffles Place Site" value={form.location_name}
                   onChange={e => setForm(f => ({ ...f, location_name: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-gray-500 uppercase">GPS Coordinates *</label>
                   <button onClick={useCurrentLocation}
-                    className="text-xs text-blue-600 hover:underline">📍 Use Current Location</button>
+                    className="text-xs text-primary-600 hover:underline">📍 Use Current Location</button>
                 </div>
                 <div className="flex gap-2">
                   <input type="number" step="0.0000001" placeholder="Latitude" value={form.location_lat}
                     onChange={e => setForm(f => ({ ...f, location_lat: e.target.value }))}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
                   <input type="number" step="0.0000001" placeholder="Longitude" value={form.location_lng}
                     onChange={e => setForm(f => ({ ...f, location_lng: e.target.value }))}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
                 </div>
               </div>
 
@@ -497,7 +497,7 @@ export default function Schedules() {
                 <label className="text-xs font-semibold text-gray-500 uppercase">Allowed Radius (meters)</label>
                 <input type="number" value={form.radius}
                   onChange={e => setForm(f => ({ ...f, radius: parseInt(e.target.value) }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-blue-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
               </div>
 
               {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -509,7 +509,7 @@ export default function Schedules() {
                 Cancel
               </button>
               <button onClick={handleSave} disabled={saving}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 rounded-lg text-sm transition">
+                className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 text-white font-semibold py-2 rounded-lg text-sm transition">
                 {saving ? 'Saving...' : 'Save Schedule'}
               </button>
             </div>

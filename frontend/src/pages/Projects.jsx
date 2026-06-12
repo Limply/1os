@@ -30,7 +30,7 @@ function ResizableHeader({ label, colKey, widths, setWidths, align = 'left' }) {
     >
       <span className={`block text-${align}`}>{label}</span>
       <div onMouseDown={onMouseDown}
-        className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-blue-300 opacity-0 hover:opacity-100 transition-opacity"
+        className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary-300 opacity-0 hover:opacity-100 transition-opacity"
       />
     </th>
   )
@@ -40,12 +40,12 @@ const STATUS_COLORS = {
   planning:  'bg-gray-100 text-gray-600',
   active:    'bg-green-100 text-green-700',
   on_hold:   'bg-yellow-100 text-yellow-700',
-  completed: 'bg-blue-100 text-blue-700',
+  completed: 'bg-primary-100 text-primary-700',
   cancelled: 'bg-red-100 text-red-600',
 }
 
 const PRIORITY_COLORS = {
-  low: 'text-gray-400', medium: 'text-blue-500', high: 'text-orange-500', urgent: 'text-red-500',
+  low: 'text-gray-400', medium: 'text-primary-500', high: 'text-orange-500', urgent: 'text-red-500',
 }
 
 const EMPTY_FORM = {
@@ -98,7 +98,7 @@ export default function Projects() {
         <input
           value={form[key]}
           onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           {...props}
         />
       </div>
@@ -117,7 +117,7 @@ export default function Projects() {
           <p className="text-sm text-gray-500 mt-0.5">{projects.length} project{projects.length !== 1 ? 's' : ''}</p>
         </div>
         <button onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+          className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition">
           + New Project
         </button>
       </div>
@@ -131,7 +131,7 @@ export default function Projects() {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
               <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                 <option value="client">Client</option>
                 <option value="internal">Internal</option>
               </select>
@@ -139,7 +139,7 @@ export default function Projects() {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
               <select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
@@ -160,7 +160,7 @@ export default function Projects() {
                     value={form.client_address}
                     onChange={e => setForm(p => ({ ...p, client_address: e.target.value }))}
                     rows={2}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                     placeholder="Site / billing address"
                   />
                 </div>
@@ -171,7 +171,7 @@ export default function Projects() {
               <button type="button" onClick={() => setShowForm(false)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
               <button type="submit" disabled={saving}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                 {saving ? 'Creating...' : 'Create Project'}
               </button>
             </div>
@@ -205,7 +205,7 @@ export default function Projects() {
             <tbody className="divide-y divide-gray-100">
               {projects.map(p => (
                 <tr key={p.id} onClick={() => setSelected(p.id)}
-                  className="hover:bg-blue-50 cursor-pointer transition">
+                  className="hover:bg-primary-50 cursor-pointer transition">
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.project_no}</td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-800">{p.name}</div>
@@ -224,7 +224,7 @@ export default function Projects() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
+                        <div className="bg-primary-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
                       </div>
                       <span className="text-xs text-gray-600 w-8">{p.progress}%</span>
                     </div>

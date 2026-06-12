@@ -64,7 +64,7 @@ export default function CameraTest() {
         <div className="flex gap-2">
           <button
             onClick={testCamera}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded font-bold"
+            className="flex-1 bg-primary-600 hover:bg-primary-700 py-2 rounded font-bold"
           >
             Test Camera
           </button>

@@ -196,7 +196,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
 
       {/* Schedule info */}
       {schedule ? (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 text-sm text-blue-800">
+        <div className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-2 text-sm text-primary-800">
           📋 <strong>{schedule.location_name}</strong> &nbsp;·&nbsp; {schedule.shift_start} – {schedule.shift_end}
         </div>
       ) : (
@@ -228,7 +228,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
             )}
             <a href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
               target="_blank" rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline">
+              className="text-xs text-primary-600 hover:underline">
               🗺️ View on Google Maps
             </a>
           </div>
@@ -251,7 +251,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       <div className="flex gap-2">
         {!cameraActive && !photoPreview && (
           <button onClick={startCamera}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">
+            className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">
             📷 Open Camera
           </button>
         )}

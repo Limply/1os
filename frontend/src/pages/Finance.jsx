@@ -3,9 +3,9 @@ import api from '../api/axios'
 
 const TABS = ['Quotations', 'Invoices', 'Delivery Orders']
 
-const Q_STATUS   = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600', expired: 'bg-yellow-100 text-yellow-700' }
-const INV_STATUS = { unpaid: 'bg-yellow-100 text-yellow-700', partial: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-600', void: 'bg-gray-100 text-gray-500' }
-const DO_STATUS  = { draft: 'bg-gray-100 text-gray-600', issued: 'bg-blue-100 text-blue-700', delivered: 'bg-purple-100 text-purple-700', acknowledged: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
+const Q_STATUS   = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-primary-100 text-primary-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600', expired: 'bg-yellow-100 text-yellow-700' }
+const INV_STATUS = { unpaid: 'bg-yellow-100 text-yellow-700', partial: 'bg-primary-100 text-primary-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-600', void: 'bg-gray-100 text-gray-500' }
+const DO_STATUS  = { draft: 'bg-gray-100 text-gray-600', issued: 'bg-primary-100 text-primary-700', delivered: 'bg-purple-100 text-purple-700', acknowledged: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
 
 const GST_RATE = 0.09
 
@@ -48,20 +48,20 @@ function ItemsTable({ items, setItems, showAmount = true }) {
               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
               <td className="px-3 py-2">
                 <input value={item.description || ''} onChange={e => update(i, 'description', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5" />
+                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
               </td>
               <td className="px-3 py-2">
                 <input value={item.unit || ''} onChange={e => update(i, 'unit', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5" />
+                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
               </td>
               <td className="px-3 py-2">
                 <input type="number" value={item.qty || ''} onChange={e => update(i, 'qty', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5 text-right" />
+                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5 text-right" />
               </td>
               {showAmount && (
                 <td className="px-3 py-2">
                   <input type="number" value={item.unit_price || ''} onChange={e => update(i, 'unit_price', e.target.value)}
-                    className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5 text-right" />
+                    className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5 text-right" />
                 </td>
               )}
               {showAmount && (
@@ -70,7 +70,7 @@ function ItemsTable({ items, setItems, showAmount = true }) {
               {!showAmount && (
                 <td className="px-3 py-2">
                   <input value={item.remarks || ''} onChange={e => update(i, 'remarks', e.target.value)}
-                    className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5" />
+                    className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
                 </td>
               )}
               <td className="px-3 py-2">
@@ -82,7 +82,7 @@ function ItemsTable({ items, setItems, showAmount = true }) {
         </tbody>
       </table>
       <button onClick={() => setItems(prev => [...prev, { description: '', unit: '', qty: 1, unit_price: '', amount: '', remarks: '' }])}
-        className="mt-2 ml-3 text-sm text-blue-600 hover:underline">+ Add line</button>
+        className="mt-2 ml-3 text-sm text-primary-600 hover:underline">+ Add line</button>
     </div>
   )
 }
@@ -227,7 +227,7 @@ export default function Finance() {
       <div className={props.col2 ? 'col-span-2' : ''}>
         <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
         <input value={form[key] || ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
           {...props} />
       </div>
     )
@@ -240,7 +240,7 @@ export default function Finance() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Finance</h1>
         <button onClick={() => { setShowForm(true); setExpanded(null) }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+          className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition">
           + New {tab === 'Quotations' ? 'Quotation' : tab === 'Invoices' ? 'Invoice' : 'Delivery Order'}
         </button>
       </div>
@@ -268,20 +268,20 @@ export default function Finance() {
                     <input value={qForm.project_no} onChange={e => setQForm(f => ({ ...f, project_no: e.target.value }))}
                       onBlur={e => lookupProject(e.target.value)}
                       placeholder="AST-26-001 — auto-fills client"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
                   </div>
                   {inp('Issue Date *', 'issue_date', qForm, setQForm, { required: true, type: 'date' })}
                   <div className="relative">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Client Name *</label>
                     <input required value={qForm.client_name}
                       onChange={e => { setQForm(f => ({ ...f, client_name: e.target.value })); searchClients(e.target.value) }}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
                       placeholder="Type to search clients..." />
                     {clientSuggestions.length > 0 && (
                       <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                         {clientSuggestions.map(c => (
                           <button key={c.id} type="button" onClick={() => fillFromClient(c)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                            className="w-full text-left px-4 py-2.5 hover:bg-primary-50 text-sm border-b border-gray-100 last:border-0">
                             <span className="font-medium text-gray-800">{c.name}</span>
                             {c.contact_name && <span className="text-gray-400 ml-2 text-xs">· {c.contact_name}</span>}
                           </button>
@@ -296,7 +296,7 @@ export default function Finance() {
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
                     <textarea value={qForm.client_address || ''} rows={2} onChange={e => setQForm(f => ({ ...f, client_address: e.target.value }))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none" />
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 resize-none" />
                   </div>
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
@@ -305,7 +305,7 @@ export default function Finance() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
-                  <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create Quotation'}
                   </button>
                 </div>
@@ -328,7 +328,7 @@ export default function Finance() {
                 {quotations.map(q => (
                   <>
                     <tr key={q.id} onClick={() => setExpanded(expanded === q.id ? null : q.id)}
-                      className="hover:bg-blue-50 cursor-pointer">
+                      className="hover:bg-primary-50 cursor-pointer">
                       <td className="px-4 py-3 font-mono text-xs">{q.quote_no}</td>
                       <td className="px-4 py-3 text-gray-500">{q.project_no || '—'}</td>
                       <td className="px-4 py-3 font-medium">{q.client_name}</td>
@@ -337,7 +337,7 @@ export default function Finance() {
                       <td className="px-4 py-3 text-right font-medium">${parseFloat(q.total).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={e => { e.stopPropagation(); downloadDocx('quotations', q.id, q.quote_no) }}
-                          className="text-xs text-blue-600 hover:underline">DOCX</button>
+                          className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
                     </tr>
                     {expanded === q.id && (
@@ -396,7 +396,7 @@ export default function Finance() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
-                  <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create Invoice'}
                   </button>
                 </div>
@@ -420,7 +420,7 @@ export default function Finance() {
                 {invoices.map(inv => (
                   <>
                     <tr key={inv.id} onClick={() => setExpanded(expanded === inv.id ? null : inv.id)}
-                      className="hover:bg-blue-50 cursor-pointer">
+                      className="hover:bg-primary-50 cursor-pointer">
                       <td className="px-4 py-3 font-mono text-xs">{inv.invoice_no}</td>
                       <td className="px-4 py-3 font-medium">{inv.client_name}</td>
                       <td className="px-4 py-3 text-gray-500">{inv.issue_date}</td>
@@ -430,7 +430,7 @@ export default function Finance() {
                       <td className="px-4 py-3 text-right font-medium text-red-600">${parseFloat(inv.balance_due).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={e => { e.stopPropagation(); downloadDocx('invoices', inv.id, inv.invoice_no) }}
-                          className="text-xs text-blue-600 hover:underline">DOCX</button>
+                          className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
                     </tr>
                     {expanded === inv.id && (
@@ -486,7 +486,7 @@ export default function Finance() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
-                  <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create DO'}
                   </button>
                 </div>
@@ -509,7 +509,7 @@ export default function Finance() {
                 {dos.map(d => (
                   <>
                     <tr key={d.id} onClick={() => setExpanded(expanded === d.id ? null : d.id)}
-                      className="hover:bg-blue-50 cursor-pointer">
+                      className="hover:bg-primary-50 cursor-pointer">
                       <td className="px-4 py-3 font-mono text-xs">{d.do_no}</td>
                       <td className="px-4 py-3 font-medium">{d.client_name}</td>
                       <td className="px-4 py-3 text-gray-500">{d.issue_date}</td>
@@ -518,7 +518,7 @@ export default function Finance() {
                       <td className="px-4 py-3 text-gray-500">{d.delivered_by || '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={e => { e.stopPropagation(); downloadDocx('delivery-orders', d.id, d.do_no) }}
-                          className="text-xs text-blue-600 hover:underline">DOCX</button>
+                          className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
                     </tr>
                     {expanded === d.id && (

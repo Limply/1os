@@ -62,7 +62,7 @@ export default function ManpowerSettings({ settings, updateSettings }) {
                 checked={settings[toggle.field]}
                 onChange={() => handleToggle(toggle.field)}
                 disabled={saving}
-                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600"
+                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary-600"
               />
               <div>
                 <span className="text-sm text-gray-700">{toggle.label}</span>
@@ -84,7 +84,7 @@ export default function ManpowerSettings({ settings, updateSettings }) {
                 checked={settings[toggle.field]}
                 onChange={() => handleToggle(toggle.field)}
                 disabled={saving}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                className="w-4 h-4 rounded border-gray-300 text-primary-600"
               />
               <span className="text-sm text-gray-700">{toggle.label}</span>
             </label>
@@ -92,8 +92,8 @@ export default function ManpowerSettings({ settings, updateSettings }) {
         </div>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <p className="text-xs text-blue-800">
+      <div className="bg-primary-50 border border-primary-200 rounded-lg p-3">
+        <p className="text-xs text-primary-800">
           <strong>Note:</strong> Changes are saved automatically. The calendar will refresh with your new preferences.
         </p>
       </div>

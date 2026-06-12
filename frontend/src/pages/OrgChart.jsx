@@ -181,7 +181,7 @@ export default function OrgChart() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search staff..."
-          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 w-44"
+          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary-400 w-44"
         />
         <div className="flex items-center gap-1 ml-2">
           <button onClick={() => setScale(s => Math.max(0.3, s - 0.1))}
@@ -252,7 +252,7 @@ export default function OrgChart() {
               )}
               <div className="flex-1">
                 <h2 className="font-bold text-gray-800 text-base">{selected.full_name}</h2>
-                <p className="text-sm text-blue-600">{selected.position_name || '—'}</p>
+                <p className="text-sm text-primary-600">{selected.position_name || '—'}</p>
                 <p className="text-xs text-gray-400">{selected.department_name || '—'}</p>
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 text-xl">×</button>

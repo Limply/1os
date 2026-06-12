@@ -12,6 +12,7 @@ import HR from './pages/HR'
 import Finance from './pages/Finance'
 import OrgChart from './pages/OrgChart'
 import Calendar from './pages/Calendar'
+import Settings from './pages/Settings'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />
           <Route path="/files"      element={<Files />} />
           <Route path="/calendar"   element={<Calendar />} />
+          <Route path="/settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

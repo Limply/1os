@@ -18,7 +18,7 @@ const ATTENDANCE_COLORS = {
   present:  'bg-green-100 text-green-700',
   absent:   'bg-red-100 text-red-700',
   late:     'bg-yellow-100 text-yellow-700',
-  half_day: 'bg-blue-100 text-blue-700',
+  half_day: 'bg-primary-100 text-primary-700',
   leave:    'bg-purple-100 text-purple-700',
 }
 
@@ -30,7 +30,7 @@ function SubTabs({ tabs, active, onChange }) {
         <button key={t} onClick={() => onChange(t)}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
             active === t
-              ? 'bg-blue-600 text-white'
+              ? 'bg-primary-600 text-white'
               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
           }`}>
           {t}
@@ -162,7 +162,7 @@ export default function HR() {
 
       {/* Profile header */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex items-center gap-4">
-        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
+        <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold text-lg">
           {employee.first_name?.[0]}{employee.last_name?.[0]}
         </div>
         <div>
@@ -194,7 +194,7 @@ export default function HR() {
                   <p className="text-2xl font-bold text-gray-800">{b.remaining}</p>
                   <p className="text-xs text-gray-400">of {b.entitled} days remaining</p>
                   <div className="mt-2 w-full bg-gray-100 rounded-full h-1.5">
-                    <div className="bg-blue-500 h-1.5 rounded-full"
+                    <div className="bg-primary-500 h-1.5 rounded-full"
                       style={{ width: `${b.entitled > 0 ? (b.remaining / b.entitled) * 100 : 0}%` }} />
                   </div>
                 </div>
@@ -204,7 +204,7 @@ export default function HR() {
 
           {!showApplyForm ? (
             <button onClick={() => setShowApplyForm(true)}
-              className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition">
+              className="w-full bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition">
               + Apply for Leave
             </button>
           ) : (
@@ -212,7 +212,7 @@ export default function HR() {
               <p className="font-semibold text-gray-700 text-sm">New Leave Application</p>
               <select required value={applyForm.leave_type}
                 onChange={e => setApplyForm(p => ({ ...p, leave_type: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
                 <option value="">Select leave type</option>
                 {leaveTypes.map(lt => <option key={lt.id} value={lt.id}>{lt.name}</option>)}
               </select>
@@ -221,27 +221,27 @@ export default function HR() {
                   <label className="text-xs text-gray-400">Start Date</label>
                   <input required type="date" value={applyForm.start_date}
                     onChange={e => setApplyForm(p => ({ ...p, start_date: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400">End Date</label>
                   <input required type="date" value={applyForm.end_date}
                     onChange={e => setApplyForm(p => ({ ...p, end_date: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
                 </div>
               </div>
               <div>
                 <label className="text-xs text-gray-400">Number of Days</label>
                 <input required type="number" step="0.5" min="0.5" value={applyForm.days}
                   onChange={e => setApplyForm(p => ({ ...p, days: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
               </div>
               <textarea placeholder="Reason (optional)" value={applyForm.reason}
                 onChange={e => setApplyForm(p => ({ ...p, reason: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none" rows={2} />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500 resize-none" rows={2} />
               <div className="flex gap-2">
                 <button type="submit" disabled={applying}
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                   {applying ? 'Submitting…' : 'Submit'}
                 </button>
                 <button type="button" onClick={() => setShowApplyForm(false)}
@@ -275,7 +275,7 @@ export default function HR() {
           <div className="space-y-4">
               {isManager && !showAttendForm && (
                 <button onClick={() => setShowAttendForm(true)}
-                  className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition">
+                  className="w-full bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition">
                   + Log Attendance
                 </button>
               )}
@@ -286,11 +286,11 @@ export default function HR() {
                     <label className="text-xs text-gray-400">Date</label>
                     <input required type="date" value={attendForm.date}
                       onChange={e => setAttendForm(p => ({ ...p, date: e.target.value }))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
                   </div>
                   <select value={attendForm.status}
                     onChange={e => setAttendForm(p => ({ ...p, status: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
                     <option value="present">Present</option>
                     <option value="half_day">Half Day</option>
                     <option value="late">Late</option>
@@ -318,7 +318,7 @@ export default function HR() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-blue-700">Save</button>
+                    <button type="submit" className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-primary-700">Save</button>
                     <button type="button" onClick={() => setShowAttendForm(false)} className="px-4 py-2 text-sm text-gray-400">Cancel</button>
                   </div>
                 </form>
@@ -448,7 +448,7 @@ export default function HR() {
             value={empSearch}
             onChange={e => setEmpSearch(e.target.value)}
             placeholder="Search name, emp no, department..."
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary-400"
           />
           <p className="text-xs text-gray-400">{filteredEmployees.length} employees</p>
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
@@ -457,7 +457,7 @@ export default function HR() {
             ) : filteredEmployees.map(e => (
               <div key={e.id} className="px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm font-bold flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-sm font-bold flex-shrink-0">
                     {e.first_name?.[0]}{e.last_name?.[0]}
                   </div>
                   <div>
@@ -503,7 +503,7 @@ export default function HR() {
                 placeholder="Remarks (optional)"
                 value={remarkInput[l.id] || ''}
                 onChange={e => setRemarkInput(p => ({ ...p, [l.id]: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500"
               />
               <div className="flex gap-2">
                 <button onClick={() => handleDecision(l.id, 'approve')}

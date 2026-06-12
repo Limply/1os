@@ -11,7 +11,7 @@ const USER_COLORS = [
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
 const STATUS_COLORS = {
   todo: 'bg-gray-200 text-gray-700',
-  in_progress: 'bg-blue-100 text-blue-700',
+  in_progress: 'bg-primary-100 text-primary-700',
   review: 'bg-yellow-100 text-yellow-700',
   done: 'bg-green-100 text-green-700',
 }
@@ -206,7 +206,7 @@ export default function Calendar() {
             <div className="flex items-start justify-between mb-3">
               {selectedEvent.type === 'task' ? (
                 <input
-                  className="flex-1 text-base font-bold text-gray-800 border-b border-gray-300 focus:border-blue-500 focus:outline-none pr-2 bg-transparent"
+                  className="flex-1 text-base font-bold text-gray-800 border-b border-gray-300 focus:border-primary-500 focus:outline-none pr-2 bg-transparent"
                   value={editTask.title || ''}
                   onChange={e => setEditTask(p => ({ ...p, title: e.target.value }))}
                 />
@@ -275,7 +275,7 @@ export default function Calendar() {
                   <select
                     value={editTask.assigned_to || ''}
                     onChange={e => setEditTask(p => ({ ...p, assigned_to: e.target.value || null }))}
-                    className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500"
+                    className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-primary-500"
                   >
                     <option value="">Unassigned</option>
                     {employees.map(e => (
@@ -291,7 +291,7 @@ export default function Calendar() {
                 <button
                   onClick={handleSaveTask}
                   disabled={saving}
-                  className="mt-3 w-full bg-blue-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
+                  className="mt-3 w-full bg-primary-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition"
                 >
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>

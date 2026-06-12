@@ -28,7 +28,7 @@ function taskUrl(projectId, taskId) {
 }
 
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
-const PRIORITY_COLORS = { low: 'text-gray-400', medium: 'text-blue-500', high: 'text-orange-500', urgent: 'text-red-500' }
+const PRIORITY_COLORS = { low: 'text-gray-400', medium: 'text-primary-500', high: 'text-orange-500', urgent: 'text-red-500' }
 
 const MANAGER_ROLES = ['manager', 'admin', 'superadmin']
 
@@ -342,7 +342,7 @@ export default function ProjectDetail({ projectId, onBack }) {
           <p className="text-sm text-gray-500">
             {project.client_name && <span className="mr-2">{project.client_name} ·</span>}
             <span>{project.status.replace('_', ' ')}</span>
-            <span className="ml-2 font-semibold text-blue-600">{project.progress}% complete</span>
+            <span className="ml-2 font-semibold text-primary-600">{project.progress}% complete</span>
             {project.supervisor_name && <span className="ml-2">· Foreman: {project.supervisor_name}</span>}
           </p>
         </div>
@@ -366,7 +366,7 @@ export default function ProjectDetail({ projectId, onBack }) {
 
       {/* Progress bar */}
       <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-        <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${project.progress}%` }} />
+        <div className="bg-primary-500 h-2 rounded-full transition-all" style={{ width: `${project.progress}%` }} />
       </div>
 
       {/* Task Groups */}
@@ -411,13 +411,13 @@ export default function ProjectDetail({ projectId, onBack }) {
                         autoFocus
                         value={editValues.title}
                         onChange={e => setEditValues(p => ({ ...p, title: e.target.value }))}
-                        className="flex-1 text-sm border-b border-blue-400 focus:outline-none bg-transparent"
+                        className="flex-1 text-sm border-b border-primary-400 focus:outline-none bg-transparent"
                         onKeyDown={e => { if (e.key === 'Enter') saveEditing(); if (e.key === 'Escape') cancelEditing() }}
                       />
                     ) : (
                       <span
                         onClick={() => startEditing(task)}
-                        className={`flex-1 text-sm cursor-pointer truncate ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700 hover:text-blue-600'}`}
+                        className={`flex-1 text-sm cursor-pointer truncate ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700 hover:text-primary-600'}`}
                       >
                         {task.title}
                       </span>
@@ -434,7 +434,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                         </svg>
                       </a>
                       <button onClick={() => setPhotoModalTask(task)}
-                        className="relative text-gray-300 hover:text-blue-500 transition"
+                        className="relative text-gray-300 hover:text-primary-500 transition"
                         title={task.photo_count > 0 ? `${task.photo_count} photo(s)` : 'Add photos'}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
@@ -442,7 +442,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                         {task.photo_count > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />}
                       </button>
                       <button onClick={() => setDocModalTask(task)}
-                        className="relative text-gray-300 hover:text-blue-500 transition"
+                        className="relative text-gray-300 hover:text-primary-500 transition"
                         title={task.doc_count > 0 ? `${task.doc_count} document(s)` : 'Add documents'}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
@@ -474,13 +474,13 @@ export default function ProjectDetail({ projectId, onBack }) {
                       <input type="number" min="1" max="10" value={editValues.weightage}
                         onChange={e => setEditValues(p => ({ ...p, weightage: e.target.value }))}
                         className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none w-14 text-center" title="Weightage (1–10)" />
-                      <button onClick={saveEditing} className="text-xs text-white bg-blue-600 px-2 py-0.5 rounded-lg hover:bg-blue-700">Save</button>
+                      <button onClick={saveEditing} className="text-xs text-white bg-primary-600 px-2 py-0.5 rounded-lg hover:bg-primary-700">Save</button>
                       <button onClick={cancelEditing} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-8 mt-0.5">
                       <span onClick={() => startEditing(task)}
-                        className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full cursor-pointer hover:bg-blue-100 hover:text-blue-600">
+                        className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full cursor-pointer hover:bg-primary-100 hover:text-primary-600">
                         {task.assigned_to_name ? task.assigned_to_name.split(' ')[0] : 'Unassigned'}
                       </span>
                       {(task.start_date || task.end_date) && (
@@ -503,7 +503,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                     placeholder="Task title"
                     value={newTask[grp.group]?.title || ''}
                     onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], title: e.target.value } })}
-                    className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                   <select
                     value={newTask[grp.group]?.priority || 'medium'}
@@ -531,14 +531,14 @@ export default function ProjectDetail({ projectId, onBack }) {
                     onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], due_date: e.target.value } })}
                     className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
                   />
-                  <button type="submit" className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700">Add</button>
+                  <button type="submit" className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-primary-700">Add</button>
                   <button type="button" onClick={() => setAddingTaskTo(null)} className="text-gray-400 text-sm px-2">Cancel</button>
                 </div>
               </form>
             ) : (
               <button
                 onClick={() => setAddingTaskTo(grp.group)}
-                className="w-full text-left px-4 py-1.5 text-sm text-gray-400 hover:text-blue-600 hover:bg-gray-50 transition border-t border-gray-100"
+                className="w-full text-left px-4 py-1.5 text-sm text-gray-400 hover:text-primary-600 hover:bg-gray-50 transition border-t border-gray-100"
               >
                 + Add task
               </button>
@@ -555,9 +555,9 @@ export default function ProjectDetail({ projectId, onBack }) {
               placeholder="Group name, e.g. Phase 1 - Survey"
               value={newGroupName}
               onChange={e => setNewGroupName(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+            <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700">
               Add Group
             </button>
             <button type="button" onClick={() => setAddingGroup(false)} className="text-gray-400 text-sm px-2">Cancel</button>
@@ -566,7 +566,7 @@ export default function ProjectDetail({ projectId, onBack }) {
           <div className="flex gap-2">
             <button
               onClick={() => setAddingGroup(true)}
-              className="flex-1 border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 transition"
+              className="flex-1 border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-primary-400 hover:text-primary-500 transition"
             >
               + Add Group
             </button>
@@ -642,7 +642,7 @@ export default function ProjectDetail({ projectId, onBack }) {
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase">Project Name</label>
                 <input value={editProject.name} onChange={e => setEditProject(p => ({ ...p, name: e.target.value }))}
-                  className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -704,7 +704,7 @@ export default function ProjectDetail({ projectId, onBack }) {
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase">Description</label>
                 <textarea value={editProject.description} onChange={e => setEditProject(p => ({ ...p, description: e.target.value }))}
-                  rows={2} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  rows={2} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
               </div>
               <div className="border-t border-gray-100 pt-3">
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Client</p>
@@ -741,7 +741,7 @@ export default function ProjectDetail({ projectId, onBack }) {
               <button onClick={() => setShowEditProject(false)}
                 className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Cancel</button>
               <button onClick={saveEditProject} disabled={savingProject}
-                className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg transition disabled:opacity-50">
+                className="text-sm bg-primary-600 hover:bg-primary-700 text-white font-semibold px-5 py-2 rounded-lg transition disabled:opacity-50">
                 {savingProject ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
