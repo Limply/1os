@@ -45,9 +45,9 @@ class UserModulesForm(forms.ModelForm):
 
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
-    list_display = ['name', 'schema_name', 'domain', 'plan', 'created_at']
-    search_fields = ['name', 'schema_name', 'domain']
-    list_filter = ['plan']
+    list_display = ['name', 'email', 'phone', 'gst_registered', 'created_at']
+    search_fields = ['name', 'email', 'phone']
+    list_filter = ['gst_registered']
 
 
 @admin.register(User)

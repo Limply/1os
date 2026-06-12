@@ -20,9 +20,7 @@ REST_FRAMEWORK = {
     ],
 }
 
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')
-
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='https://ast1.sim-eng.com').split(',')
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='').split(',') if config('CSRF_TRUSTED_ORIGINS', default='') else []
 
 # Security headers
 SECURE_BROWSER_XSS_FILTER = True

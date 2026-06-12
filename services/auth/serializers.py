@@ -5,7 +5,10 @@ from .models import Tenant, User, PermissionGroup
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
-        fields = ['id', 'name', 'schema_name', 'domain', 'plan', 'modules', 'created_at']
+        fields = [
+            'id', 'name', 'site_url', 'logo', 'address', 'phone', 'email',
+            'gst_registered', 'gst_number', 'modules', 'created_at',
+        ]
         read_only_fields = ['id', 'created_at']
 
 
