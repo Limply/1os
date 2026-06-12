@@ -4,17 +4,17 @@ from django.db import models
 
 
 class Tenant(models.Model):
-    """Top-level tenant (company) record. Does not inherit BaseModel — it IS the root."""
+    """Company profile for this 1OS installation (single-tenant per server)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    schema_name = models.CharField(max_length=100, unique=True)
-    domain = models.CharField(max_length=255, unique=True)
-    plan = models.CharField(
-        max_length=20,
-        choices=[('starter', 'Starter'), ('business', 'Business'), ('enterprise', 'Enterprise')],
-        default='starter',
-    )
-    modules = models.JSONField(default=list, blank=True)
+    site_url = models.CharField(max_length=255, blank=True, null=True, help_text='e.g. https://customer.sim-eng.com')
+    logo = models.CharField(max_length=500, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    gst_registered = models.BooleanField(default=False)
+    gst_number = models.CharField(max_length=50, blank=True, null=True)
+    modules = models.JSONField(default=list, blank=True, help_text='List of module keys enabled on this installation')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
