@@ -13,6 +13,8 @@ import Finance from './pages/Finance'
 import OrgChart from './pages/OrgChart'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
+import CRM from './pages/CRM'
+import Personal from './pages/Personal'
 
 export default function App() {
   return (
@@ -23,10 +25,12 @@ export default function App() {
         <Route path="/camera-test" element={<CameraTest />} />
         <Route element={<Layout />}>
           <Route path="/"           element={<Dashboard />} />
+          <Route path="/my"         element={<Personal />} />
           <Route path="/projects"   element={<Projects />} />
           <Route path="/hr"         element={<HR />} />
           <Route path="/schedules"  element={<Schedules />} />
           <Route path="/orgchart"   element={<OrgChart />} />
+          <Route path="/crm"        element={<CRM />} />
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Finance />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />

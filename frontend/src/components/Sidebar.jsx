@@ -2,6 +2,7 @@ import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
 
 const ALL_LINKS = [
+  { module: 'dashboard', to: '/my', label: 'My Tools' },
   {
     module: 'dashboard', to: '/', label: 'Dashboard',
     children: [
@@ -21,6 +22,7 @@ const ALL_LINKS = [
       { module: 'hr', to: '/clock-in', label: 'Clock In' },
     ],
   },
+  { module: 'crm',        to: '/crm',        label: 'CRM' },
   { module: 'operations', to: '/operations', label: 'Operations' },
   { module: 'finance',    to: '/finance',    label: 'Finance' },
   { module: 'compliance', to: '/compliance', label: 'Compliance' },
@@ -90,19 +92,19 @@ export default function Sidebar({ onCollapse }) {
   }
 
   return (
-    <aside className="w-56 bg-gray-900 min-h-screen flex flex-col">
-      <div className="px-6 py-5 border-b border-gray-700">
+    <aside className="w-56 bg-gray-900 h-screen sticky top-0 flex flex-col shrink-0">
+      <div className="px-6 py-5 border-b border-gray-700 shrink-0">
         <button onClick={onCollapse} className="text-white font-bold text-lg hover:text-gray-300 transition">1OS</button>
         <p className="text-gray-400 text-xs mt-0.5">{user.tenant_name || '—'}</p>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {visibleLinks.map(link => (
           <NavItem key={link.to} link={link} allowed={allowed} isAdminPlus={isAdminPlus} />
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-gray-700">
+      <div className="px-3 py-4 border-t border-gray-700 shrink-0">
         <div className="px-3 py-2 mb-1">
           <p className="text-sm text-white font-medium truncate">{user.first_name} {user.last_name}</p>
           <p className="text-xs text-gray-400 truncate">{user.role}</p>

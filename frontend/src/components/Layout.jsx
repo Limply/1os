@@ -7,6 +7,7 @@ import { isLoggedIn, getUser } from '../api/auth'
 const ROUTE_MODULE = {
   '/orgchart':   'orgchart',
   '/projects':   'projects',
+  '/crm':        'crm',
   '/calendar':   'calendar',
   '/hr':         'hr',
   '/schedules':  'schedules',

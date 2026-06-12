@@ -53,6 +53,26 @@ class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             qs = qs.filter(can_clock_in=True)
         return qs
 
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        try:
+            emp = Employee.objects.select_related('department', 'position').get(user=request.user)
+        except Employee.DoesNotExist:
+            return Response({'employee': None, 'leave_balances': [], 'leave_applications': []})
+
+        balances = LeaveBalance.objects.filter(employee=emp).select_related('leave_type')
+        applications = LeaveApplication.objects.filter(employee=emp).select_related('leave_type').order_by('-created_at')[:5]
+
+        today = timezone.now().date()
+        attendance = Attendance.objects.filter(employee=emp, date=today).first()
+
+        return Response({
+            'employee': EmployeeSerializer(emp, context={'request': request}).data,
+            'leave_balances': LeaveBalanceSerializer(balances, many=True).data,
+            'leave_applications': LeaveApplicationSerializer(applications, many=True).data,
+            'today_attendance': AttendanceSerializer(attendance).data if attendance else None,
+        })
+
 
 class LeaveTypeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()

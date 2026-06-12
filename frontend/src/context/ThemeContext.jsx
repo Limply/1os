@@ -13,6 +13,7 @@ const ThemeContext = createContext(null)
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => localStorage.getItem('theme') || 'blue')
+  const [darkMode, setDarkModeState] = useState(() => localStorage.getItem('darkMode') || 'light')
 
   useEffect(() => {
     const root = document.documentElement
@@ -24,8 +25,16 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('theme', theme)
   }, [theme])
 
+  useEffect(() => {
+    const root = document.documentElement
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const isDark = darkMode === 'dark' || (darkMode === 'system' && prefersDark)
+    root.classList.toggle('dark', isDark)
+    localStorage.setItem('darkMode', darkMode)
+  }, [darkMode])
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme: setThemeState }}>
+    <ThemeContext.Provider value={{ theme, setTheme: setThemeState, darkMode, setDarkMode: setDarkModeState }}>
       {children}
     </ThemeContext.Provider>
   )

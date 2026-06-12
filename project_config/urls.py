@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/notify/', include('services.notifications.urls')),
     path('api/dashboard/', include('services.dashboard.urls')),
     path('api/projects/', include('services.projects.urls')),
+    path('api/crm/',      include('services.crm.urls')),
     path('api/files/proxy/', filebrowser_proxy),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

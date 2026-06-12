@@ -2,9 +2,16 @@ import { useState } from 'react'
 import { THEMES, useTheme } from '../context/ThemeContext'
 import api from '../api/axios'
 
+const MODES = [
+  { key: 'light',  label: 'Light',  icon: '☀️' },
+  { key: 'dark',   label: 'Dark',   icon: '🌙' },
+  { key: 'system', label: 'System', icon: '💻' },
+]
+
 export default function Settings() {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, darkMode, setDarkMode } = useTheme()
   const [pendingTheme, setPendingTheme] = useState(theme)
+  const [pendingMode, setPendingMode] = useState(darkMode)
   const [themeSaved, setThemeSaved] = useState(false)
 
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
@@ -14,9 +21,12 @@ export default function Settings() {
 
   function handleSaveTheme() {
     setTheme(pendingTheme)
+    setDarkMode(pendingMode)
     setThemeSaved(true)
     setTimeout(() => setThemeSaved(false), 2000)
   }
+
+  const themeChanged = pendingTheme !== theme || pendingMode !== darkMode
 
   async function handleChangePassword(e) {
     e.preventDefault()
@@ -41,6 +51,25 @@ export default function Settings() {
       {/* Appearance */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Appearance</h2>
+
+        <p className="text-sm text-gray-600 mb-3">Mode</p>
+        <div className="flex gap-2 mb-6">
+          {MODES.map(m => (
+            <button
+              key={m.key}
+              onClick={() => setPendingMode(m.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition ${
+                pendingMode === m.key
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }`}
+            >
+              <span>{m.icon}</span>
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         <p className="text-sm text-gray-600 mb-4">Color Theme</p>
         <div className="flex gap-3 flex-wrap mb-5">
           {THEMES.map(t => (
@@ -70,7 +99,7 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSaveTheme}
-            disabled={pendingTheme === theme}
+            disabled={!themeChanged}
             className="bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
           >
             Save
