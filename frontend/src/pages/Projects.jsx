@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/axios'
 import ProjectDetail from './ProjectDetail'
 
 const DEFAULT_WIDTHS = { no: 110, name: 220, client: 160, contact: 140, status: 100, priority: 90, progress: 110, tasks: 60 }
 
-function ResizableHeader({ label, colKey, widths, setWidths, align = 'left' }) {
+function SortIcon({ direction }) {
+  if (!direction) return <span className="ml-1 text-gray-300">↕</span>
+  return <span className="ml-1 text-primary-500">{direction === 'asc' ? '↑' : '↓'}</span>
+}
+
+function ResizableHeader({ label, colKey, sortKey, widths, setWidths, align = 'left', sort, onSort }) {
   const startX = useRef(null)
   const startW = useRef(null)
 
@@ -24,11 +29,20 @@ function ResizableHeader({ label, colKey, widths, setWidths, align = 'left' }) {
     window.addEventListener('mouseup', onUp)
   }
 
+  const isActive = sort?.key === sortKey
+  const direction = isActive ? sort.dir : null
+
   return (
     <th style={{ width: widths[colKey], minWidth: widths[colKey], position: 'relative' }}
       className="px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide select-none"
     >
-      <span className={`block text-${align}`}>{label}</span>
+      <span
+        className={`flex items-center text-${align} cursor-pointer hover:text-gray-800 transition ${isActive ? 'text-primary-600' : ''}`}
+        onClick={() => sortKey && onSort(sortKey)}
+      >
+        {label}
+        {sortKey && <SortIcon direction={direction} />}
+      </span>
       <div onMouseDown={onMouseDown}
         className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary-300 opacity-0 hover:opacity-100 transition-opacity"
       />
@@ -71,6 +85,11 @@ export default function Projects() {
   const [saving, setSaving] = useState(false)
   const [widths, setWidths] = useState(DEFAULT_WIDTHS)
   const [activeTab, setActiveTab] = useState('all')
+  const [sort, setSort] = useState({ key: 'project_no', dir: 'desc' })
+
+  function onSort(key) {
+    setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
+  }
 
   useEffect(() => {
     fetchProjects()
@@ -119,7 +138,26 @@ export default function Projects() {
     return <ProjectDetail projectId={selected} onBack={() => { setSelected(null); fetchProjects() }} />
   }
 
-  const filtered = activeTab === 'all' ? projects : projects.filter(p => p.status === activeTab)
+  const filtered = useMemo(() => {
+    let list = activeTab === 'all' ? projects : projects.filter(p => p.status === activeTab)
+    if (sort.key) {
+      list = [...list].sort((a, b) => {
+        let av = a[sort.key] ?? ''
+        let bv = b[sort.key] ?? ''
+        if (typeof av === 'number' || typeof bv === 'number') {
+          av = Number(av) || 0
+          bv = Number(bv) || 0
+        } else {
+          av = String(av).toLowerCase()
+          bv = String(bv).toLowerCase()
+        }
+        if (av < bv) return sort.dir === 'asc' ? -1 : 1
+        if (av > bv) return sort.dir === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+    return list
+  }, [projects, activeTab, sort])
 
   return (
     <div>
@@ -227,14 +265,14 @@ export default function Projects() {
           <table className="text-sm" style={{ tableLayout: 'fixed', width: Object.values(widths).reduce((a, b) => a + b, 0) }}>
             <thead>
               <tr>
-                <ResizableHeader label="Project No." colKey="no"       widths={widths} setWidths={setWidths} />
-                <ResizableHeader label="Name"         colKey="name"     widths={widths} setWidths={setWidths} />
-                <ResizableHeader label="Client"       colKey="client"   widths={widths} setWidths={setWidths} />
-                <ResizableHeader label="Contact"      colKey="contact"  widths={widths} setWidths={setWidths} />
-                <ResizableHeader label="Status"       colKey="status"   widths={widths} setWidths={setWidths} />
-                <ResizableHeader label="Priority"     colKey="priority" widths={widths} setWidths={setWidths} />
-                <ResizableHeader label="Progress"     colKey="progress" widths={widths} setWidths={setWidths} align="right" />
-                <ResizableHeader label="Tasks"        colKey="tasks"    widths={widths} setWidths={setWidths} align="right" />
+                <ResizableHeader label="Project No." colKey="no"       sortKey="project_no"   widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                <ResizableHeader label="Name"         colKey="name"     sortKey="name"         widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                <ResizableHeader label="Client"       colKey="client"   sortKey="client_name"  widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                <ResizableHeader label="Contact"      colKey="contact"  sortKey="client_contact" widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                <ResizableHeader label="Status"       colKey="status"   sortKey="status"       widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                <ResizableHeader label="Priority"     colKey="priority" sortKey="priority"     widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                <ResizableHeader label="Progress"     colKey="progress" sortKey="progress"     widths={widths} setWidths={setWidths} align="right" sort={sort} onSort={onSort} />
+                <ResizableHeader label="Tasks"        colKey="tasks"    sortKey="task_count"   widths={widths} setWidths={setWidths} align="right" sort={sort} onSort={onSort} />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
