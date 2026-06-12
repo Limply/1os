@@ -4,11 +4,19 @@ import api from '../api/axios'
 
 export default function Settings() {
   const { theme, setTheme } = useTheme()
+  const [pendingTheme, setPendingTheme] = useState(theme)
+  const [themeSaved, setThemeSaved] = useState(false)
 
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
   const [pwMsg, setPwMsg] = useState('')
   const [pwError, setPwError] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
+
+  function handleSaveTheme() {
+    setTheme(pendingTheme)
+    setThemeSaved(true)
+    setTimeout(() => setThemeSaved(false), 2000)
+  }
 
   async function handleChangePassword(e) {
     e.preventDefault()
@@ -34,22 +42,22 @@ export default function Settings() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Appearance</h2>
         <p className="text-sm text-gray-600 mb-4">Color Theme</p>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-3 flex-wrap mb-5">
           {THEMES.map(t => (
             <button
               key={t.key}
-              onClick={() => setTheme(t.key)}
+              onClick={() => setPendingTheme(t.key)}
               title={t.label}
               className="flex flex-col items-center gap-1.5 group"
             >
               <span
-                className="w-9 h-9 rounded-full flex items-center justify-center transition ring-offset-2"
+                className="w-9 h-9 rounded-full flex items-center justify-center transition"
                 style={{
                   backgroundColor: t.color,
-                  boxShadow: theme === t.key ? `0 0 0 3px #fff, 0 0 0 5px ${t.color}` : undefined,
+                  boxShadow: pendingTheme === t.key ? `0 0 0 3px #fff, 0 0 0 5px ${t.color}` : undefined,
                 }}
               >
-                {theme === t.key && (
+                {pendingTheme === t.key && (
                   <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
@@ -58,6 +66,16 @@ export default function Settings() {
               <span className="text-xs text-gray-500 group-hover:text-gray-700">{t.label}</span>
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSaveTheme}
+            disabled={pendingTheme === theme}
+            className="bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+          >
+            Save
+          </button>
+          {themeSaved && <span className="text-sm text-green-600">✓ Theme saved</span>}
         </div>
       </div>
 
