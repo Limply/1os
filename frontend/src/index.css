@@ -137,6 +137,33 @@
   --color-primary-900: 136 19 55;
 }
 
+/* FullCalendar — toolbar buttons */
+.fc .fc-button {
+  background-color: #f3f4f6 !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  transition: background 0.15s, box-shadow 0.15s !important;
+}
+.fc .fc-button:hover {
+  background-color: #e5e7eb !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+  color: #111827 !important;
+}
+.fc .fc-button-active,
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37,99,235,0.35) !important;
+}
+.fc .fc-button:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.2) !important;
+}
+
 /* FullCalendar — Sunday column styling */
 .fc-day-sunday {
   background-color: #f9fafb !important;

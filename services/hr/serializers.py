@@ -142,7 +142,8 @@ class WorkScheduleSerializer(serializers.ModelSerializer):
     def get_clock_in_time(self, obj):
         record = obj.employee.attendance_records.filter(date=obj.date).first()
         if record and record.clock_in:
-            return record.clock_in.strftime('%H:%M')
+            from django.utils.timezone import localtime
+            return localtime(record.clock_in).strftime('%H:%M')
         return None
 
 

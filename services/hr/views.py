@@ -173,7 +173,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             now = timezone.now()
             from datetime import time as time_type
             shift_start = datetime.strptime(schedule.get('shift_start', '00:00'), '%H:%M').time()
-            attendance_status = 'late' if now.time() > shift_start else 'present'
+            attendance_status = 'late' if timezone.localtime(now).time() > shift_start else 'present'
 
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
@@ -204,7 +204,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             late_note = ' (Late)' if attendance_status == 'late' else ''
             response = {
                 'success': True,
-                'message': f'Clocked in at {now.strftime("%H:%M:%S")}{late_note}',
+                'message': f'Clocked in at {timezone.localtime(now).strftime("%H:%M:%S")}{late_note}',
                 'clock_in_time': now,
                 'status': attendance_status,
                 'photo_url': photo_url,
@@ -253,7 +253,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             photo_url = record.clock_out_photo.url if record.clock_out_photo else None
             response = {
                 'success': True,
-                'message': f'Clocked out at {now.strftime("%H:%M:%S")}',
+                'message': f'Clocked out at {timezone.localtime(now).strftime("%H:%M:%S")}',
                 'clock_out_time': now,
                 'hours_worked': record.hours,
                 'photo_url': photo_url,
@@ -298,7 +298,7 @@ def _row_clock_status(emp, date_obj):
     record = Attendance.objects.filter(employee=emp, date=date_obj).first()
     if not record or not record.clock_in:
         return ('Missed' if date_obj < timezone.now().date() else 'Pending'), None
-    return ('Late' if record.status == 'late' else 'Done'), record.clock_in.strftime('%H:%M')
+    return ('Late' if record.status == 'late' else 'Done'), timezone.localtime(record.clock_in).strftime('%H:%M')
 
 
 def _enrich(row):
