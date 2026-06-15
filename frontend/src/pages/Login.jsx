@@ -33,11 +33,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #f1f8f2 50%, #e0f2e9 100%)' }}>
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">1OS</h1>
-        <p className="text-sm text-gray-500 mb-1">{companyName}</p>
-        <p className="text-xs text-gray-400 mb-6">Developed by Simply Engineering</p>
+        <p className="text-sm font-bold text-gray-700 mb-6">{companyName}</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -82,6 +81,8 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <p className="text-xs text-gray-400 text-center mt-6">Developed by Simply Engineering</p>
       </div>
     </div>
   )
