@@ -142,6 +142,7 @@ class Attendance(BaseModel):
     clock_out_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-out: {"lat": x, "lng": y}')
     clock_in_address = models.CharField(max_length=500, blank=True, null=True)
     clock_out_address = models.CharField(max_length=500, blank=True, null=True)
+    project = models.ForeignKey('projects.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='attendance_records')
 
     class Meta:
         unique_together = ('employee', 'date')

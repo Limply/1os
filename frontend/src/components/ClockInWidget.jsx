@@ -19,6 +19,8 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
   const [gpsError, setGpsError] = useState('')
   const [clockedIn, setClockedIn] = useState(false)
   const [todayRecord, setTodayRecord] = useState(null)
+  const [projects, setProjects] = useState([])
+  const [selectedProject, setSelectedProject] = useState('')
 
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
@@ -40,7 +42,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     if (empProp) { setEmployee(empProp); return }
     if (!user?.id) return
     api.get('/hr/employees/?limit=999').then(res => {
-      const results = res.data.results || []
+      const results = res.data.results || res.data || []
       let emp = results.find(e => e.user === user.id)
       if (!emp && user.first_name)
         emp = results.find(e => e.first_name?.toLowerCase() === user.first_name?.toLowerCase())
@@ -57,6 +59,13 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       .then(res => setSchedule(res.data.results?.[0] || null))
       .catch(console.error)
   }, [employee?.id])
+
+  // Fetch projects for remote clock-in
+  useEffect(() => {
+    api.get('/projects/projects/?limit=999').then(res => {
+      setProjects(res.data.results || res.data)
+    }).catch(() => {})
+  }, [])
 
   // Fetch today's attendance
   useEffect(() => {
@@ -164,6 +173,8 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       formData.append('gps_lng', gpsCoords.lng)
       if (gpsCoords.address) formData.append('address', gpsCoords.address)
     }
+    if (action === 'clock_in' && geofenceStatus === 'fail' && selectedProject)
+      formData.append('project_id', selectedProject)
     try {
       const res = await api.post(`/hr/attendance/${action}/`, formData)
       if (res.data.success) {
@@ -227,6 +238,21 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
                 {geofenceMsg}
               </p>
             )}
+            {geofenceStatus === 'fail' && (
+              <div className="mt-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Select Project (required to clock in remotely)</label>
+                <select
+                  value={selectedProject}
+                  onChange={e => setSelectedProject(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">— Select a project —</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.project_no ? `${p.project_no} — ` : ''}{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <a href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
               target="_blank" rel="noopener noreferrer"
               className="text-xs text-primary-600 hover:underline">
@@ -289,7 +315,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       <div className="flex gap-3">
         {!clockedIn ? (
           <button onClick={() => postClockAction('clock_in')}
-            disabled={!photoBlob || loading || !schedule || geofenceStatus === 'fail'}
+            disabled={!photoBlob || loading || !schedule || (geofenceStatus === 'fail' && !selectedProject)}
             className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl text-base transition">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1" />Clocking In…</> : <><Check className="w-4 h-4 inline mr-1" />Clock In</>}
           </button>

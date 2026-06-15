@@ -156,14 +156,18 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             # Check GPS within allowed radius
             gps_lat = request.data.get('gps_lat')
             gps_lng = request.data.get('gps_lng')
+            project_id = request.data.get('project_id')
+            outside_geofence = False
             if gps_lat and gps_lng:
                 distance = haversine_distance(gps_lat, gps_lng, schedule['location_lat'], schedule['location_lng'])
                 radius = int(schedule.get('radius', 200))
                 if distance > radius:
-                    return Response({
-                        'success': False,
-                        'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Must be within {radius}m to clock in.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                    if not project_id:
+                        return Response({
+                            'success': False,
+                            'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Select a project to clock in remotely.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    outside_geofence = True
 
             # Flag late if past shift_start
             now = timezone.now()
@@ -186,6 +190,13 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             address = request.data.get('address')
             if address:
                 record.clock_in_address = address
+
+            if project_id and outside_geofence:
+                from services.projects.models import Project
+                try:
+                    record.project = Project.objects.get(id=project_id)
+                except Project.DoesNotExist:
+                    pass
 
             record.save()
 
