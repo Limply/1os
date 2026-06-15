@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../api/auth'
 
@@ -8,7 +8,15 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [companyName, setCompanyName] = useState('')
   const navigate = useNavigate()
+
+  useEffect(() => {
+    fetch('/api/auth/tenant-info/')
+      .then(r => r.json())
+      .then(d => setCompanyName(d.name))
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -28,7 +36,8 @@ export default function Login() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">1OS</h1>
-        <p className="text-sm text-gray-500 mb-6">Simply Engineering Pte Ltd</p>
+        <p className="text-sm text-gray-500 mb-1">{companyName}</p>
+        <p className="text-xs text-gray-400 mb-6">Developed by Simply Engineering</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
