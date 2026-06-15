@@ -5,6 +5,13 @@ from .models import Tenant, User, PermissionGroup
 from .serializers import TenantSerializer, UserSerializer, UserCreateSerializer, PermissionGroupSerializer
 
 
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tenant_info(request):
+    tenant = Tenant.objects.first()
+    return Response({'name': tenant.name if tenant else ''})
+
+
 @api_view(['GET', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def me(request):
