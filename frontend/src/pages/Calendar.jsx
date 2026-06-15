@@ -68,7 +68,7 @@ export default function Calendar() {
     .filter(p => p.start_date && p.end_date)
     .map(p => ({
       id: `project-${p.id}`,
-      title: `📁 ${p.name}`,
+      title: `▸ ${p.name}`,
       start: p.start_date,
       end: p.end_date,
       backgroundColor: '#1e293b',
@@ -212,7 +212,7 @@ export default function Calendar() {
                 />
               ) : (
                 <h2 className="text-base font-bold text-gray-800 flex-1 pr-2">
-                  📁 {selectedEvent.data.name}
+                  {selectedEvent.data.name}
                 </h2>
               )}
               <button onClick={() => setSelectedEvent(null)} className="text-gray-400 text-xl leading-none ml-2">×</button>

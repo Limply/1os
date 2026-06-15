@@ -7,7 +7,7 @@ class TenantSerializer(serializers.ModelSerializer):
         model = Tenant
         fields = [
             'id', 'name', 'site_url', 'logo', 'address', 'phone', 'email',
-            'gst_registered', 'gst_number', 'modules', 'created_at',
+            'gst_registered', 'gst_number', 'modules', 'project_prefix', 'created_at',
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -19,7 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'tenant_id', 'tenant_name', 'email', 'first_name', 'last_name',
-            'role', 'is_active', 'mfa_enabled', 'avatar', 'modules', 'created_at',
+            'role', 'is_active', 'mfa_enabled', 'avatar', 'modules', 'preferences', 'created_at',
         ]
         read_only_fields = ['id', 'tenant_name', 'created_at']
 

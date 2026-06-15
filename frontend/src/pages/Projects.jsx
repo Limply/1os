@@ -1,9 +1,35 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/axios'
+import { getUser } from '../api/auth'
 import ProjectDetail from './ProjectDetail'
 
-const DEFAULT_WIDTHS = { no: 110, name: 260, client: 180, contact: 160, priority: 100, progress: 120, tasks: 70 }
-const TABLE_WIDTH = Object.values(DEFAULT_WIDTHS).reduce((a, b) => a + b, 0)
+const DEFAULT_WIDTHS = {
+  no: 110, name: 260, client: 180, contact: 160, priority: 100, progress: 120, tasks: 70,
+  status: 100, start: 90, end: 90, manager: 140, supervisor: 140,
+}
+
+const ALL_COLS = [
+  { key: 'name',            label: 'Name',       sortKey: 'name',            colKey: 'name',       defaultOn: true  },
+  { key: 'client_name',     label: 'Client',      sortKey: 'client_name',     colKey: 'client',     defaultOn: true  },
+  { key: 'client_contact',  label: 'Contact',     sortKey: 'client_contact',  colKey: 'contact',    defaultOn: true  },
+  { key: 'priority',        label: 'Priority',    sortKey: 'priority',        colKey: 'priority',   defaultOn: true  },
+  { key: 'progress',        label: 'Progress',    sortKey: 'progress',        colKey: 'progress',   defaultOn: true,  align: 'right' },
+  { key: 'task_count',      label: 'Tasks',       sortKey: 'task_count',      colKey: 'tasks',      defaultOn: true,  align: 'right' },
+  { key: 'status',          label: 'Status',      sortKey: 'status',          colKey: 'status',     defaultOn: false },
+  { key: 'start_date',      label: 'Start',       sortKey: 'start_date',      colKey: 'start',      defaultOn: false },
+  { key: 'end_date',        label: 'End',         sortKey: 'end_date',        colKey: 'end',        defaultOn: false },
+  { key: 'manager_name',    label: 'Manager',     sortKey: 'manager_name',    colKey: 'manager',    defaultOn: false },
+  { key: 'supervisor_name', label: 'Supervisor',  sortKey: 'supervisor_name', colKey: 'supervisor', defaultOn: false },
+]
+const DEFAULT_COLS = ALL_COLS.filter(c => c.defaultOn).map(c => c.key)
+
+const STATUS_COLORS = {
+  planning:  'bg-gray-100 text-gray-600',
+  active:    'bg-green-100 text-green-700',
+  on_hold:   'bg-yellow-100 text-yellow-700',
+  completed: 'bg-primary-100 text-primary-700',
+  cancelled: 'bg-red-100 text-red-600',
+}
 
 const STATUS_ORDER = ['active', 'planning', 'on_hold', 'completed', 'cancelled']
 const STATUS_LABEL  = { active: 'Active', planning: 'Planning', on_hold: 'On Hold', completed: 'Completed', cancelled: 'Cancelled' }
@@ -30,7 +56,7 @@ function SortIcon({ direction }) {
   return <span className="ml-1 text-primary-500">{direction === 'asc' ? '↑' : '↓'}</span>
 }
 
-function ResizableHeader({ label, colKey, sortKey, widths, setWidths, align = 'left', sort, onSort }) {
+function ResizableHeader({ label, colKey, sortKey, widths, setWidths, align = 'left', sort, onSort, sticky = false }) {
   const startX = useRef(null)
   const startW = useRef(null)
 
@@ -54,8 +80,8 @@ function ResizableHeader({ label, colKey, sortKey, widths, setWidths, align = 'l
   const direction = isActive ? sort.dir : null
 
   return (
-    <th style={{ width: widths[colKey], minWidth: widths[colKey], position: 'relative' }}
-      className="px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide select-none"
+    <th style={{ width: widths[colKey], minWidth: widths[colKey], position: sticky ? 'sticky' : 'relative', left: sticky ? 0 : undefined, zIndex: sticky ? 3 : undefined }}
+      className={`px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide select-none${sticky ? ' border-r border-gray-200' : ''}`}
     >
       <span
         className={`flex items-center cursor-pointer hover:text-gray-800 transition justify-${align === 'right' ? 'end' : 'start'} ${isActive ? 'text-primary-600' : ''}`}
@@ -82,6 +108,11 @@ export default function Projects() {
   const [sort, setSort]                 = useState({ key: 'project_no', dir: 'desc' })
   const [collapsedGroups, setCollapsed] = useState(new Set(['completed', 'cancelled']))
   const [search, setSearch]             = useState('')
+  const [clients, setClients]               = useState([])
+  const [clientDropdown, setClientDropdown] = useState(false)
+  const [visibleCols, setVisibleCols]       = useState(DEFAULT_COLS)
+  const [showColPicker, setShowColPicker]   = useState(false)
+  const colPickerRef                        = useRef(null)
 
   function handleSearch(val) {
     setSearch(val)
@@ -109,6 +140,42 @@ export default function Projects() {
     const pid = params.get('project')
     if (pid) setSelected(pid)
   }, [])
+
+  useEffect(() => {
+    if (!showForm || clients.length > 0) return
+    api.get('/organisation/clients/').then(r => {
+      const d = r.data
+      setClients(Array.isArray(d) ? d : (Array.isArray(d?.results) ? d.results : []))
+    }).catch(() => {})
+  }, [showForm])
+
+  useEffect(() => {
+    const saved = getUser().preferences?.projects_columns
+    if (Array.isArray(saved) && saved.length > 0) setVisibleCols(saved)
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target)) setShowColPicker(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  async function saveColPrefs(cols) {
+    const user = getUser()
+    const prefs = { ...(user.preferences || {}), projects_columns: cols }
+    localStorage.setItem('user', JSON.stringify({ ...user, preferences: prefs }))
+    try { await api.patch('/auth/me/', { preferences: prefs }) } catch {}
+  }
+
+  function toggleCol(key) {
+    setVisibleCols(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+      saveColPrefs(next)
+      return next
+    })
+  }
 
   async function fetchProjects() {
     try {
@@ -179,7 +246,8 @@ export default function Projects() {
     return <ProjectDetail projectId={selected} onBack={() => { setSelected(null); fetchProjects() }} />
   }
 
-  const tableWidth = Object.values(widths).reduce((a, b) => a + b, 0)
+  const activeCols = ALL_COLS.filter(c => visibleCols.includes(c.key))
+  const tableWidth = widths.no + activeCols.reduce((sum, c) => sum + (widths[c.colKey] || 120), 0)
   const allCollapsed = grouped.every(g => collapsedGroups.has(g.status))
 
   return (
@@ -221,6 +289,36 @@ export default function Projects() {
           >
             {allCollapsed ? 'Expand all' : 'Collapse all'}
           </button>
+          {/* Column picker */}
+          <div className="relative" ref={colPickerRef}>
+            <button
+              onClick={() => setShowColPicker(p => !p)}
+              className={`text-xs px-2 py-1 border rounded-lg transition flex items-center gap-1 ${showColPicker ? 'border-primary-400 text-primary-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              Columns
+            </button>
+            {showColPicker && (
+              <div className="absolute right-0 top-8 z-30 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-44">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Show / Hide</p>
+                <label className="flex items-center gap-2 py-1 opacity-50 cursor-not-allowed">
+                  <input type="checkbox" checked readOnly className="accent-primary-600" />
+                  <span className="text-sm text-gray-700">Project No.</span>
+                </label>
+                {ALL_COLS.map(c => (
+                  <label key={c.key} className="flex items-center gap-2 py-1 cursor-pointer hover:text-primary-600">
+                    <input
+                      type="checkbox"
+                      checked={visibleCols.includes(c.key)}
+                      onChange={() => toggleCol(c.key)}
+                      className="accent-primary-600"
+                    />
+                    <span className="text-sm text-gray-700">{c.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={() => setShowForm(true)}
             className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition">
             + New Project
@@ -235,14 +333,6 @@ export default function Projects() {
           <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
             {field('Project Name *', 'name', { required: true, col2: true, placeholder: 'e.g. Lift Maintenance — Changi' })}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                <option value="client">Client</option>
-                <option value="internal">Internal</option>
-              </select>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
               <select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
@@ -255,7 +345,47 @@ export default function Projects() {
             <div className="col-span-2 border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Client Info</p>
               <div className="grid grid-cols-2 gap-4">
-                {field('Company Name', 'client_name', { placeholder: 'e.g. Ritz Carlton Singapore' })}
+                {/* Company Name combobox */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Company Name</label>
+                  <input
+                    value={form.client_name}
+                    onChange={e => { setForm(p => ({ ...p, client_name: e.target.value })); setClientDropdown(true) }}
+                    onFocus={() => setClientDropdown(true)}
+                    onBlur={() => setTimeout(() => setClientDropdown(false), 150)}
+                    placeholder="e.g. Ritz Carlton Singapore"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  {clientDropdown && (() => {
+                    const q = (form.client_name || '').toLowerCase()
+                    const matches = (clients || []).filter(c => c.name?.toLowerCase().includes(q))
+                    return (
+                      <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {matches.length === 0
+                          ? <li className="px-3 py-2 text-xs text-gray-400 italic">No clients found — type to enter new</li>
+                          : matches.map(c => (
+                              <li key={c.id}
+                                onMouseDown={() => {
+                                  setForm(p => ({
+                                    ...p,
+                                    client_name:    c.name,
+                                    client_contact: c.contact_name    || '',
+                                    client_email:   c.contact_email   || '',
+                                    client_phone:   c.contact_phone   || '',
+                                    client_address: c.billing_address || '',
+                                  }))
+                                  setClientDropdown(false)
+                                }}
+                                className="px-3 py-2 text-sm text-gray-700 hover:bg-primary-50 cursor-pointer"
+                              >
+                                {c.name}
+                              </li>
+                            ))
+                        }
+                      </ul>
+                    )
+                  })()}
+                </div>
                 {field('Contact Person', 'client_contact', { placeholder: 'e.g. John Tan' })}
                 {field('Email', 'client_email', { type: 'email', placeholder: 'john@example.com' })}
                 {field('Phone', 'client_phone', { placeholder: '+65 9123 4567' })}
@@ -298,17 +428,14 @@ export default function Projects() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           <table className="text-sm" style={{ tableLayout: 'fixed', width: tableWidth }}>
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
-                <ResizableHeader label="Project No." colKey="no"       sortKey="project_no"     widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
-                <ResizableHeader label="Name"         colKey="name"     sortKey="name"           widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
-                <ResizableHeader label="Client"       colKey="client"   sortKey="client_name"    widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
-                <ResizableHeader label="Contact"      colKey="contact"  sortKey="client_contact" widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
-                <ResizableHeader label="Priority"     colKey="priority" sortKey="priority"       widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
-                <ResizableHeader label="Progress"     colKey="progress" sortKey="progress"       widths={widths} setWidths={setWidths} align="right" sort={sort} onSort={onSort} />
-                <ResizableHeader label="Tasks"        colKey="tasks"    sortKey="task_count"     widths={widths} setWidths={setWidths} align="right" sort={sort} onSort={onSort} />
+                <ResizableHeader label="Project No." colKey="no" sortKey="project_no" widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} sticky />
+                {activeCols.map(c => (
+                  <ResizableHeader key={c.key} label={c.label} colKey={c.colKey} sortKey={c.sortKey} align={c.align} widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -322,7 +449,7 @@ export default function Projects() {
                       className={`cursor-pointer select-none border-t border-gray-200 ${row}`}
                       onClick={() => toggleGroup(status)}
                     >
-                      <td colSpan={7} className={`px-4 py-2 ${text}`}>
+                      <td colSpan={1 + activeCols.length} className={`px-4 py-2 ${text}`}>
                         <div className="flex items-center gap-2">
                           <span className="text-xs w-4 opacity-60">{collapsed ? '▶' : '▼'}</span>
                           <span className={`w-2 h-2 rounded-full ${dot} shrink-0`} />
@@ -339,25 +466,45 @@ export default function Projects() {
                         onClick={() => setSelected(p.id)}
                         className="hover:bg-primary-50 cursor-pointer transition border-t border-gray-100"
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.project_no}</td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-gray-800 truncate">{p.name}</div>
-                          {p.supervisor_name && <div className="text-xs text-gray-400">{p.supervisor_name}</div>}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600 truncate">{p.client_name || '—'}</td>
-                        <td className="px-4 py-3 text-gray-500 truncate">{p.client_contact || '—'}</td>
-                        <td className={`px-4 py-3 font-medium ${PRIORITY_COLORS[p.priority]}`}>
-                          {p.priority}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div className="bg-primary-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
-                            </div>
-                            <span className="text-xs text-gray-600 w-8">{p.progress}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right text-gray-500">{p.task_count}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-500 bg-white border-r border-gray-100" style={{ position: 'sticky', left: 0, zIndex: 1 }}>{p.project_no}</td>
+                        {activeCols.map(c => {
+                          switch (c.key) {
+                            case 'name': return (
+                              <td key="name" className="px-4 py-3">
+                                <div className="font-medium text-gray-800 truncate">{p.name}</div>
+                                {!visibleCols.includes('supervisor_name') && p.supervisor_name && (
+                                  <div className="text-xs text-gray-400">{p.supervisor_name}</div>
+                                )}
+                              </td>
+                            )
+                            case 'client_name': return <td key="client_name" className="px-4 py-3 text-gray-600 truncate">{p.client_name || '—'}</td>
+                            case 'client_contact': return <td key="client_contact" className="px-4 py-3 text-gray-500 truncate">{p.client_contact || '—'}</td>
+                            case 'priority': return <td key="priority" className={`px-4 py-3 font-medium ${PRIORITY_COLORS[p.priority]}`}>{p.priority}</td>
+                            case 'progress': return (
+                              <td key="progress" className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                    <div className="bg-primary-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
+                                  </div>
+                                  <span className="text-xs text-gray-600 w-8">{p.progress}%</span>
+                                </div>
+                              </td>
+                            )
+                            case 'task_count': return <td key="task_count" className="px-4 py-3 text-right text-gray-500">{p.task_count}</td>
+                            case 'status': return (
+                              <td key="status" className="px-4 py-3">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-600'}`}>
+                                  {STATUS_LABEL[p.status] || p.status}
+                                </span>
+                              </td>
+                            )
+                            case 'start_date': return <td key="start_date" className="px-4 py-3 text-gray-500 text-xs">{p.start_date || '—'}</td>
+                            case 'end_date': return <td key="end_date" className="px-4 py-3 text-gray-500 text-xs">{p.end_date || '—'}</td>
+                            case 'manager_name': return <td key="manager_name" className="px-4 py-3 text-gray-600 truncate">{p.manager_name || '—'}</td>
+                            case 'supervisor_name': return <td key="supervisor_name" className="px-4 py-3 text-gray-600 truncate">{p.supervisor_name || '—'}</td>
+                            default: return <td key={c.key} className="px-4 py-3 text-gray-500">{p[c.key] || '—'}</td>
+                          }
+                        })}
                       </tr>
                     ))}
                   </Fragment>

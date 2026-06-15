@@ -19,7 +19,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         return ClientSerializer
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 class ContactViewSet(viewsets.ModelViewSet):
@@ -35,7 +35,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 class LeadViewSet(viewsets.ModelViewSet):
@@ -57,7 +57,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 class InteractionViewSet(viewsets.ModelViewSet):
@@ -74,6 +74,5 @@ class InteractionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(
-            tenant=self.request.user.tenant,
             by=self.request.user,
         )

@@ -2,11 +2,11 @@ import io
 from django.http import HttpResponse
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem
+from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem, Expense
 from .serializers import (
     QuotationSerializer, QuotationItemSerializer,
     InvoiceSerializer, InvoiceItemSerializer, PaymentSerializer,
-    DeliveryOrderSerializer, DeliveryOrderItemSerializer,
+    DeliveryOrderSerializer, DeliveryOrderItemSerializer, ExpenseSerializer,
 )
 
 
@@ -17,7 +17,7 @@ class TenantScopedMixin:
         return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 def _docx_response(doc, filename):
@@ -80,3 +80,18 @@ class DeliveryOrderViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 class DeliveryOrderItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = DeliveryOrderItem.objects.select_related('delivery_order')
     serializer_class = DeliveryOrderItemSerializer
+
+
+class ExpenseViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Expense.objects.select_related('recorded_by')
+    serializer_class = ExpenseSerializer
+
+    def get_queryset(self):
+        qs = Expense.objects.select_related('recorded_by').filter(is_active=True)
+        project_no = self.request.query_params.get('project_no')
+        if project_no:
+            qs = qs.filter(project_no=project_no)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(recorded_by=self.request.user)

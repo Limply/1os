@@ -7,11 +7,11 @@ from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
-    ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer,
+    ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer, StaffDeploymentSerializer,
 )
 from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
@@ -38,7 +38,7 @@ class TenantScopedMixin:
         return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
@@ -174,7 +174,6 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
                 date=today,
-                defaults={'tenant': request.user.tenant}
             )
 
             record.clock_in = now
@@ -568,11 +567,64 @@ def employee_me(request):
     """Return the employee profile for the logged-in user."""
     try:
         employee = Employee.objects.select_related('department', 'position').get(
-            user=request.user, tenant=request.user.tenant
+            user=request.user
         )
         return Response(EmployeeSerializer(employee).data)
     except Employee.DoesNotExist:
         return Response({'detail': 'No employee profile found.'}, status=404)
+
+
+class StaffDeploymentViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = StaffDeployment.objects.select_related('employee')
+    serializer_class = StaffDeploymentSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        emp = self.request.query_params.get('employee')
+        if emp:
+            qs = qs.filter(employee_id=emp)
+        return qs.order_by('-date_from')
+
+    @action(detail=True, methods=['post'], url_path='generate')
+    def generate_schedules(self, request, pk=None):
+        """Expand this deployment into WorkSchedule CSV rows for each matching date."""
+        import datetime as dt
+        dep = self.get_object()
+        emp = dep.employee
+
+        rows = fb_read_csv(CSV_PATH)
+        existing_keys = {(r.get('emp_no'), r.get('date')) for r in rows}
+
+        created, skipped = 0, 0
+        current = dep.date_from
+        new_rows = []
+        while current <= dep.date_to:
+            if current.weekday() in dep.days_of_week:
+                date_str = current.strftime('%d-%m-%Y')
+                key = (emp.emp_no, date_str)
+                if key not in existing_keys:
+                    new_rows.append({
+                        'emp_no': emp.emp_no,
+                        'first_name': emp.first_name,
+                        'last_name': emp.last_name,
+                        'date': date_str,
+                        'shift_start': dep.shift_start.strftime('%H:%M'),
+                        'shift_end': dep.shift_end.strftime('%H:%M'),
+                        'location_name': dep.location_name,
+                        'location_lat': str(dep.location_lat),
+                        'location_lng': str(dep.location_lng),
+                        'radius': str(dep.radius),
+                    })
+                    existing_keys.add(key)
+                    created += 1
+                else:
+                    skipped += 1
+            current += dt.timedelta(days=1)
+
+        if new_rows:
+            fb_write_csv(CSV_PATH, rows + new_rows, CSV_FIELDS)
+        return Response({'created': created, 'skipped': skipped,
+                         'message': f'{created} schedule(s) generated, {skipped} already existed.'})
 
 
 class ManpowerSettingsViewSet(viewsets.ModelViewSet):
@@ -581,15 +633,17 @@ class ManpowerSettingsViewSet(viewsets.ModelViewSet):
     queryset = ManpowerSettings.objects.all()
 
     def get_queryset(self):
-        return ManpowerSettings.objects.filter(tenant=self.request.user.tenant)
+        return ManpowerSettings.objects.all()
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
     @action(detail=False, methods=['get', 'post'], url_path='current')
     def current(self, request):
-        """Get or create/update tenant's manpower settings."""
-        obj, _ = ManpowerSettings.objects.get_or_create(tenant=request.user.tenant)
+        """Get or create/update manpower settings."""
+        obj = ManpowerSettings.objects.first()
+        if obj is None:
+            obj = ManpowerSettings.objects.create()
         if request.method == 'POST':
             serializer = self.get_serializer(obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)

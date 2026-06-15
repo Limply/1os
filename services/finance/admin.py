@@ -1,5 +1,5 @@
 from django.contrib import admin
-from shared.admin import TenantModelAdmin
+from shared.admin import TenantModelAdmin  # noqa: F401 kept for compatibility
 from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem
 
 

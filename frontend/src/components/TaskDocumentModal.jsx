@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { FileText, FileSpreadsheet, Presentation, Archive, Image, File, X } from 'lucide-react'
 import api from '../api/axios'
 
-const EXT_ICONS = {
-  pdf:  { icon: '📄', color: 'text-red-500' },
-  doc:  { icon: '📝', color: 'text-primary-600' },
-  docx: { icon: '📝', color: 'text-primary-600' },
-  xls:  { icon: '📊', color: 'text-green-600' },
-  xlsx: { icon: '📊', color: 'text-green-600' },
-  ppt:  { icon: '📋', color: 'text-orange-500' },
-  pptx: { icon: '📋', color: 'text-orange-500' },
-  zip:  { icon: '🗜️', color: 'text-gray-500' },
-  rar:  { icon: '🗜️', color: 'text-gray-500' },
-  txt:  { icon: '📃', color: 'text-gray-400' },
-  img:  { icon: '🖼️', color: 'text-purple-500' },
+const EXT_ICON_MAP = {
+  pdf:  { Icon: FileText,        color: 'text-red-500' },
+  doc:  { Icon: FileText,        color: 'text-primary-600' },
+  docx: { Icon: FileText,        color: 'text-primary-600' },
+  xls:  { Icon: FileSpreadsheet, color: 'text-green-600' },
+  xlsx: { Icon: FileSpreadsheet, color: 'text-green-600' },
+  ppt:  { Icon: Presentation,    color: 'text-orange-500' },
+  pptx: { Icon: Presentation,    color: 'text-orange-500' },
+  zip:  { Icon: Archive,         color: 'text-gray-500' },
+  rar:  { Icon: Archive,         color: 'text-gray-500' },
+  txt:  { Icon: FileText,        color: 'text-gray-400' },
+  png:  { Icon: Image,           color: 'text-purple-500' },
+  jpg:  { Icon: Image,           color: 'text-purple-500' },
+  jpeg: { Icon: Image,           color: 'text-purple-500' },
 }
 
-function fileIcon(filename) {
+function FileIconComponent({ filename }) {
   const ext = filename?.split('.').pop()?.toLowerCase()
-  return EXT_ICONS[ext] || { icon: '📁', color: 'text-gray-400' }
+  const { Icon, color } = EXT_ICON_MAP[ext] || { Icon: File, color: 'text-gray-400' }
+  return <Icon className={`w-4 h-4 shrink-0 ${color}`} />
 }
 
 function fileSize(bytes) {
@@ -101,7 +105,7 @@ export default function TaskDocumentModal({ task, onClose }) {
             <p className="text-xs text-gray-400 uppercase font-semibold">Task Documents</p>
             <h2 className="text-base font-bold text-gray-800">{task.title}</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
 
         {/* Document table */}
@@ -129,7 +133,7 @@ export default function TaskDocumentModal({ task, onClose }) {
                       <td className="px-4 py-2">
                         <a href={d.file_url} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-2 hover:text-primary-600 transition">
-                          <span className={`text-lg ${color}`}>{icon}</span>
+                          <FileIconComponent filename={d.filename} />
                           <span className="text-sm text-gray-700 hover:underline">{d.filename}</span>
                         </a>
                       </td>
@@ -166,7 +170,7 @@ export default function TaskDocumentModal({ task, onClose }) {
                       <td className="px-2 py-2">
                         <button onClick={() => handleDelete(d.id)}
                           className="text-gray-300 hover:text-red-500 transition"
-                          title="Delete">✕</button>
+                          title="Delete"><X className="w-3.5 h-3.5" /></button>
                       </td>
                     </tr>
                   )

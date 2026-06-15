@@ -15,6 +15,7 @@ class Tenant(models.Model):
     gst_registered = models.BooleanField(default=False)
     gst_number = models.CharField(max_length=50, blank=True, null=True)
     modules = models.JSONField(default=list, blank=True, help_text='List of module keys enabled on this installation')
+    project_prefix = models.CharField(max_length=10, default='SE', help_text='Prefix for auto-generated project numbers, e.g. SE → SE-26-001')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -60,8 +61,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     mfa_enabled = models.BooleanField(default=False)
     avatar = models.CharField(max_length=500, blank=True, null=True)
-    modules = models.JSONField(default=list, blank=True, help_text='List of module keys this user can access')
-    created_at = models.DateTimeField(auto_now_add=True)
+    modules      = models.JSONField(default=list, blank=True, help_text='List of module keys this user can access')
+    preferences  = models.JSONField(default=dict, blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD = 'email'

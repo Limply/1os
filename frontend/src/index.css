@@ -136,3 +136,12 @@
   --color-primary-800: 159 18 57;
   --color-primary-900: 136 19 55;
 }
+
+/* FullCalendar — Sunday column styling */
+.fc-day-sunday {
+  background-color: #f9fafb !important;
+}
+.fc-day-sunday .fc-daygrid-day-number,
+.fc-col-header-cell.fc-day-sunday .fc-col-header-cell-cushion {
+  color: #9ca3af !important;
+}

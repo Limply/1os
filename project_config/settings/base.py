@@ -68,7 +68,7 @@ WSGI_APPLICATION = 'project_config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='astronic'),
+        'NAME': config('DB_NAME', default='1os_db_dev'),
         'USER': config('DB_USER', default='astronic_user'),
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default='localhost'),

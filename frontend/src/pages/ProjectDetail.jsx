@@ -47,6 +47,10 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [docModalTask, setDocModalTask] = useState(null)
   const [editingTask, setEditingTask] = useState(null) // taskId
   const [editValues, setEditValues] = useState({}) // { title, assigned_to }
+  const [openComments, setOpenComments] = useState(new Set()) // task IDs with comments panel open
+  const [comments, setComments] = useState({})   // { taskId: [...] }
+  const [commentDraft, setCommentDraft] = useState({}) // { taskId: string }
+  const [commentSaving, setCommentSaving] = useState(null) // taskId being saved
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const [templates, setTemplates] = useState([])
   const [applyingTemplate, setApplyingTemplate] = useState(false)
@@ -252,6 +256,38 @@ export default function ProjectDetail({ projectId, onBack }) {
     fetchProject()
   }
 
+  async function toggleComments(taskId) {
+    const next = new Set(openComments)
+    if (next.has(taskId)) {
+      next.delete(taskId)
+    } else {
+      next.add(taskId)
+      if (!comments[taskId]) {
+        const res = await api.get(`/projects/task-comments/?task=${taskId}`)
+        setComments(prev => ({ ...prev, [taskId]: res.data }))
+      }
+    }
+    setOpenComments(next)
+  }
+
+  async function submitComment(e, taskId) {
+    e.preventDefault()
+    const body = (commentDraft[taskId] || '').trim()
+    if (!body) return
+    setCommentSaving(taskId)
+    const res = await api.post('/projects/task-comments/', { task: taskId, body })
+    setComments(prev => ({ ...prev, [taskId]: [...(prev[taskId] || []), res.data] }))
+    setCommentDraft(prev => ({ ...prev, [taskId]: '' }))
+    setCommentSaving(null)
+    fetchProject() // refresh comment_count
+  }
+
+  async function deleteComment(taskId, commentId) {
+    await api.delete(`/projects/task-comments/${commentId}/`)
+    setComments(prev => ({ ...prev, [taskId]: prev[taskId].filter(c => c.id !== commentId) }))
+    fetchProject()
+  }
+
   if (loading) return <p className="text-gray-400 text-sm">Loading...</p>
   if (!project) return null
 
@@ -449,6 +485,16 @@ export default function ProjectDetail({ projectId, onBack }) {
                         </svg>
                         {task.doc_count > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />}
                       </button>
+                      <button
+                        onClick={() => toggleComments(task.id)}
+                        className="relative text-gray-300 hover:text-primary-500 transition"
+                        title={task.comment_count > 0 ? `${task.comment_count} comment(s)` : 'Comments'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        {task.comment_count > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-400 rounded-full" />}
+                      </button>
                       {isManager && editingTask !== task.id && (
                         <button onClick={() => handleDeleteTask(task.id, task.title)}
                           className="text-gray-300 hover:text-red-500 transition text-sm" title="Delete task">✕</button>
@@ -488,6 +534,50 @@ export default function ProjectDetail({ projectId, onBack }) {
                       )}
                       <span className="text-xs text-gray-400" title="Weightage">×{task.weightage ?? 1}</span>
                       <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+                    </div>
+                  )}
+
+                  {/* Comments panel */}
+                  {openComments.has(task.id) && (
+                    <div className="pl-8 pr-2 pb-3 mt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Comments</span>
+                        <button onClick={() => toggleComments(task.id)} className="text-xs text-gray-400 hover:text-gray-600 transition">✕ Close</button>
+                      </div>
+                      {(comments[task.id] || []).length === 0 && (
+                        <p className="text-xs text-gray-400">No comments yet.</p>
+                      )}
+                      {(comments[task.id] || []).map(c => (
+                        <div key={c.id} className="flex items-start gap-2">
+                          <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0">
+                            {c.author_initials}
+                          </span>
+                          <div className="flex-1 bg-gray-50 rounded-lg px-3 py-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-gray-700">{c.author_name}</span>
+                              <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            </div>
+                            <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{c.body}</p>
+                          </div>
+                          {(c.author === user?.id || isManager) && (
+                            <button onClick={() => deleteComment(task.id, c.id)}
+                              className="text-gray-300 hover:text-red-400 text-xs mt-1 shrink-0">✕</button>
+                          )}
+                        </div>
+                      ))}
+                      <form onSubmit={e => submitComment(e, task.id)} className="flex gap-2 mt-1">
+                        <input
+                          value={commentDraft[task.id] || ''}
+                          onChange={e => setCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))}
+                          placeholder="Add a comment…"
+                          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary-400"
+                        />
+                        <button type="submit"
+                          disabled={commentSaving === task.id || !(commentDraft[task.id] || '').trim()}
+                          className="text-xs bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 disabled:opacity-40 transition">
+                          {commentSaving === task.id ? '…' : 'Post'}
+                        </button>
+                      </form>
                     </div>
                   )}
                 </div>
@@ -650,7 +740,6 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.type} onChange={e => setEditProject(p => ({ ...p, type: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="client">Client Project</option>
-                    <option value="internal">Internal Project</option>
                   </select>
                 </div>
                 <div>

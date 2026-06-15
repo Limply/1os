@@ -2,7 +2,6 @@ import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
 
 const ALL_LINKS = [
-  { module: 'dashboard', to: '/my', label: 'My Tools' },
   {
     module: 'dashboard', to: '/', label: 'Dashboard',
     children: [
@@ -24,9 +23,15 @@ const ALL_LINKS = [
   },
   { module: 'crm',        to: '/crm',        label: 'CRM' },
   { module: 'operations', to: '/operations', label: 'Operations' },
-  { module: 'finance',    to: '/finance',    label: 'Finance' },
+  {
+    module: 'finance', to: '/finance', label: 'Finance',
+    children: [
+      { module: 'finance', to: '/finance/pl', label: 'P&L' },
+    ],
+  },
   { module: 'compliance', to: '/compliance', label: 'Compliance' },
   { module: 'files',      to: '/files',      label: 'Files' },
+  { module: 'dashboard',  to: '/my',         label: 'My Tools' },
 ]
 
 function canSee(module, allowed, isAdminPlus) {

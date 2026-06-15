@@ -183,6 +183,26 @@ class WorkSchedule(BaseModel):
         return f"{self.employee.full_name} @ {self.location_name} on {self.date}"
 
 
+class StaffDeployment(BaseModel):
+    """Repeating deployment pattern: assign an employee to a site for a date range on specific weekdays."""
+    DAYS = [(i, d) for i, d in enumerate(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])]
+
+    employee    = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='deployments')
+    location_name = models.CharField(max_length=200)
+    location_lat  = models.DecimalField(max_digits=10, decimal_places=7)
+    location_lng  = models.DecimalField(max_digits=10, decimal_places=7)
+    radius        = models.IntegerField(default=200, help_text='Clock-in radius in metres')
+    date_from     = models.DateField()
+    date_to       = models.DateField()
+    shift_start   = models.TimeField()
+    shift_end     = models.TimeField()
+    days_of_week  = models.JSONField(default=list, help_text='List of weekday ints 0=Mon … 6=Sun')
+    notes         = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.employee.full_name} @ {self.location_name} ({self.date_from}–{self.date_to})"
+
+
 class PublicHoliday(models.Model):
     """Singapore public holiday calendar (shared, not tenant-scoped)."""
     date = models.DateField(unique=True)
@@ -217,4 +237,4 @@ class ManpowerSettings(BaseModel):
         verbose_name_plural = "Manpower Settings"
 
     def __str__(self):
-        return f"Manpower Settings — {self.tenant}"
+        return "Manpower Settings"

@@ -10,6 +10,7 @@ import Files from './pages/Files'
 import Projects from './pages/Projects'
 import HR from './pages/HR'
 import Finance from './pages/Finance'
+import ProfitLoss from './pages/ProfitLoss'
 import OrgChart from './pages/OrgChart'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/crm"        element={<CRM />} />
           <Route path="/operations" element={<Placeholder title="Operations" />} />
           <Route path="/finance"    element={<Finance />} />
+          <Route path="/finance/pl" element={<ProfitLoss />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />
           <Route path="/files"      element={<Files />} />
           <Route path="/calendar"   element={<Calendar />} />

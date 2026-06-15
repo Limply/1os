@@ -10,7 +10,7 @@ class TenantScopedMixin:
         return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 class JobViewSet(TenantScopedMixin, viewsets.ModelViewSet):

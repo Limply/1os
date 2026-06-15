@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { THEMES, useTheme } from '../context/ThemeContext'
+import { getUser } from '../api/auth'
 import api from '../api/axios'
 
 const MODES = [
@@ -10,14 +11,43 @@ const MODES = [
 
 export default function Settings() {
   const { theme, setTheme, darkMode, setDarkMode } = useTheme()
-  const [pendingTheme, setPendingTheme] = useState(theme)
-  const [pendingMode, setPendingMode] = useState(darkMode)
-  const [themeSaved, setThemeSaved] = useState(false)
+  const user = getUser()
+  const isAdmin = ['admin', 'superadmin'].includes(user?.role)
 
-  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
-  const [pwMsg, setPwMsg] = useState('')
+  const [pendingTheme, setPendingTheme] = useState(theme)
+  const [pendingMode, setPendingMode]   = useState(darkMode)
+  const [themeSaved, setThemeSaved]     = useState(false)
+
+  const [pwForm, setPwForm]   = useState({ current_password: '', new_password: '', confirm_password: '' })
+  const [pwMsg, setPwMsg]     = useState('')
   const [pwError, setPwError] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
+
+  // Company settings
+  const [tenant, setTenant]         = useState(null)
+  const [tenantForm, setTenantForm] = useState({})
+  const [tenantMsg, setTenantMsg]   = useState('')
+  const [tenantErr, setTenantErr]   = useState('')
+  const [tenantSaving, setTenantSaving] = useState(false)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    api.get('/auth/tenants/').then(res => {
+      const t = Array.isArray(res.data) ? res.data[0] : res.data.results?.[0]
+      if (t) {
+        setTenant(t)
+        setTenantForm({
+          name:           t.name           ?? '',
+          phone:          t.phone          ?? '',
+          email:          t.email          ?? '',
+          address:        t.address        ?? '',
+          gst_registered: t.gst_registered ?? false,
+          gst_number:     t.gst_number     ?? '',
+          project_prefix: t.project_prefix ?? 'SE',
+        })
+      }
+    }).catch(() => {})
+  }, [isAdmin])
 
   function handleSaveTheme() {
     setTheme(pendingTheme)
@@ -44,12 +74,29 @@ export default function Settings() {
     }
   }
 
+  async function handleSaveTenant(e) {
+    e.preventDefault()
+    setTenantErr('')
+    setTenantMsg('')
+    setTenantSaving(true)
+    try {
+      const prefix = (tenantForm.project_prefix || 'SE').toUpperCase().replace(/[^A-Z0-9]/g, '')
+      await api.patch(`/auth/tenants/${tenant.id}/`, { ...tenantForm, project_prefix: prefix })
+      setTenantForm(f => ({ ...f, project_prefix: prefix }))
+      setTenantMsg('Company settings saved.')
+    } catch (err) {
+      setTenantErr(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save.')
+    } finally {
+      setTenantSaving(false)
+    }
+  }
+
   return (
-    <div className="p-6 max-w-xl">
-      <h1 className="text-xl font-bold text-gray-800 mb-6">Settings</h1>
+    <div className="p-6 max-w-xl space-y-4">
+      <h1 className="text-xl font-bold text-gray-800">Settings</h1>
 
       {/* Appearance */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Appearance</h2>
 
         <p className="text-sm text-gray-600 mb-3">Mode</p>
@@ -107,6 +154,80 @@ export default function Settings() {
           {themeSaved && <span className="text-sm text-green-600">✓ Theme saved</span>}
         </div>
       </div>
+
+      {/* Company (admin only) */}
+      {isAdmin && tenant && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Company</h2>
+          <form onSubmit={handleSaveTenant} className="space-y-3">
+            {[
+              { key: 'name',    label: 'Company Name' },
+              { key: 'phone',   label: 'Phone' },
+              { key: 'email',   label: 'Email' },
+              { key: 'address', label: 'Address' },
+            ].map(({ key, label }) => (
+              <div key={key}>
+                <label className="text-xs font-semibold text-gray-500 uppercase">{label}</label>
+                <input
+                  type="text"
+                  value={tenantForm[key] ?? ''}
+                  onChange={e => setTenantForm(f => ({ ...f, [key]: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400"
+                />
+              </div>
+            ))}
+
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase">Project Number Prefix</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="text"
+                  value={tenantForm.project_prefix ?? ''}
+                  onChange={e => setTenantForm(f => ({ ...f, project_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))}
+                  maxLength={10}
+                  className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary-400"
+                  placeholder="SE"
+                />
+                <span className="text-sm text-gray-400">
+                  → generates <span className="font-mono text-gray-600">{tenantForm.project_prefix || 'SE'}-26-001</span>
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Letters and numbers only. Existing project numbers are not affected.</p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={tenantForm.gst_registered ?? false}
+                  onChange={e => setTenantForm(f => ({ ...f, gst_registered: e.target.checked }))}
+                  className="accent-primary-600 w-4 h-4"
+                />
+                GST Registered
+              </label>
+              {tenantForm.gst_registered && (
+                <input
+                  type="text"
+                  value={tenantForm.gst_number ?? ''}
+                  onChange={e => setTenantForm(f => ({ ...f, gst_number: e.target.value }))}
+                  placeholder="GST Reg. No."
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+                />
+              )}
+            </div>
+
+            {tenantErr && <p className="text-red-500 text-sm">{tenantErr}</p>}
+            {tenantMsg && <p className="text-green-600 text-sm">✓ {tenantMsg}</p>}
+            <button
+              type="submit"
+              disabled={tenantSaving}
+              className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+            >
+              {tenantSaving ? 'Saving...' : 'Save Company Settings'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Account */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

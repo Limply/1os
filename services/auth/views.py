@@ -5,9 +5,15 @@ from .models import Tenant, User, PermissionGroup
 from .serializers import TenantSerializer, UserSerializer, UserCreateSerializer, PermissionGroupSerializer
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def me(request):
+    if request.method == 'PATCH':
+        allowed = {'preferences', 'first_name', 'last_name', 'avatar'}
+        data = {k: v for k, v in request.data.items() if k in allowed}
+        for k, v in data.items():
+            setattr(request.user, k, v)
+        request.user.save(update_fields=list(data.keys()))
     return Response(UserSerializer(request.user).data)
 
 
