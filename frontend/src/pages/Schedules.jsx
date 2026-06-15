@@ -414,13 +414,13 @@ export default function Schedules() {
 
           {/* View toggle + nav */}
           <div className="flex flex-wrap items-center gap-3 mb-5">
-            <div className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
+            <div className="flex bg-gray-200 rounded-lg p-0.5 text-sm shadow-inner">
               <button onClick={() => setViewMode('calendar')}
-                className={`px-3 py-1.5 rounded-md font-medium transition ${viewMode === 'calendar' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>
+                className={`px-4 py-1.5 rounded-md font-semibold transition ${viewMode === 'calendar' ? 'bg-primary-600 text-white shadow' : 'bg-gray-100 text-gray-500 hover:bg-white hover:text-gray-800 shadow-sm'}`}>
                 Calendar
               </button>
               <button onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md font-medium transition ${viewMode === 'list' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>
+                className={`px-4 py-1.5 rounded-md font-semibold transition ${viewMode === 'list' ? 'bg-primary-600 text-white shadow' : 'bg-gray-100 text-gray-500 hover:bg-white hover:text-gray-800 shadow-sm'}`}>
                 List
               </button>
             </div>
