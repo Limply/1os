@@ -10,8 +10,8 @@ const POSITION_TO_LEVEL = {
   'supervisor':                      'supervisor',
   'construction worker cum driver':  'worker',
   'construction worker':             'worker',
-  'engineer':                        'supervisor',
-  'project engineer':                'supervisor',
+  'engineer':                        'worker',
+  'project engineer':                'worker',
   'helper':                          'worker',
 };
 

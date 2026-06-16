@@ -52,7 +52,6 @@ class User(AbstractBaseUser, PermissionsMixin):
             ('superadmin', 'Super Admin'),
             ('admin', 'Admin'),
             ('manager', 'Manager'),
-            ('engineer', 'Engineer'),
             ('staff', 'Staff'),
             ('viewer', 'Viewer'),
         ],

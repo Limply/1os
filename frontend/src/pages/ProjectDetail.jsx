@@ -143,10 +143,12 @@ export default function ProjectDetail({ projectId, onBack }) {
 
   async function fetchForemen() {
     try {
-      const res = await api.get('/auth/users/')
-      const users = res.data.results || res.data
-      const FOREMAN_ROLES = ['manager', 'engineer', 'admin', 'superadmin']
-      setForemen(users.filter(u => u.is_active && FOREMAN_ROLES.includes(u.role)))
+      const res = await api.get('/hr/employees/?is_active=true')
+      const emps = res.data.results || res.data
+      const FOREMAN_TITLES = ['foremen', 'supervisor', 'senior supervisor', 'engineer']
+      setForemen(emps.filter(e =>
+        e.user && FOREMAN_TITLES.some(t => (e.position_name || '').toLowerCase().includes(t))
+      ))
     } catch {
       setForemen([])
     }
@@ -808,7 +810,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.supervisor} onChange={e => setEditProject(p => ({ ...p, supervisor: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="">— None —</option>
-                    {foremen.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</option>)}
+                    {foremen.map(e => <option key={e.user} value={e.user}>{e.full_name} ({e.position_name})</option>)}
                   </select>
                 </div>
                 <div>
