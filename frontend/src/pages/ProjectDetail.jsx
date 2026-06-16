@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import jsPDF from 'jspdf'
@@ -6,8 +6,49 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import TaskPhotoModal from '../components/TaskPhotoModal'
 import TaskDocumentModal from '../components/TaskDocumentModal'
+import { Circle, Clock, Eye, CheckCircle2, AlertCircle } from 'lucide-react'
 
-const STATUS_ICONS = { todo: '⬜', in_progress: '🔄', review: '👁️', done: '✅' }
+const STATUS_CONFIG = {
+  todo:        { Icon: Circle,       color: '#9ca3af', label: 'To Do' },
+  in_progress: { Icon: Clock,        color: '#f97316', label: 'In Progress' },
+  review:      { Icon: Eye,          color: '#3b82f6', label: 'Review' },
+  done:        { Icon: CheckCircle2, color: '#22c55e', label: 'Done' },
+  issue:       { Icon: AlertCircle,  color: '#a855f7', label: 'Issue' },
+}
+
+function StatusDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const current = STATUS_CONFIG[value] || STATUS_CONFIG.todo
+
+  useEffect(() => {
+    if (!open) return
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 transition" title={current.label}>
+        <current.Icon size={15} color={current.color} strokeWidth={2.2} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-7 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+          {Object.entries(STATUS_CONFIG).map(([val, { Icon, color, label }]) => (
+            <button key={val} onClick={() => { onChange(val); setOpen(false) }}
+              className={`flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-gray-50 transition ${val === value ? 'font-semibold' : 'text-gray-700'}`}>
+              <Icon size={14} color={color} strokeWidth={2.2} />
+              <span style={{ color: val === value ? color : undefined }}>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const STATUS_ICONS = { todo: '⬜', in_progress: '🔄', review: '👁️', done: '✅', issue: '⚠️' }
 
 function buildWhatsAppLink(project, task) {
   const text = [
@@ -27,7 +68,8 @@ function taskUrl(projectId, taskId) {
   return `${window.location.origin}/projects?project=${projectId}#task-${taskId}`
 }
 
-const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
+const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done', issue: 'Issue' }
+const STATUS_ROW_BG = { done: 'bg-green-50', in_progress: 'bg-orange-50', issue: 'bg-purple-50' }
 const PRIORITY_COLORS = { low: 'text-gray-400', medium: 'text-primary-500', high: 'text-orange-500', urgent: 'text-red-500' }
 
 const MANAGER_ROLES = ['manager', 'admin', 'superadmin']
@@ -101,12 +143,10 @@ export default function ProjectDetail({ projectId, onBack }) {
 
   async function fetchForemen() {
     try {
-      const res = await api.get('/hr/employees/?is_active=true')
-      const emps = res.data.results || res.data
-      const FOREMAN_TITLES = ['foremen', 'supervisor', 'senior supervisor']
-      setForemen(emps.filter(e =>
-        e.user && FOREMAN_TITLES.some(t => (e.position_name || '').toLowerCase().includes(t))
-      ))
+      const res = await api.get('/auth/users/')
+      const users = res.data.results || res.data
+      const FOREMAN_ROLES = ['manager', 'engineer', 'admin', 'superadmin']
+      setForemen(users.filter(u => u.is_active && FOREMAN_ROLES.includes(u.role)))
     } catch {
       setForemen([])
     }
@@ -427,20 +467,12 @@ export default function ProjectDetail({ projectId, onBack }) {
             {/* Tasks */}
             <div className="divide-y divide-gray-100">
               {grp.tasks.map((task, ti) => (
-                <div key={task.id} id={`task-${task.id}`} className="px-3 py-1 hover:bg-gray-50 transition">
+                <div key={task.id} id={`task-${task.id}`} className={`px-3 py-1 transition ${STATUS_ROW_BG[task.status] || 'hover:bg-gray-50'}`}>
 
                   {/* Row 1: SN + status + title + action icons */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-300 w-6 shrink-0 text-right">{gi + 1}.{ti + 1}</span>
-                    <select
-                      value={task.status}
-                      onChange={e => handleStatusChange(task.id, e.target.value)}
-                      className="text-xs border-none bg-transparent focus:outline-none cursor-pointer shrink-0 max-w-[90px]"
-                    >
-                      {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                        <option key={val} value={val}>{STATUS_ICONS[val]} {label}</option>
-                      ))}
-                    </select>
+                    <StatusDropdown value={task.status} onChange={val => handleStatusChange(task.id, val)} />
 
                     {editingTask === task.id ? (
                       <input
@@ -776,7 +808,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.supervisor} onChange={e => setEditProject(p => ({ ...p, supervisor: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="">— None —</option>
-                    {foremen.map(e => <option key={e.user} value={e.user}>{e.full_name} ({e.position_name})</option>)}
+                    {foremen.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</option>)}
                   </select>
                 </div>
                 <div>
