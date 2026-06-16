@@ -143,6 +143,7 @@ Set up a clean Django monolith at `/opt/astronic/` following the architecture de
 
 | Issue | Status |
 |---|---|
+| **[FIXED 2026-06-16] Photo upload fails on mobile browser** | nginx default `client_max_body_size` is 1MB; mobile camera photos are 3–8MB. Fix: added `client_max_body_size 20M;` to `/etc/nginx/sites-available/1os-prod` on the server. Desktop worked because gallery picks are smaller. |
 | `services/core/` exists but has no purpose | Unused — can be deleted |
 | Django Admin has no models registered | Needs `admin.py` wiring |
 | Compliance module has no assigned dev | Needs owner assignment |
