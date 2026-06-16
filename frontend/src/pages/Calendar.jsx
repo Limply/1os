@@ -8,7 +8,7 @@ const USER_COLORS = [
   '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
 ]
 
-const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
+const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done', issue: 'Issue' }
 const STATUS_COLORS = {
   todo: 'bg-gray-200 text-gray-700',
   in_progress: 'bg-primary-100 text-primary-700',

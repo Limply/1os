@@ -94,6 +94,7 @@ class Task(BaseModel):
         ('in_progress', 'In Progress'),
         ('review', 'In Review'),
         ('done', 'Done'),
+        ('issue', 'Issue'),
     ]
     PRIORITY_CHOICES = [
         ('low', 'Low'),
