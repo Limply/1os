@@ -5,40 +5,40 @@ from .models import Company, Department, Team, Position, Site, Client
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Department
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class TeamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Team
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class PositionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Position
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']

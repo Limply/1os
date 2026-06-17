@@ -1,16 +1,155 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
+import { getUser } from '../api/auth'
 
-const TABS = ['Quotations', 'Invoices', 'Delivery Orders']
+const TABS = ['Quotations', 'Invoices', 'Delivery Orders', 'P&L']
 
-const Q_STATUS   = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600', expired: 'bg-yellow-100 text-yellow-700' }
-const INV_STATUS = { unpaid: 'bg-yellow-100 text-yellow-700', partial: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-600', void: 'bg-gray-100 text-gray-500' }
-const DO_STATUS  = { draft: 'bg-gray-100 text-gray-600', issued: 'bg-blue-100 text-blue-700', delivered: 'bg-purple-100 text-purple-700', acknowledged: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
+const Q_STATUS   = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-primary-100 text-primary-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600', expired: 'bg-yellow-100 text-yellow-700' }
+const INV_STATUS = { unpaid: 'bg-yellow-100 text-yellow-700', partial: 'bg-primary-100 text-primary-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-600', void: 'bg-gray-100 text-gray-500' }
+const DO_STATUS  = { draft: 'bg-gray-100 text-gray-600', issued: 'bg-primary-100 text-primary-700', delivered: 'bg-purple-100 text-purple-700', acknowledged: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
 
 const GST_RATE = 0.09
+const ADMIN_ROLES = ['admin', 'superadmin']
+
+const PROJECT_STATUSES = [
+  { value: 'planning',  label: 'Planning',  cls: 'bg-gray-100 text-gray-500' },
+  { value: 'active',    label: 'Active',    cls: 'bg-green-100 text-green-700' },
+  { value: 'on_hold',   label: 'On Hold',   cls: 'bg-yellow-100 text-yellow-700' },
+  { value: 'completed', label: 'Completed', cls: 'bg-blue-100 text-blue-700' },
+  { value: 'cancelled', label: 'Cancelled', cls: 'bg-red-100 text-red-500' },
+]
 
 function Badge({ label, map }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[label] || 'bg-gray-100 text-gray-500'}`}>{label?.replace('_', ' ')}</span>
+}
+
+function MoneyCell({ row, field, value, className, canEdit, onPatch }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(value > 0 ? String(value) : '')
+
+  if (!canEdit) return (
+    <td className={className}>{value > 0 ? money(value) : '—'}</td>
+  )
+  return (
+    <td className={className} onClick={e => { e.stopPropagation(); setEditing(true) }}>
+      {editing ? (
+        <input
+          autoFocus
+          type="number"
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={() => { setEditing(false); onPatch(row.id, field, val) }}
+          onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+          className="w-24 text-right border-b border-primary-400 focus:outline-none bg-transparent text-sm"
+        />
+      ) : (
+        <span className="cursor-text">{value > 0 ? money(value) : <span className="text-gray-300">click to add</span>}</span>
+      )}
+    </td>
+  )
+}
+
+function StatusCell({ row, canEdit, onPatch }) {
+  const [editing, setEditing] = useState(false)
+  const current = PROJECT_STATUSES.find(s => s.value === row.status) || { label: row.status, cls: 'bg-gray-100 text-gray-500' }
+  return (
+    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+      {editing && canEdit ? (
+        <select
+          autoFocus
+          defaultValue={row.status}
+          onChange={e => { onPatch(row.id, 'status', e.target.value); setEditing(false) }}
+          onBlur={() => setEditing(false)}
+          className="text-xs border border-primary-300 rounded px-2 py-0.5 focus:outline-none bg-white"
+        >
+          {PROJECT_STATUSES.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+      ) : (
+        <span
+          onClick={canEdit ? () => setEditing(true) : undefined}
+          className={`text-xs px-2 py-0.5 rounded-full font-medium ${current.cls} ${canEdit ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-primary-300' : ''}`}
+        >
+          {current.label}
+        </span>
+      )}
+    </td>
+  )
+}
+
+function CommentPanel({ projectId, canDelete, currentUserId }) {
+  const [comments, setComments] = useState(null)
+  const [body, setBody] = useState('')
+
+  useEffect(() => {
+    api.get(`/projects/project-comments/?project=${projectId}`)
+      .then(r => setComments(r.data.results || r.data))
+      .catch(() => setComments([]))
+  }, [projectId])
+
+  async function addComment(e) {
+    e.preventDefault()
+    if (!body.trim()) return
+    const res = await api.post('/projects/project-comments/', { project: projectId, body: body.trim() })
+    setComments(prev => [...prev, res.data])
+    setBody('')
+  }
+
+  async function deleteComment(id) {
+    await api.delete(`/projects/project-comments/${id}/`)
+    setComments(prev => prev.filter(c => c.id !== id))
+  }
+
+  if (!comments) return <div className="px-6 py-3 text-xs text-gray-400">Loading…</div>
+
+  return (
+    <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+      <p className="text-xs font-semibold text-gray-500 mb-2">Comments</p>
+      {comments.length === 0 && <p className="text-xs text-gray-400 mb-2">No comments yet.</p>}
+      <div className="space-y-2 mb-3">
+        {comments.map(c => (
+          <div key={c.id} className="flex items-start gap-2 group">
+            <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0">
+              {c.author_initials}
+            </div>
+            <div className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm">
+              <span className="font-medium text-gray-700 text-xs mr-2">{c.author_name}</span>
+              <span className="text-gray-400 text-xs">{new Date(c.created_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <p className="text-gray-700 mt-0.5">{c.body}</p>
+            </div>
+            {(canDelete || currentUserId === c.author) && (
+              <button onClick={() => deleteComment(c.id)}
+                className="text-gray-300 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition pt-1">✕</button>
+            )}
+          </div>
+        ))}
+      </div>
+      <form onSubmit={addComment} className="flex gap-2">
+        <input value={body} onChange={e => setBody(e.target.value)}
+          placeholder="Add a comment…"
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary-400" />
+        <button type="submit" disabled={!body.trim()}
+          className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-40 transition">
+          Post
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function money(n) {
+  return '$' + n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function PlSortTh({ label, colKey, align = 'right', sort, onSort }) {
+  const active = sort.key === colKey
+  return (
+    <th onClick={() => onSort(colKey)}
+      className={`px-4 py-3 text-${align} text-xs text-gray-500 uppercase cursor-pointer select-none hover:text-primary-600 whitespace-nowrap`}>
+      {label}{active ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+    </th>
+  )
 }
 
 function ItemsTable({ items, setItems, showAmount = true }) {
@@ -48,20 +187,20 @@ function ItemsTable({ items, setItems, showAmount = true }) {
               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
               <td className="px-3 py-2">
                 <input value={item.description || ''} onChange={e => update(i, 'description', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5" />
+                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
               </td>
               <td className="px-3 py-2">
                 <input value={item.unit || ''} onChange={e => update(i, 'unit', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5" />
+                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
               </td>
               <td className="px-3 py-2">
                 <input type="number" value={item.qty || ''} onChange={e => update(i, 'qty', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5 text-right" />
+                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5 text-right" />
               </td>
               {showAmount && (
                 <td className="px-3 py-2">
                   <input type="number" value={item.unit_price || ''} onChange={e => update(i, 'unit_price', e.target.value)}
-                    className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5 text-right" />
+                    className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5 text-right" />
                 </td>
               )}
               {showAmount && (
@@ -70,7 +209,7 @@ function ItemsTable({ items, setItems, showAmount = true }) {
               {!showAmount && (
                 <td className="px-3 py-2">
                   <input value={item.remarks || ''} onChange={e => update(i, 'remarks', e.target.value)}
-                    className="w-full border-b border-gray-200 focus:border-blue-400 focus:outline-none text-sm py-0.5" />
+                    className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
                 </td>
               )}
               <td className="px-3 py-2">
@@ -82,7 +221,7 @@ function ItemsTable({ items, setItems, showAmount = true }) {
         </tbody>
       </table>
       <button onClick={() => setItems(prev => [...prev, { description: '', unit: '', qty: 1, unit_price: '', amount: '', remarks: '' }])}
-        className="mt-2 ml-3 text-sm text-blue-600 hover:underline">+ Add line</button>
+        className="mt-2 ml-3 text-sm text-primary-600 hover:underline">+ Add line</button>
     </div>
   )
 }
@@ -101,10 +240,15 @@ function Totals({ items }) {
 }
 
 export default function Finance() {
+  const currentUser = getUser()
+  const canEditFinance = ADMIN_ROLES.includes(currentUser?.role)
   const [tab, setTab] = useState('Quotations')
   const [quotations, setQuotations] = useState([])
   const [invoices, setInvoices] = useState([])
   const [dos, setDos] = useState([])
+  const [projects, setProjects] = useState([])
+  const [plSort, setPlSort] = useState({ key: 'profit', dir: 'desc' })
+  const [plExpanded, setPlExpanded] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState(null)
@@ -126,14 +270,16 @@ export default function Finance() {
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const [q, i, d] = await Promise.all([
+    const [q, i, d, p] = await Promise.all([
       api.get('/finance/quotations/'),
       api.get('/finance/invoices/'),
       api.get('/finance/delivery-orders/'),
+      api.get('/projects/projects/'),
     ])
     setQuotations(q.data.results || q.data)
     setInvoices(i.data.results || i.data)
     setDos(d.data.results || d.data)
+    setProjects(p.data.results || p.data)
     setLoading(false)
   }
 
@@ -227,7 +373,7 @@ export default function Finance() {
       <div className={props.col2 ? 'col-span-2' : ''}>
         <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
         <input value={form[key] || ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
           {...props} />
       </div>
     )
@@ -239,10 +385,12 @@ export default function Finance() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Finance</h1>
-        <button onClick={() => { setShowForm(true); setExpanded(null) }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
-          + New {tab === 'Quotations' ? 'Quotation' : tab === 'Invoices' ? 'Invoice' : 'Delivery Order'}
-        </button>
+        {tab !== 'P&L' && (
+          <button onClick={() => { setShowForm(true); setExpanded(null) }}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition">
+            + New {tab === 'Quotations' ? 'Quotation' : tab === 'Invoices' ? 'Invoice' : 'Delivery Order'}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -268,20 +416,20 @@ export default function Finance() {
                     <input value={qForm.project_no} onChange={e => setQForm(f => ({ ...f, project_no: e.target.value }))}
                       onBlur={e => lookupProject(e.target.value)}
                       placeholder="AST-26-001 — auto-fills client"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
                   </div>
                   {inp('Issue Date *', 'issue_date', qForm, setQForm, { required: true, type: 'date' })}
                   <div className="relative">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Client Name *</label>
                     <input required value={qForm.client_name}
                       onChange={e => { setQForm(f => ({ ...f, client_name: e.target.value })); searchClients(e.target.value) }}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
                       placeholder="Type to search clients..." />
                     {clientSuggestions.length > 0 && (
                       <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                         {clientSuggestions.map(c => (
                           <button key={c.id} type="button" onClick={() => fillFromClient(c)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                            className="w-full text-left px-4 py-2.5 hover:bg-primary-50 text-sm border-b border-gray-100 last:border-0">
                             <span className="font-medium text-gray-800">{c.name}</span>
                             {c.contact_name && <span className="text-gray-400 ml-2 text-xs">· {c.contact_name}</span>}
                           </button>
@@ -296,7 +444,7 @@ export default function Finance() {
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
                     <textarea value={qForm.client_address || ''} rows={2} onChange={e => setQForm(f => ({ ...f, client_address: e.target.value }))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none" />
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 resize-none" />
                   </div>
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
@@ -305,16 +453,16 @@ export default function Finance() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
-                  <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create Quotation'}
                   </button>
                 </div>
               </form>
             </div>
           )}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+              <thead className="sticky top-0 z-10"><tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
                 <th className="px-4 py-3 text-left">Quote No.</th>
                 <th className="px-4 py-3 text-left">Project</th>
                 <th className="px-4 py-3 text-left">Client</th>
@@ -326,9 +474,9 @@ export default function Finance() {
               <tbody className="divide-y divide-gray-100">
                 {quotations.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No quotations yet</td></tr>}
                 {quotations.map(q => (
-                  <>
-                    <tr key={q.id} onClick={() => setExpanded(expanded === q.id ? null : q.id)}
-                      className="hover:bg-blue-50 cursor-pointer">
+                  <Fragment key={q.id}>
+                    <tr onClick={() => setExpanded(expanded === q.id ? null : q.id)}
+                      className="hover:bg-primary-50 cursor-pointer">
                       <td className="px-4 py-3 font-mono text-xs">{q.quote_no}</td>
                       <td className="px-4 py-3 text-gray-500">{q.project_no || '—'}</td>
                       <td className="px-4 py-3 font-medium">{q.client_name}</td>
@@ -337,7 +485,7 @@ export default function Finance() {
                       <td className="px-4 py-3 text-right font-medium">${parseFloat(q.total).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={e => { e.stopPropagation(); downloadDocx('quotations', q.id, q.quote_no) }}
-                          className="text-xs text-blue-600 hover:underline">DOCX</button>
+                          className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
                     </tr>
                     {expanded === q.id && (
@@ -364,7 +512,7 @@ export default function Finance() {
                         {q.notes && <p className="text-xs text-gray-500 mt-2">Notes: {q.notes}</p>}
                       </td></tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -396,16 +544,16 @@ export default function Finance() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
-                  <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create Invoice'}
                   </button>
                 </div>
               </form>
             </div>
           )}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+              <thead className="sticky top-0 z-10"><tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
                 <th className="px-4 py-3 text-left">Invoice No.</th>
                 <th className="px-4 py-3 text-left">Client</th>
                 <th className="px-4 py-3 text-left">Issue Date</th>
@@ -418,9 +566,9 @@ export default function Finance() {
               <tbody className="divide-y divide-gray-100">
                 {invoices.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No invoices yet</td></tr>}
                 {invoices.map(inv => (
-                  <>
-                    <tr key={inv.id} onClick={() => setExpanded(expanded === inv.id ? null : inv.id)}
-                      className="hover:bg-blue-50 cursor-pointer">
+                  <Fragment key={inv.id}>
+                    <tr onClick={() => setExpanded(expanded === inv.id ? null : inv.id)}
+                      className="hover:bg-primary-50 cursor-pointer">
                       <td className="px-4 py-3 font-mono text-xs">{inv.invoice_no}</td>
                       <td className="px-4 py-3 font-medium">{inv.client_name}</td>
                       <td className="px-4 py-3 text-gray-500">{inv.issue_date}</td>
@@ -430,7 +578,7 @@ export default function Finance() {
                       <td className="px-4 py-3 text-right font-medium text-red-600">${parseFloat(inv.balance_due).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={e => { e.stopPropagation(); downloadDocx('invoices', inv.id, inv.invoice_no) }}
-                          className="text-xs text-blue-600 hover:underline">DOCX</button>
+                          className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
                     </tr>
                     {expanded === inv.id && (
@@ -455,7 +603,7 @@ export default function Finance() {
                         )}
                       </td></tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -486,16 +634,16 @@ export default function Finance() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
-                  <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create DO'}
                   </button>
                 </div>
               </form>
             </div>
           )}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+              <thead className="sticky top-0 z-10"><tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
                 <th className="px-4 py-3 text-left">DO No.</th>
                 <th className="px-4 py-3 text-left">Client</th>
                 <th className="px-4 py-3 text-left">Issue Date</th>
@@ -507,9 +655,9 @@ export default function Finance() {
               <tbody className="divide-y divide-gray-100">
                 {dos.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No delivery orders yet</td></tr>}
                 {dos.map(d => (
-                  <>
-                    <tr key={d.id} onClick={() => setExpanded(expanded === d.id ? null : d.id)}
-                      className="hover:bg-blue-50 cursor-pointer">
+                  <Fragment key={d.id}>
+                    <tr onClick={() => setExpanded(expanded === d.id ? null : d.id)}
+                      className="hover:bg-primary-50 cursor-pointer">
                       <td className="px-4 py-3 font-mono text-xs">{d.do_no}</td>
                       <td className="px-4 py-3 font-medium">{d.client_name}</td>
                       <td className="px-4 py-3 text-gray-500">{d.issue_date}</td>
@@ -518,7 +666,7 @@ export default function Finance() {
                       <td className="px-4 py-3 text-gray-500">{d.delivered_by || '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={e => { e.stopPropagation(); downloadDocx('delivery-orders', d.id, d.do_no) }}
-                          className="text-xs text-blue-600 hover:underline">DOCX</button>
+                          className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
                     </tr>
                     {expanded === d.id && (
@@ -534,13 +682,149 @@ export default function Finance() {
                         </table>
                       </td></tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         </>
       )}
+
+      {/* ── P&L ── */}
+      {tab === 'P&L' && (() => {
+        const fmt = n => parseFloat(n) || 0
+
+        function onPlSort(key) {
+          setPlSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
+        }
+
+        async function patchProject(id, field, value) {
+          await api.patch(`/projects/projects/${id}/`, { [field]: value })
+          setProjects(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p))
+        }
+
+        async function patchFinance(id, field, value) {
+          patchProject(id, field, value === '' ? null : parseFloat(value))
+        }
+
+
+        const rows = projects
+          .map(p => {
+            const received = fmt(p.payment_received)
+            const expenses = fmt(p.expenses)
+            const profit   = received - expenses
+            const margin   = received > 0 ? (profit / received) * 100 : -Infinity
+            return { ...p, quoted: fmt(p.quoted_amount), received, expenses, profit, margin }
+          })
+          .sort((a, b) => {
+            const av = a[plSort.key] ?? ''
+            const bv = b[plSort.key] ?? ''
+            if (av < bv) return plSort.dir === 'asc' ? -1 : 1
+            if (av > bv) return plSort.dir === 'asc' ? 1 : -1
+            return 0
+          })
+
+        const totQuoted   = rows.reduce((s, r) => s + r.quoted,   0)
+        const totReceived = rows.reduce((s, r) => s + r.received, 0)
+        const totExpenses = rows.reduce((s, r) => s + r.expenses, 0)
+        const totProfit   = totReceived - totExpenses
+        const totMargin   = totReceived > 0 ? (totProfit / totReceived) * 100 : 0
+
+        function marginColor(pct) {
+          if (pct >= 20) return 'text-green-600'
+          if (pct >= 0)  return 'text-yellow-600'
+          return 'text-red-600'
+        }
+
+        return (
+          <>
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              {[
+                { label: 'Total Quoted',   value: totQuoted,   color: 'text-gray-800' },
+                { label: 'Total Received', value: totReceived, color: 'text-blue-600' },
+                { label: 'Total Expenses', value: totExpenses, color: 'text-orange-600' },
+                { label: 'Net Profit',     value: totProfit,   color: totProfit >= 0 ? 'text-green-600' : 'text-red-600' },
+              ].map(k => (
+                <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
+                  <p className="text-xs text-gray-400 mb-1">{k.label}</p>
+                  <p className={`text-xl font-bold ${k.color}`}>{money(k.value)}</p>
+                  {k.label === 'Net Profit' && (
+                    <p className={`text-xs mt-1 ${marginColor(totMargin)}`}>{totMargin.toFixed(1)}% margin</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-auto max-h-[calc(100vh-400px)]">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gray-50 border-b">
+                    <PlSortTh label="Project"  colKey="project_no" align="left" sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Client"   colKey="client_name" align="left" sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Status"   colKey="status" align="left" sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Quoted"   colKey="quoted"   sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Received" colKey="received" sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Expenses" colKey="expenses" sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Profit"   colKey="profit"   sort={plSort} onSort={onPlSort} />
+                    <PlSortTh label="Margin"   colKey="margin"   sort={plSort} onSort={onPlSort} />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rows.length === 0 && (
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No projects yet</td></tr>
+                  )}
+                  {rows.map(r => {
+                    const hasData = r.quoted > 0 || r.received > 0 || r.expenses > 0
+                    const marginDisplay = r.margin !== -Infinity ? r.margin : null
+                    const isOpen = plExpanded === r.id
+                    return (
+                      <Fragment key={r.id}>
+                      <tr onClick={() => setPlExpanded(isOpen ? null : r.id)}
+                        className={`cursor-pointer ${hasData ? 'hover:bg-primary-50' : 'opacity-40'} ${isOpen ? 'bg-primary-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs text-gray-400 mr-2">{r.project_no}</span>
+                          <span className="font-medium text-gray-800">{r.name}</span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{r.client_name || '—'}</td>
+                        <StatusCell row={r} canEdit={canEditFinance} onPatch={patchProject} />
+                        <MoneyCell row={r} field="quoted_amount"    value={r.quoted}   className="px-4 py-3 text-right text-gray-600"           canEdit={false} onPatch={patchFinance} />
+                        <MoneyCell row={r} field="payment_received" value={r.received} className="px-4 py-3 text-right text-blue-600 font-medium" canEdit={false} onPatch={patchFinance} />
+                        <MoneyCell row={r} field="expenses"         value={r.expenses} className="px-4 py-3 text-right text-orange-600"            canEdit={false} onPatch={patchFinance} />
+                        <td className={`px-4 py-3 text-right font-semibold ${r.received > 0 ? (r.profit >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-300'}`}>
+                          {r.received > 0 ? money(r.profit) : '—'}
+                        </td>
+                        <td className={`px-4 py-3 text-right font-medium ${marginDisplay !== null ? marginColor(marginDisplay) : 'text-gray-300'}`}>
+                          {marginDisplay !== null ? `${marginDisplay.toFixed(1)}%` : '—'}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr key={`${r.id}-comments`}>
+                          <td colSpan={8} className="p-0">
+                            <CommentPanel projectId={r.id} canDelete={canEditFinance} currentUserId={currentUser?.id} />
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+                {rows.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-sm">
+                      <td className="px-4 py-3 text-gray-500" colSpan={3}>Total ({rows.length} projects)</td>
+                      <td className="px-4 py-3 text-right text-gray-600">{money(totQuoted)}</td>
+                      <td className="px-4 py-3 text-right text-blue-600">{money(totReceived)}</td>
+                      <td className="px-4 py-3 text-right text-orange-600">{money(totExpenses)}</td>
+                      <td className={`px-4 py-3 text-right ${totProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{money(totProfit)}</td>
+                      <td className={`px-4 py-3 text-right ${marginColor(totMargin)}`}>{totMargin.toFixed(1)}%</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

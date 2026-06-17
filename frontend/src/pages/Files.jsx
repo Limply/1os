@@ -12,7 +12,7 @@ export default function Files() {
           href={FILES_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-blue-600 hover:underline"
+          className="text-sm text-primary-600 hover:underline"
         >
           Open in new tab ↗
         </a>

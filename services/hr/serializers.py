@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -9,7 +9,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_department_name(self, obj):
@@ -66,7 +66,7 @@ class EmployeeTreeSerializer(serializers.ModelSerializer):
 class LeaveTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LeaveType
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -76,7 +76,7 @@ class LeaveBalanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LeaveBalance
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_leave_type_name(self, obj):
@@ -89,7 +89,7 @@ class LeaveApplicationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LeaveApplication
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'status', 'approved_by', 'approved_at', 'created_at', 'updated_at']
 
     def get_leave_type_name(self, obj):
@@ -102,14 +102,14 @@ class LeaveApplicationSerializer(serializers.ModelSerializer):
 class AttendanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attendance
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class CertificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Certification
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -126,7 +126,7 @@ class WorkScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkSchedule
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_employee_name(self, obj):
@@ -142,7 +142,8 @@ class WorkScheduleSerializer(serializers.ModelSerializer):
     def get_clock_in_time(self, obj):
         record = obj.employee.attendance_records.filter(date=obj.date).first()
         if record and record.clock_in:
-            return record.clock_in.strftime('%H:%M')
+            from django.utils.timezone import localtime
+            return localtime(record.clock_in).strftime('%H:%M')
         return None
 
 
@@ -159,5 +160,17 @@ class ClockInResponseSerializer(serializers.Serializer):
 class ManpowerSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ManpowerSettings
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class StaffDeploymentSerializer(serializers.ModelSerializer):
+    employee_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffDeployment
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_employee_name(self, obj):
+        return obj.employee.full_name if obj.employee else None

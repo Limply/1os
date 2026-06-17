@@ -7,11 +7,11 @@ from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
-    ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer,
+    ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer, StaffDeploymentSerializer,
 )
 from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
@@ -38,7 +38,7 @@ class TenantScopedMixin:
         return self.queryset.filter(is_active=True)
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
 
 class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
@@ -52,6 +52,26 @@ class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         if can_clock_in == 'true':
             qs = qs.filter(can_clock_in=True)
         return qs
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        try:
+            emp = Employee.objects.select_related('department', 'position').get(user=request.user)
+        except Employee.DoesNotExist:
+            return Response({'employee': None, 'leave_balances': [], 'leave_applications': []})
+
+        balances = LeaveBalance.objects.filter(employee=emp).select_related('leave_type')
+        applications = LeaveApplication.objects.filter(employee=emp).select_related('leave_type').order_by('-created_at')[:5]
+
+        today = timezone.now().date()
+        attendance = Attendance.objects.filter(employee=emp, date=today).first()
+
+        return Response({
+            'employee': EmployeeSerializer(emp, context={'request': request}).data,
+            'leave_balances': LeaveBalanceSerializer(balances, many=True).data,
+            'leave_applications': LeaveApplicationSerializer(applications, many=True).data,
+            'today_attendance': AttendanceSerializer(attendance).data if attendance else None,
+        })
 
 
 class LeaveTypeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
@@ -136,25 +156,28 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             # Check GPS within allowed radius
             gps_lat = request.data.get('gps_lat')
             gps_lng = request.data.get('gps_lng')
+            project_id = request.data.get('project_id')
+            outside_geofence = False
             if gps_lat and gps_lng:
                 distance = haversine_distance(gps_lat, gps_lng, schedule['location_lat'], schedule['location_lng'])
                 radius = int(schedule.get('radius', 200))
                 if distance > radius:
-                    return Response({
-                        'success': False,
-                        'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Must be within {radius}m to clock in.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                    if not project_id:
+                        return Response({
+                            'success': False,
+                            'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Select a project to clock in remotely.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    outside_geofence = True
 
             # Flag late if past shift_start
             now = timezone.now()
             from datetime import time as time_type
             shift_start = datetime.strptime(schedule.get('shift_start', '00:00'), '%H:%M').time()
-            attendance_status = 'late' if now.time() > shift_start else 'present'
+            attendance_status = 'late' if timezone.localtime(now).time() > shift_start else 'present'
 
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
                 date=today,
-                defaults={'tenant': request.user.tenant}
             )
 
             record.clock_in = now
@@ -168,13 +191,20 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             if address:
                 record.clock_in_address = address
 
+            if project_id and outside_geofence:
+                from services.projects.models import Project
+                try:
+                    record.project = Project.objects.get(id=project_id)
+                except Project.DoesNotExist:
+                    pass
+
             record.save()
 
             photo_url = record.clock_in_photo.url if record.clock_in_photo else None
             late_note = ' (Late)' if attendance_status == 'late' else ''
             response = {
                 'success': True,
-                'message': f'Clocked in at {now.strftime("%H:%M:%S")}{late_note}',
+                'message': f'Clocked in at {timezone.localtime(now).strftime("%H:%M:%S")}{late_note}',
                 'clock_in_time': now,
                 'status': attendance_status,
                 'photo_url': photo_url,
@@ -223,7 +253,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             photo_url = record.clock_out_photo.url if record.clock_out_photo else None
             response = {
                 'success': True,
-                'message': f'Clocked out at {now.strftime("%H:%M:%S")}',
+                'message': f'Clocked out at {timezone.localtime(now).strftime("%H:%M:%S")}',
                 'clock_out_time': now,
                 'hours_worked': record.hours,
                 'photo_url': photo_url,
@@ -268,7 +298,7 @@ def _row_clock_status(emp, date_obj):
     record = Attendance.objects.filter(employee=emp, date=date_obj).first()
     if not record or not record.clock_in:
         return ('Missed' if date_obj < timezone.now().date() else 'Pending'), None
-    return ('Late' if record.status == 'late' else 'Done'), record.clock_in.strftime('%H:%M')
+    return ('Late' if record.status == 'late' else 'Done'), timezone.localtime(record.clock_in).strftime('%H:%M')
 
 
 def _enrich(row):
@@ -548,11 +578,64 @@ def employee_me(request):
     """Return the employee profile for the logged-in user."""
     try:
         employee = Employee.objects.select_related('department', 'position').get(
-            user=request.user, tenant=request.user.tenant
+            user=request.user
         )
         return Response(EmployeeSerializer(employee).data)
     except Employee.DoesNotExist:
         return Response({'detail': 'No employee profile found.'}, status=404)
+
+
+class StaffDeploymentViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = StaffDeployment.objects.select_related('employee')
+    serializer_class = StaffDeploymentSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        emp = self.request.query_params.get('employee')
+        if emp:
+            qs = qs.filter(employee_id=emp)
+        return qs.order_by('-date_from')
+
+    @action(detail=True, methods=['post'], url_path='generate')
+    def generate_schedules(self, request, pk=None):
+        """Expand this deployment into WorkSchedule CSV rows for each matching date."""
+        import datetime as dt
+        dep = self.get_object()
+        emp = dep.employee
+
+        rows = fb_read_csv(CSV_PATH)
+        existing_keys = {(r.get('emp_no'), r.get('date')) for r in rows}
+
+        created, skipped = 0, 0
+        current = dep.date_from
+        new_rows = []
+        while current <= dep.date_to:
+            if current.weekday() in dep.days_of_week:
+                date_str = current.strftime('%d-%m-%Y')
+                key = (emp.emp_no, date_str)
+                if key not in existing_keys:
+                    new_rows.append({
+                        'emp_no': emp.emp_no,
+                        'first_name': emp.first_name,
+                        'last_name': emp.last_name,
+                        'date': date_str,
+                        'shift_start': dep.shift_start.strftime('%H:%M'),
+                        'shift_end': dep.shift_end.strftime('%H:%M'),
+                        'location_name': dep.location_name,
+                        'location_lat': str(dep.location_lat),
+                        'location_lng': str(dep.location_lng),
+                        'radius': str(dep.radius),
+                    })
+                    existing_keys.add(key)
+                    created += 1
+                else:
+                    skipped += 1
+            current += dt.timedelta(days=1)
+
+        if new_rows:
+            fb_write_csv(CSV_PATH, rows + new_rows, CSV_FIELDS)
+        return Response({'created': created, 'skipped': skipped,
+                         'message': f'{created} schedule(s) generated, {skipped} already existed.'})
 
 
 class ManpowerSettingsViewSet(viewsets.ModelViewSet):
@@ -561,15 +644,17 @@ class ManpowerSettingsViewSet(viewsets.ModelViewSet):
     queryset = ManpowerSettings.objects.all()
 
     def get_queryset(self):
-        return ManpowerSettings.objects.filter(tenant=self.request.user.tenant)
+        return ManpowerSettings.objects.all()
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
     @action(detail=False, methods=['get', 'post'], url_path='current')
     def current(self, request):
-        """Get or create/update tenant's manpower settings."""
-        obj, _ = ManpowerSettings.objects.get_or_create(tenant=request.user.tenant)
+        """Get or create/update manpower settings."""
+        obj = ManpowerSettings.objects.first()
+        if obj is None:
+            obj = ManpowerSettings.objects.create()
         if request.method == 'POST':
             serializer = self.get_serializer(obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)

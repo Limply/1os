@@ -3,7 +3,7 @@ from django.db import models
 from shared.models import BaseModel
 
 
-def _next_no(model, field, prefix, tenant=None):
+def _next_no(model, field, prefix):
     year = str(datetime.date.today().year)[2:]
     p = f'{prefix}-{year}-'
     last = model.objects.filter(**{f'{field}__startswith': p}).order_by(f'-{field}').first()
@@ -45,7 +45,7 @@ class Quotation(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.quote_no:
-            self.quote_no = _next_no(Quotation, 'quote_no', 'Q', self.tenant)
+            self.quote_no = _next_no(Quotation, 'quote_no', 'Q')
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -98,6 +98,7 @@ class Invoice(BaseModel):
     ]
 
     invoice_no = models.CharField(max_length=20, unique=True, blank=True)
+    project_no = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number')
     quotation = models.ForeignKey(
         Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices'
     )
@@ -116,7 +117,7 @@ class Invoice(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.invoice_no:
-            self.invoice_no = _next_no(Invoice, 'invoice_no', 'INV', self.tenant)
+            self.invoice_no = _next_no(Invoice, 'invoice_no', 'INV')
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -167,6 +168,7 @@ class DeliveryOrder(BaseModel):
     ]
 
     do_no = models.CharField(max_length=20, unique=True, blank=True)
+    project_no = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number')
     quotation = models.ForeignKey(
         Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_orders'
     )
@@ -187,7 +189,7 @@ class DeliveryOrder(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.do_no:
-            self.do_no = _next_no(DeliveryOrder, 'do_no', 'DO', self.tenant)
+            self.do_no = _next_no(DeliveryOrder, 'do_no', 'DO')
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -210,6 +212,36 @@ class DeliveryOrderItem(BaseModel):
         return f"{self.delivery_order.do_no} — {self.description[:50]}"
 
 
+class Expense(BaseModel):
+    """Project expense recorded against the Finance database."""
+    CATEGORIES = [
+        ('labour',      'Labour'),
+        ('material',    'Material'),
+        ('equipment',   'Equipment'),
+        ('transport',   'Transport'),
+        ('subcontract', 'Subcontract'),
+        ('misc',        'Miscellaneous'),
+    ]
+
+    project_no   = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number')
+    description  = models.CharField(max_length=255)
+    category     = models.CharField(max_length=20, choices=CATEGORIES, default='misc')
+    amount       = models.DecimalField(max_digits=12, decimal_places=2)
+    expense_date = models.DateField()
+    reference    = models.CharField(max_length=100, blank=True, null=True)
+    notes        = models.TextField(blank=True, null=True)
+    recorded_by  = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recorded_expenses'
+    )
+
+    class Meta:
+        ordering = ['-expense_date']
+
+    def __str__(self):
+        return f"{self.project_no or '—'} — {self.description} ${self.amount}"
+
+
 class Payment(BaseModel):
     """Individual payment against an invoice, enabling partial payment history."""
     PAYMENT_METHODS = [
@@ -219,7 +251,15 @@ class Payment(BaseModel):
         ('paynow', 'PayNow'),
     ]
 
-    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
+    quotation = models.ForeignKey(
+        Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments',
+        help_text='Set if payment is against a quotation (e.g. deposit) without an invoice'
+    )
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments',
+        help_text='Set if payment is against a specific invoice'
+    )
+    project_no = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_date = models.DateField()
     method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
@@ -230,4 +270,5 @@ class Payment(BaseModel):
     )
 
     def __str__(self):
-        return f"{self.invoice.invoice_no} — ${self.amount} on {self.payment_date}"
+        ref = self.invoice.invoice_no if self.invoice else (self.quotation.quote_no if self.quotation else self.project_no or '—')
+        return f"{ref} — ${self.amount} on {self.payment_date}"

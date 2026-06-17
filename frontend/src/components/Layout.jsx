@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import NotificationBell from './NotificationBell'
 import { isLoggedIn, getUser } from '../api/auth'
 
 // Maps URL path → module key (dashboard '/' is always accessible — no entry)
 const ROUTE_MODULE = {
   '/orgchart':   'orgchart',
   '/projects':   'projects',
+  '/crm':        'crm',
   '/calendar':   'calendar',
   '/hr':         'hr',
   '/schedules':  'schedules',
@@ -36,21 +38,20 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen bg-gray-100">
       {open && <Sidebar onCollapse={() => setOpen(false)} />}
-      <div className="flex flex-col flex-1 min-w-0">
-        {!open && (
-          <div className="bg-gray-900 px-4 py-3">
-            <button
-              onClick={() => setOpen(true)}
-              className="text-white font-bold text-lg tracking-wide"
-            >
-              1OS
-            </button>
-          </div>
-        )}
-        <main className="flex-1 p-6 overflow-auto">
-          <Outlet />
-        </main>
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="fixed top-3 left-3 z-50 bg-gray-900 text-white font-bold text-sm px-3 py-1.5 rounded-lg hover:bg-gray-700 transition shadow"
+        >
+          1OS
+        </button>
+      )}
+      <div className="fixed top-3 right-4 z-50">
+        <NotificationBell />
       </div>
+      <main className="flex-1 p-6 overflow-auto min-w-0">
+        <Outlet />
+      </main>
     </div>
   )
 }

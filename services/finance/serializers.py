@@ -1,11 +1,11 @@
 from rest_framework import serializers
-from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem
+from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem, Expense
 
 
 class QuotationItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuotationItem
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'amount', 'created_at', 'updated_at']
 
 
@@ -14,21 +14,21 @@ class QuotationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Quotation
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvoiceItem
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'amount', 'created_at', 'updated_at']
 
 
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -39,14 +39,14 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Invoice
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class DeliveryOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryOrderItem
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -55,5 +55,17 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliveryOrder
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    recorded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Expense
+        fields = '__all__'
+        read_only_fields = ['id', 'recorded_by', 'created_at', 'updated_at']
+
+    def get_recorded_by_name(self, obj):
+        return obj.recorded_by.full_name if obj.recorded_by else None

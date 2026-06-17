@@ -4,12 +4,6 @@ from django.db import models
 
 class BaseModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey(
-        'accounts.Tenant',
-        on_delete=models.CASCADE,
-        related_name='+',
-        db_column='tenant_id',
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)

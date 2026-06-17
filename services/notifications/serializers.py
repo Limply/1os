@@ -5,5 +5,5 @@ from .models import Notification
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        exclude = ['tenant']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']

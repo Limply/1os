@@ -5,11 +5,11 @@ from shared.models import BaseModel
 from shared.storage import FileBrowserStorage  # used by HR attendance/employee photos
 
 
-def _generate_project_no(tenant):
+def _generate_project_no():
     year = str(datetime.date.today().year)[2:]
     prefix = f'AST-{year}-'
     last = Project.objects.filter(
-        tenant=tenant, project_no__startswith=prefix
+        project_no__startswith=prefix
     ).order_by('-project_no').first()
     seq = int(last.project_no.split('-')[-1]) + 1 if last else 1
     return f'{prefix}{seq:03d}'
@@ -18,7 +18,6 @@ def _generate_project_no(tenant):
 class Project(BaseModel):
     TYPE_CHOICES = [
         ('client', 'Client Project'),
-        ('internal', 'Internal Project'),
     ]
     STATUS_CHOICES = [
         ('planning', 'Planning'),
@@ -34,7 +33,7 @@ class Project(BaseModel):
         ('urgent', 'Urgent'),
     ]
 
-    project_no    = models.CharField(max_length=20, unique=True, blank=True)
+    project_no    = models.CharField(max_length=30, unique=True, blank=True)
     name          = models.CharField(max_length=255)
     type          = models.CharField(max_length=20, choices=TYPE_CHOICES, default='client')
     status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
@@ -61,12 +60,18 @@ class Project(BaseModel):
     members  = models.JSONField(default=list, blank=True)
     progress = models.IntegerField(default=0)
 
+    # Additional project tracking fields
+    remarks          = models.TextField(blank=True, null=True)
+    partner          = models.CharField(max_length=255, blank=True, null=True)
+    payment_record = models.TextField(blank=True, null=True)
+    external_link    = models.CharField(max_length=1000, blank=True, null=True)
+
     ref_type = models.CharField(max_length=50, blank=True, null=True)
     ref_id   = models.UUIDField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.project_no:
-            self.project_no = _generate_project_no(self.tenant)
+            self.project_no = _generate_project_no()
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -89,6 +94,7 @@ class Task(BaseModel):
         ('in_progress', 'In Progress'),
         ('review', 'In Review'),
         ('done', 'Done'),
+        ('issue', 'Issue'),
     ]
     PRIORITY_CHOICES = [
         ('low', 'Low'),
@@ -163,5 +169,32 @@ class TaskDocument(BaseModel):
             self.filename = self.file.name.split('/')[-1]
         super().save(*args, **kwargs)
 
+
+class TaskComment(BaseModel):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='task_comments'
+    )
+    body = models.TextField()
+
+    class Meta:
+        ordering = ['created_at']
+
     def __str__(self):
-        return f"{self.task.title} — {self.filename}"
+        return f"{self.task.title} — comment by {self.author}"
+
+
+class ProjectComment(BaseModel):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='project_comments'
+    )
+    body = models.TextField()
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.project.project_no} — comment by {self.author}"

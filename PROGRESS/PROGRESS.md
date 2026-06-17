@@ -1,14 +1,28 @@
 # 1OS — Project Progress Log
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-05-28
+**Last Updated:** 2026-06-10 (session 6)
 
 ---
 
-## What Was Built Today
+## Dev / Prod Quick Reference
+
+| | Dev | Prod |
+|---|---|---|
+| **Code here** | `/opt/1os/` (`dev` branch) | `/home/lucus/1os-prod/` (`main` branch) |
+| **Frontend** | Vite `:8100` → `ast2.sim-eng.com` | Nginx `:8000` → `ast1.sim-eng.com` |
+| **Backend** | Django `runserver :8001` | Gunicorn `:8002` (internal) |
+| **Start dev** | `./start_dev.sh` | systemd auto-manages |
+
+**Deploy:** merge `dev` → `main`, `git pull` in prod, `npm run build`, `collectstatic`, `sudo systemctl restart gunicorn-1os`.
+See `DEVELOPMENT.md` for full steps.
+
+---
+
+## What Was Built (Sessions 1–5, up to 2026-06-10)
 
 ### 1. Project Structure
-Set up a clean Django monolith at `/opt/astronic/` following the architecture defined in `1os-dev-guide.md`.
+Set up a clean Django monolith at `/opt/1os/` following the architecture defined in `1os-dev-guide.md`.
 
 ```
 /opt/astronic/
@@ -76,66 +90,78 @@ Set up a clean Django monolith at `/opt/astronic/` following the architecture de
 
 - React + Vite scaffold at `frontend/`
 - Login page with JWT auth
-- Dashboard with 4 stat cards
-- Sidebar: Dashboard, Projects, HR, Operations, Finance, Compliance, Files
-- Projects page: create/list projects with inline task lists and tasks
-- Files page: embedded FileBrowser (https://files.sim-eng.com/files/)
-- Sidebar shows tenant company name + user name/role from `/api/auth/me/`
+- Dashboard with stat cards
+- Sidebar: Dashboard, Projects, HR, Clock-In, Schedules, Calendar, Files
+- Projects page: create/list projects, inline task groups + tasks
+- Project detail: task photos, documents, PDF/Excel export, WhatsApp reminder button
+- Project edit modal (manager+): all fields, supervisor (Foreman) + manager dropdowns
+- Task deep-link: `?project={id}#task-{taskId}` auto-opens and scrolls to task
+- HR module: Employees, Leave, Attendance, Courses, Approvals tabs (role-gated)
+- Clock-In: photo + GPS + geofence (200m), watermark, FileBrowser upload
+- Work Schedules: date picker, add/edit/delete schedules, CSV import/export
+- Files page: embedded FileBrowser
+- Module access control: per-user module list, sidebar + route gating
+- 26 worker accounts created (`Astronic.7890`)
 
 ---
 
-### 6. Cloudflare Tunnel — Live
+### 6. Production Deployment (June 2026)
 
-- Tunnel ID: `afb68fe8-2a42-4fdc-ae55-22aa402382fd`
-- Frontend: `https://ast1.sim-eng.com` → Vite dev server (port 5173)
-- SSH access: `ssh.ast1.sim-eng.com` → port 22
-- Admin: access via SSH tunnel (`ssh -L 8000:localhost:8000 lucus@192.168.1.71`) then `http://localhost:8000/admin/`
+- **Nginx** (`:8000`) serves `frontend/dist/` directly — no WhiteNoise
+- **Gunicorn** (`:8002`, 3 workers) handles Django API only — managed by systemd (`gunicorn-1os`)
+- **Cloudflare Tunnel:**
+  - `ast1.sim-eng.com` → Nginx `:8000` (prod)
+  - `ast2.sim-eng.com` → Vite `:8100` (dev)
+  - `ssh.ast1.sim-eng.com` → SSH `:22`
+  - `ast-iot.sim-eng.com` → IoT `:6123`
+  - `files.sim-eng.com` → FileBrowser `:8088`
+- **Separate prod folder:** `/home/lucus/1os-prod/` on `main` branch
+- **Dev/prod isolation:** dev at `/opt/1os/` (`dev` branch), prod at `/home/lucus/1os-prod/` (`main` branch)
+- **Nginx user:** `lucus` (set in `/etc/nginx/nginx.conf`) — avoids permission issues with home dir
 
 ---
 
-### 7. Dev Environment
+### 7. Environment Summary
 
-- Server: `http://192.168.1.71:8000` (Django), `http://192.168.1.71:5173` (Vite)
-- Public URL: `https://ast1.sim-eng.com`
-- Django Admin: `http://192.168.1.71:8000/admin/`
-- Users: `admin@astronic.com` / `Astronic.2468`, `lucus@astronic.com.sg` / `Astronic.2468`
-- PostgreSQL: `astronic` database, all migrations applied
-- GitHub: `https://github.com/Limply/1os` (private)
-- Settings split: `dev.py` / `prod.py` / `base.py`, secrets via `.env`
+| Item | Dev | Prod |
+|---|---|---|
+| Path | `/opt/1os/` | `/home/lucus/1os-prod/` |
+| Branch | `dev` | `main` |
+| Frontend | Vite `:8100` → `ast2.sim-eng.com` | Nginx `:8000` → `ast1.sim-eng.com` |
+| Backend | Django `runserver :8001` | Gunicorn `:8002` (internal) |
+| DB | PostgreSQL `astronic` (shared) | ← same |
+| Admin | `https://ast1.sim-eng.com/admin/` (via Nginx) | ← same |
+| GitHub | `github.com/Limply/1os` (private) | ← same |
 
 ---
 
 ## What's Next (Priority Order)
 
-### Backend (Do First)
-- [x] Register all models in `admin.py` per service
-- [ ] Write `api-contract.yml` per service
-- [ ] Add business logic to each service:
-  - [ ] Leave approval workflow (HR)
-  - [ ] Job status transitions (Operations)
-  - [ ] WTS GPS tracking (Operations)
-  - [ ] Auto-generate job/ref numbers (Operations)
-  - [ ] Quotation → Invoice conversion (Finance)
-  - [ ] GST calculation on save (Finance)
-  - [ ] Licence expiry alerts (Compliance)
-  - [ ] Telegram bot notifications (Notifications)
+### Frontend
+- [ ] Operations page (Jobs, WTS)
+- [ ] Finance page (Quotations, Invoices, Payments)
+- [ ] Compliance page (Licences, Incidents)
+- [ ] HR Calendar (leave, public holidays) — uses `CalendarView`
+- [ ] Ops Calendar (jobs, site visits) — uses `CalendarView`
+- [ ] Notifications / Telegram bot integration
+
+### Backend — Business Logic
+- [ ] Leave approval workflow (pending → approved/rejected)
+- [ ] Leave balance deduction on approval
+- [ ] Job status transitions + auto-numbering (Operations)
+- [ ] WTS GPS live tracking
+- [ ] Quotation → Invoice conversion (Finance)
+- [ ] GST auto-calculation on save (9%)
+- [ ] Licence expiry alerts (Compliance)
+- [ ] Dashboard aggregate endpoint (active jobs, pending approvals, revenue MTD)
+
+### Backend — Quality
+- [ ] Write API contracts per service (`api-contract.yml`)
 - [ ] Add filtering, search, ordering to all ViewSets
 - [ ] Write tests (minimum 1 happy + 1 error per endpoint)
-- [ ] Assign service owners per `1os-dev-guide.md` team table
 
 ### DevOps
-- [ ] Configure Nginx gateway (`gateway/`)
-- [ ] Write `docker-compose.yml`
-- [ ] Per-service Dockerfiles
-- [ ] Set up `.env` from `.env.template`
-
-### Frontend (After Backend Contracts Are Stable)
-- [x] React + Vite scaffold
-- [x] Auth flow (login, token refresh, logout)
-- [x] Dashboard layout with sidebar
-- [x] Projects + TaskList + Task management pages
-- [x] Files page (FileBrowser embed)
-- [ ] HR, Operations, Finance, Compliance pages (placeholders only)
+- [ ] Docker / docker-compose for easier multi-machine deployment (deferred — see DEVELOPMENT.md for decision)
 
 ---
 

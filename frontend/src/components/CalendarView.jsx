@@ -27,11 +27,14 @@ export default function CalendarView({ events = [], onEventClick, initialView = 
           center: 'title',
           right: 'dayGridMonth,listMonth',
         }}
+        firstDay={1}
         events={events}
         eventClick={onEventClick}
         height="auto"
         eventDisplay="block"
         dayMaxEvents={3}
+        dayCellClassNames={arg => arg.date.getDay() === 0 ? ['fc-day-sunday'] : []}
+        dayHeaderClassNames={arg => arg.dow === 0 ? ['fc-day-sunday'] : []}
       />
     </div>
   )

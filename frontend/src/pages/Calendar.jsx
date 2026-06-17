@@ -8,15 +8,20 @@ const USER_COLORS = [
   '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
 ]
 
-const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done' }
+const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done', issue: 'Issue' }
 const STATUS_COLORS = {
   todo: 'bg-gray-200 text-gray-700',
-  in_progress: 'bg-blue-100 text-blue-700',
+  in_progress: 'bg-primary-100 text-primary-700',
   review: 'bg-yellow-100 text-yellow-700',
   done: 'bg-green-100 text-green-700',
 }
 const PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' }
 const DEPT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#ec4899']
+
+function todayStr() {
+  const d = new Date()
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`
+}
 
 export default function Calendar() {
   const [tasks, setTasks] = useState([])
@@ -27,6 +32,28 @@ export default function Calendar() {
   const [editTask, setEditTask] = useState({}) // { title, assigned_to }
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [clockStatusMap, setClockStatusMap] = useState({}) // emp_no → { status, shift_start }
+
+  useEffect(() => {
+    const now = new Date()
+    api.get(`/hr/work-schedules/?date=${todayStr()}`).then(res => {
+      const rows = res.data.results || res.data || []
+      const map = {}
+      rows.forEach(r => {
+        const shiftStart = r.shift_start ? r.shift_start.slice(0, 5) : null
+        const [sh, sm] = shiftStart ? shiftStart.split(':').map(Number) : [0, 0]
+        const shiftStartMins = sh * 60 + sm
+        const nowMins = now.getHours() * 60 + now.getMinutes()
+        let dot = null
+        if (r.clock_status === 'Done') dot = 'green'
+        else if (r.clock_status === 'Late') dot = 'yellow'
+        else if (r.clock_status === 'Pending' && nowMins > shiftStartMins) dot = 'red'
+        if (dot) map[r.emp_no] = dot
+      })
+      setClockStatusMap(map)
+    }).catch(() => {})
+  }, [])
+
   useEffect(() => {
     Promise.all([
       api.get('/projects/tasks/'),
@@ -46,12 +73,16 @@ export default function Calendar() {
   const userDeptMap = {}
   const deptColorMap = {}
   const userColorMap = {}
+  const empNoByUser = {}
   const deptNames = [...new Set(employees.map(e => e.department_name || 'Unassigned'))]
   deptNames.forEach((d, i) => { deptColorMap[d] = DEPT_COLORS[i % DEPT_COLORS.length] })
   employees.forEach((e, i) => {
     userDeptMap[e.user] = e.department_name || 'Unassigned'
     userColorMap[e.user] = USER_COLORS[i % USER_COLORS.length]
+    empNoByUser[e.user] = e.emp_no
   })
+
+  const DOT_COLOR = { green: '#22c55e', yellow: '#eab308', red: '#ef4444' }
 
   const taskEvents = tasks
     .filter(t => t.due_date && (selectedUsers.has(t.assigned_to) || (!t.assigned_to && selectedUsers.size > 0)))
@@ -68,7 +99,7 @@ export default function Calendar() {
     .filter(p => p.start_date && p.end_date)
     .map(p => ({
       id: `project-${p.id}`,
-      title: `📁 ${p.name}`,
+      title: `▸ ${p.name}`,
       start: p.start_date,
       end: p.end_date,
       backgroundColor: '#1e293b',
@@ -154,17 +185,26 @@ export default function Calendar() {
               </button>
               {deptMembers.map(e => {
                 const on = selectedUsers.has(e.user)
+                const dot = clockStatusMap[empNoByUser[e.user]]
                 return (
                   <button
                     key={e.user}
                     onClick={() => toggleUser(e.user)}
-                    className="text-xs px-2 py-0.5 rounded-full border transition"
+                    className="text-xs px-2 py-0.5 rounded-full border transition flex items-center gap-1"
                     style={{
                       backgroundColor: on ? userColorMap[e.user] : '#f3f4f6',
                       borderColor: on ? userColorMap[e.user] : '#e5e7eb',
                       color: on ? '#fff' : '#9ca3af',
                     }}
                   >
+                    {dot && (
+                      <span style={{
+                        width: 7, height: 7, borderRadius: '50%',
+                        backgroundColor: DOT_COLOR[dot],
+                        display: 'inline-block', flexShrink: 0,
+                        boxShadow: `0 0 0 1px ${on ? 'rgba(255,255,255,0.5)' : '#fff'}`,
+                      }} />
+                    )}
                     {e.first_name}
                   </button>
                 )
@@ -206,13 +246,13 @@ export default function Calendar() {
             <div className="flex items-start justify-between mb-3">
               {selectedEvent.type === 'task' ? (
                 <input
-                  className="flex-1 text-base font-bold text-gray-800 border-b border-gray-300 focus:border-blue-500 focus:outline-none pr-2 bg-transparent"
+                  className="flex-1 text-base font-bold text-gray-800 border-b border-gray-300 focus:border-primary-500 focus:outline-none pr-2 bg-transparent"
                   value={editTask.title || ''}
                   onChange={e => setEditTask(p => ({ ...p, title: e.target.value }))}
                 />
               ) : (
                 <h2 className="text-base font-bold text-gray-800 flex-1 pr-2">
-                  📁 {selectedEvent.data.name}
+                  {selectedEvent.data.name}
                 </h2>
               )}
               <button onClick={() => setSelectedEvent(null)} className="text-gray-400 text-xl leading-none ml-2">×</button>
@@ -275,7 +315,7 @@ export default function Calendar() {
                   <select
                     value={editTask.assigned_to || ''}
                     onChange={e => setEditTask(p => ({ ...p, assigned_to: e.target.value || null }))}
-                    className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500"
+                    className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-primary-500"
                   >
                     <option value="">Unassigned</option>
                     {employees.map(e => (
@@ -291,7 +331,7 @@ export default function Calendar() {
                 <button
                   onClick={handleSaveTask}
                   disabled={saving}
-                  className="mt-3 w-full bg-blue-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
+                  className="mt-3 w-full bg-primary-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition"
                 >
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>

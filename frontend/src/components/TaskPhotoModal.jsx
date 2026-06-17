@@ -125,11 +125,11 @@ export default function TaskPhotoModal({ task, onClose }) {
                             onChange={e => setEditComment(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
                             rows={2}
-                            className="w-full border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none resize-none"
+                            className="w-full border border-primary-400 rounded px-2 py-1 text-sm focus:outline-none resize-none"
                           />
                           <div className="flex gap-2 mt-1">
                             <button onClick={() => saveComment(p.id)}
-                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1 rounded transition">
+                              className="text-xs bg-primary-600 hover:bg-primary-700 text-white font-semibold px-3 py-1 rounded transition">
                               Save
                             </button>
                             <button onClick={cancelEdit}
@@ -139,8 +139,8 @@ export default function TaskPhotoModal({ task, onClose }) {
                           </div>
                         </div>
                       ) : (
-                        <span className="text-gray-700 whitespace-pre-wrap cursor-pointer hover:text-blue-600 group">
-                          {p.comment || <span className="text-gray-300 italic group-hover:text-blue-300">click to add comment</span>}
+                        <span className="text-gray-700 whitespace-pre-wrap cursor-pointer hover:text-primary-600 group">
+                          {p.comment || <span className="text-gray-300 italic group-hover:text-primary-300">click to add comment</span>}
                         </span>
                       )}
                     </td>
@@ -166,7 +166,7 @@ export default function TaskPhotoModal({ task, onClose }) {
               {/* Gallery picker */}
               <label className="cursor-pointer">
                 <div className={`w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center text-2xl transition
-                  ${preview ? 'border-transparent p-0' : 'border-gray-300 hover:border-blue-400 text-gray-300 hover:text-blue-400'}`}>
+                  ${preview ? 'border-transparent p-0' : 'border-gray-300 hover:border-primary-400 text-gray-300 hover:text-primary-400'}`}>
                   {preview
                     ? <img src={preview} alt="preview" className="w-full h-full object-cover rounded-lg" />
                     : '+'}
@@ -176,7 +176,7 @@ export default function TaskPhotoModal({ task, onClose }) {
               {/* Camera button */}
               <button type="button"
                 onClick={() => cameraRef.current?.click()}
-                className="w-20 flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-blue-500 border border-gray-200 hover:border-blue-400 rounded-lg py-1 transition">
+                className="w-20 flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-primary-500 border border-gray-200 hover:border-primary-400 rounded-lg py-1 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
                 </svg>
@@ -189,14 +189,14 @@ export default function TaskPhotoModal({ task, onClose }) {
               onChange={e => setComment(e.target.value)}
               placeholder="Write a comment..."
               rows={3}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 resize-none"
             />
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose}
               className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">Cancel</button>
             <button type="submit" disabled={!file || uploading}
-              className="text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold px-4 py-1.5 rounded-lg transition">
+              className="text-sm bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white font-semibold px-4 py-1.5 rounded-lg transition">
               {uploading ? 'Uploading...' : 'Upload'}
             </button>
           </div>

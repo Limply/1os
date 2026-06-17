@@ -4,8 +4,8 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from .models import Project, Task, TaskPhoto, TaskDocument
-from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment
+from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer
 
 TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
 
@@ -53,8 +53,13 @@ def task_templates(request):
 MANAGER_ROLES = {'manager', 'admin', 'superadmin'}
 
 
+ADMIN_ROLES = ('admin', 'superadmin')
+FINANCIAL_FIELDS = {'payment_record'}
+
+
 class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         qs = Project.objects.order_by('-created_at')
@@ -69,7 +74,19 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return ProjectSerializer
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_ROLES:
+            touching_finance = FINANCIAL_FIELDS & set(request.data.keys())
+            if touching_finance:
+                from rest_framework.response import Response
+                from rest_framework import status
+                return Response(
+                    {'detail': 'Only admin users can edit financial fields.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        return super().partial_update(request, *args, **kwargs)
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -93,7 +110,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save()
 
     def destroy(self, request, *args, **kwargs):
         if request.user.role not in MANAGER_ROLES:
@@ -115,10 +132,8 @@ class TaskPhotoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(
-            tenant=self.request.user.tenant,
             uploaded_by=self.request.user,
         )
-
 
 
 class TaskDocumentViewSet(viewsets.ModelViewSet):
@@ -135,7 +150,54 @@ class TaskDocumentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(
-            tenant=self.request.user.tenant,
             uploaded_by=self.request.user,
         )
 
+
+class TaskCommentViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TaskCommentSerializer
+    pagination_class = None
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        qs = TaskComment.objects.select_related('author')
+        task_id = self.request.query_params.get('task')
+        if task_id:
+            qs = qs.filter(task_id=task_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(
+            author=self.request.user,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.author != request.user and request.user.role not in ('admin', 'superadmin'):
+            raise PermissionDenied('You can only delete your own comments.')
+        return super().destroy(request, *args, **kwargs)
+
+
+class ProjectCommentViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProjectCommentSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = ProjectComment.objects.select_related('author')
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(
+            author=self.request.user,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.author != request.user and request.user.role not in ('admin', 'superadmin'):
+            raise PermissionDenied('You can only delete your own comments.')
+        return super().destroy(request, *args, **kwargs)
