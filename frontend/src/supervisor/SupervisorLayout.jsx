@@ -70,10 +70,10 @@ export default function SupervisorLayout() {
   const displayName = user.first_name || user.email || ''
 
   return (
-    <div
-      style={{ fontFamily: "'Barlow', sans-serif", background: '#0D1720', minHeight: '100svh' }}
-      className="flex flex-col"
-    >
+    <div style={{ fontFamily: "'Barlow', sans-serif", background: '#0D1720', minHeight: '100svh' }}
+      className="flex justify-center">
+      <div className="flex flex-col w-full" style={{ maxWidth: 480, minHeight: '100svh', position: 'relative' }}>
+
       {/* App header */}
       <header style={{ background: '#212D3E', borderBottom: '1px solid #2F4060' }}
         className="flex items-center justify-between px-5 py-3 flex-shrink-0">
@@ -143,6 +143,7 @@ export default function SupervisorLayout() {
           </NavLink>
         ))}
       </nav>
+      </div>
     </div>
   )
 }
