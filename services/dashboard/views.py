@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db.models import Q
 
 
 @api_view(['GET'])
@@ -98,4 +99,96 @@ def overview(request):
         },
         'ending_soon':    ending_soon,
         'overdue_tasks_list': recent_overdue,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def supervisor_home(request):
+    from services.projects.models import Project, Task
+    from services.hr.models import Attendance
+
+    today = timezone.now().date()
+    user = request.user
+
+    # Active project for this supervisor
+    active_project = (
+        Project.objects
+        .filter(supervisor=user, status='active')
+        .first()
+    )
+
+    site = None
+    if active_project:
+        site = {
+            'name': active_project.name,
+            'project_no': active_project.project_no,
+            'status': active_project.status,
+        }
+
+    # Task counts across all active supervised projects
+    supervised_tasks = Task.objects.filter(
+        project__supervisor=user,
+        project__status='active',
+    )
+    tasks_done    = supervised_tasks.filter(status='done').count()
+    tasks_pending = supervised_tasks.filter(status__in=['todo', 'in_progress', 'review']).count()
+    tasks_urgent  = supervised_tasks.filter(priority='urgent').exclude(status='done').count()
+
+    # Workers on site today (clocked in on any supervised project)
+    workers_on_site = Attendance.objects.filter(
+        date=today,
+        clock_in__isnull=False,
+        project__supervisor=user,
+    ).count()
+
+    # Today's task list (non-done, assigned to logged-in user or on supervised projects)
+    task_qs = (
+        supervised_tasks
+        .exclude(status='done')
+        .filter(Q(assigned_to=user) | Q(assigned_to__isnull=False))
+        .select_related('project')
+        .order_by('priority', 'due_date')[:10]
+    )
+    tasks_list = [
+        {
+            'id':         str(t.id),
+            'title':      t.title,
+            'group':      t.group,
+            'status':     t.status,
+            'priority':   t.priority,
+            'project':    t.project.name,
+            'project_no': t.project.project_no,
+        }
+        for t in task_qs
+    ]
+
+    # Team today — employees clocked in on supervised projects
+    team_qs = (
+        Attendance.objects
+        .filter(date=today, clock_in__isnull=False, project__supervisor=user)
+        .select_related('employee', 'employee__position')
+        .order_by('clock_in')
+    )
+    team_list = [
+        {
+            'name':       a.employee.full_name,
+            'position':   a.employee.position.title if a.employee.position else '',
+            'clock_in':   timezone.localtime(a.clock_in).strftime('%H:%M') if a.clock_in else None,
+            'clock_out':  timezone.localtime(a.clock_out).strftime('%H:%M') if a.clock_out else None,
+            'status':     'out' if a.clock_out else 'in',
+        }
+        for a in team_qs
+    ]
+
+    return Response({
+        'site': site,
+        'summary': {
+            'workers_on_site': workers_on_site,
+            'tasks_done':      tasks_done,
+            'tasks_pending':   tasks_pending,
+            'tasks_urgent':    tasks_urgent,
+        },
+        'tasks': tasks_list,
+        'team':  team_list,
     })

@@ -16,6 +16,12 @@ import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import CRM from './pages/CRM'
 import Personal from './pages/Personal'
+import SupervisorLayout from './supervisor/SupervisorLayout'
+import SupervisorHome from './supervisor/pages/SupervisorHome'
+import SupervisorTasks from './supervisor/pages/SupervisorTasks'
+import SupervisorTeam from './supervisor/pages/SupervisorTeam'
+import SupervisorDocs from './supervisor/pages/SupervisorDocs'
+import SupervisorSettings from './supervisor/pages/SupervisorSettings'
 
 export default function App() {
   return (
@@ -24,6 +30,13 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/clock-in" element={<ClockIn />} />
         <Route path="/camera-test" element={<CameraTest />} />
+        <Route path="/supervisor" element={<SupervisorLayout />}>
+          <Route index element={<SupervisorHome />} />
+          <Route path="tasks"    element={<SupervisorTasks />} />
+          <Route path="team"     element={<SupervisorTeam />} />
+          <Route path="docs"     element={<SupervisorDocs />} />
+          <Route path="settings" element={<SupervisorSettings />} />
+        </Route>
         <Route element={<Layout />}>
           <Route path="/"           element={<Dashboard />} />
           <Route path="/my"         element={<Personal />} />
