@@ -20,7 +20,6 @@ import SupervisorLayout from './supervisor/SupervisorLayout'
 import SupervisorHome from './supervisor/pages/SupervisorHome'
 import SupervisorTasks from './supervisor/pages/SupervisorTasks'
 import SupervisorTeam from './supervisor/pages/SupervisorTeam'
-import SupervisorDocs from './supervisor/pages/SupervisorDocs'
 import SupervisorSettings from './supervisor/pages/SupervisorSettings'
 
 export default function App() {
@@ -34,7 +33,7 @@ export default function App() {
           <Route index element={<SupervisorHome />} />
           <Route path="tasks"    element={<SupervisorTasks />} />
           <Route path="team"     element={<SupervisorTeam />} />
-          <Route path="docs"     element={<SupervisorDocs />} />
+          <Route path="clock-in" element={<ClockIn />} />
           <Route path="settings" element={<SupervisorSettings />} />
         </Route>
         <Route element={<Layout />}>

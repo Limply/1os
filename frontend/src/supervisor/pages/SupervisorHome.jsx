@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../../api/axios'
 
 // ── colour tokens ─────────────────────────────────────────────────────────────
@@ -35,9 +36,9 @@ function SumChip({ color, num, label, icon }) {
   )
 }
 
-function ActionCard({ acColor, acBg, icon, title, desc, badge, badgeBg }) {
+function ActionCard({ acColor, acBg, icon, title, desc, badge, badgeBg, onClick }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '15px 13px 13px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 9, position: 'relative', overflow: 'hidden' }}>
+    <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '15px 13px 13px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 9, position: 'relative', overflow: 'hidden' }}>
       <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, background: acColor, borderRadius: '2px 2px 0 0' }} />
       <div style={{ width: 38, height: 38, borderRadius: 10, background: acBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {icon}
@@ -144,6 +145,8 @@ export default function SupervisorHome() {
       .finally(() => setLoading(false))
   }, [])
 
+  const navigate = useNavigate()
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: C.muted, fontFamily: "'Barlow', sans-serif", fontSize: 13 }}>
@@ -220,12 +223,31 @@ export default function SupervisorHome() {
 
           <ActionCard
             acColor={C.blue} acBg="rgba(58,142,230,0.1)"
-            title="Workers In" desc="Check in / check out"
+            title="Clock In / Out" desc="Check in / check out"
             badge={summary.workers_on_site || null} badgeBg={C.blue}
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><line x1="19" y1="8" x2="23" y2="8"/><line x1="21" y1="6" x2="21" y2="10"/></svg>}
+            onClick={() => navigate('/supervisor/clock-in')}
+            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
           />
 
         </div>
+
+        {/* My Team Today */}
+        <SectionHead>My Team Today</SectionHead>
+
+        {team.length === 0 ? (
+          <div style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '16px 0' }}>No workers clocked in yet</div>
+        ) : team.map((w, i) => (
+          <ListCard
+            key={i}
+            iconBg="rgba(58,142,230,0.1)"
+            icon={IconPerson(C.blue)}
+            title={w.name}
+            sub={`${w.position || 'Worker'} · In since ${w.clock_in}`}
+            pillText={w.status === 'out' ? 'Out' : 'In'}
+            pillColor={w.status === 'out' ? C.muted : C.green}
+            pillBg={w.status === 'out' ? 'rgba(122,144,170,0.15)' : 'rgba(46,204,113,0.15)'}
+          />
+        ))}
 
         {/* Today's Tasks */}
         <SectionHead>Today's Tasks</SectionHead>
@@ -248,24 +270,6 @@ export default function SupervisorHome() {
             />
           )
         })}
-
-        {/* My Team Today */}
-        <SectionHead>My Team Today</SectionHead>
-
-        {team.length === 0 ? (
-          <div style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '16px 0' }}>No workers clocked in yet</div>
-        ) : team.map((w, i) => (
-          <ListCard
-            key={i}
-            iconBg="rgba(58,142,230,0.1)"
-            icon={IconPerson(C.blue)}
-            title={w.name}
-            sub={`${w.position || 'Worker'} · In since ${w.clock_in}`}
-            pillText={w.status === 'out' ? 'Out' : 'In'}
-            pillColor={w.status === 'out' ? C.muted : C.green}
-            pillBg={w.status === 'out' ? 'rgba(122,144,170,0.15)' : 'rgba(46,204,113,0.15)'}
-          />
-        ))}
 
       </div>
     </div>

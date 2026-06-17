@@ -19,7 +19,8 @@ class DynamicCORSMiddleware:
     DEV_ORIGINS = {
         'http://localhost:5173',
         'http://127.0.0.1:5173',
-        'https://dev.sim-eng.com',
+        'https://1os-dev.astronic.com.sg',
+        'https://ast1-dev.sim-eng.com',
     }
 
     def __init__(self, get_response):
