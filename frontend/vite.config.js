@@ -6,12 +6,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    allowedHosts: ['ast1.sim-eng.com'],
+    port: 5173,
+    allowedHosts: ['1os-dev.astronic.com.sg', 'ast1-dev.sim-eng.com'],
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
-      '/admin': 'http://127.0.0.1:8000',
-      '/static': 'http://127.0.0.1:8000',
-      '/media': 'http://127.0.0.1:8000',
+      '/api': 'http://127.0.0.1:8001',
+      '/admin': 'http://127.0.0.1:8001',
+      '/static': 'http://127.0.0.1:8001',
+      '/media': 'http://127.0.0.1:8001',
     },
   },
 })
