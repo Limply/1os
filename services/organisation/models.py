@@ -84,15 +84,29 @@ class Site(BaseModel):
 
 
 class Client(BaseModel):
-    """Client / customer company record."""
-    name = models.CharField(max_length=255)
-    uen = models.CharField(max_length=20, blank=True, null=True, help_text='UEN / company registration')
-    gst_no = models.CharField(max_length=20, blank=True, null=True)
-    contact_name = models.CharField(max_length=255, blank=True, null=True)
-    contact_email = models.EmailField(blank=True, null=True)
-    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+    """Client / customer company record — single source of truth."""
+    TYPE_CHOICES = [
+        ('mcst',        'MCST'),
+        ('commercial',  'Commercial'),
+        ('residential', 'Residential'),
+        ('government',  'Government'),
+        ('other',       'Other'),
+    ]
+
+    name            = models.CharField(max_length=255)
+    type            = models.CharField(max_length=20, choices=TYPE_CHOICES, default='other', blank=True)
+    address         = models.TextField(blank=True, null=True, help_text='Site / general address')
     billing_address = models.TextField(blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
+    uen             = models.CharField(max_length=20, blank=True, null=True, help_text='UEN / company registration')
+    gst_no          = models.CharField(max_length=20, blank=True, null=True)
+    website         = models.CharField(max_length=500, blank=True, null=True)
+    contact_name    = models.CharField(max_length=255, blank=True, null=True)
+    contact_email   = models.EmailField(blank=True, null=True)
+    contact_phone   = models.CharField(max_length=20, blank=True, null=True)
+    notes           = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['name']
 
     def __str__(self):
         return self.name

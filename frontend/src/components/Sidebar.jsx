@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
 
@@ -90,6 +91,14 @@ export default function Sidebar({ onCollapse }) {
   const allowed = user.modules || []
   const isAdminPlus = ['admin', 'superadmin'].includes(user.role)
   const visibleLinks = ALL_LINKS.filter(link => canSee(link.module, allowed, isAdminPlus))
+  const [logoUrl, setLogoUrl] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/auth/tenant-info/')
+      .then(r => r.json())
+      .then(data => { if (data.logo) setLogoUrl(`/media/${data.logo}`) })
+      .catch(() => {})
+  }, [])
 
   function handleLogout() {
     logout()
@@ -99,7 +108,12 @@ export default function Sidebar({ onCollapse }) {
   return (
     <aside className="w-56 bg-gray-900 h-screen sticky top-0 flex flex-col shrink-0">
       <div className="px-6 py-5 border-b border-gray-700 shrink-0">
-        <button onClick={onCollapse} className="text-white font-bold text-lg hover:text-gray-300 transition">1OS</button>
+        <div className="flex items-center gap-2">
+          {logoUrl && (
+            <img src={logoUrl} alt="logo" className="h-7 w-7 object-contain rounded" />
+          )}
+          <button onClick={onCollapse} className="text-white font-bold text-lg hover:text-gray-300 transition">1OS</button>
+        </div>
         <p className="text-gray-400 text-xs mt-0.5">{user.tenant_name || '—'}</p>
       </div>
 

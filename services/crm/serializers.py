@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Client, Contact, Lead, Interaction
+from services.organisation.models import Client
+from .models import Contact, Lead, Interaction
 
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -76,5 +77,10 @@ class ClientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Client
-        fields = ['id', 'name', 'type', 'address', 'website', 'notes', 'contacts', 'leads', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'type', 'address', 'billing_address',
+            'uen', 'gst_no', 'website',
+            'contact_name', 'contact_email', 'contact_phone',
+            'notes', 'contacts', 'leads', 'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
