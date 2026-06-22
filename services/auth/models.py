@@ -12,10 +12,14 @@ class Tenant(models.Model):
     address = models.TextField(blank=True, null=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
+    uen = models.CharField(max_length=50, blank=True, null=True, help_text='Unique Entity Number (UEN) — mandatory for all SG registered entities')
     gst_registered = models.BooleanField(default=False)
-    gst_number = models.CharField(max_length=50, blank=True, null=True)
+    gst_number = models.CharField(max_length=50, blank=True, null=True, help_text='GST Registration Number — only if GST registered')
     modules = models.JSONField(default=list, blank=True, help_text='List of module keys enabled on this installation')
     project_prefix = models.CharField(max_length=10, default='SE', help_text='Prefix for auto-generated project numbers, e.g. SE → SE-26-001')
+    signatory_name = models.CharField(max_length=255, blank=True, null=True, help_text='Name printed on quotation/invoice signature block')
+    signatory_designation = models.CharField(max_length=255, blank=True, null=True, help_text='Designation printed on quotation/invoice signature block')
+    signatory_file = models.ImageField(upload_to='tenant/signatory/', blank=True, null=True, help_text='Signature image embedded in generated documents')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

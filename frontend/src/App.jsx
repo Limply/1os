@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -15,6 +16,7 @@ import OrgChart from './pages/OrgChart'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import CRM from './pages/CRM'
+import Operations from './pages/Operations'
 import Personal from './pages/Personal'
 import SupervisorLayout from './supervisor/SupervisorLayout'
 import SupervisorHome from './supervisor/pages/SupervisorHome'
@@ -23,6 +25,15 @@ import SupervisorTeam from './supervisor/pages/SupervisorTeam'
 import SupervisorSettings from './supervisor/pages/SupervisorSettings'
 
 export default function App() {
+  useEffect(() => {
+    fetch('/api/auth/tenant-info/')
+      .then(r => r.json())
+      .then(data => {
+        if (data.project_prefix) document.title = `${data.project_prefix} 1OS`
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
@@ -44,7 +55,7 @@ export default function App() {
           <Route path="/schedules"  element={<Schedules />} />
           <Route path="/orgchart"   element={<OrgChart />} />
           <Route path="/crm"        element={<CRM />} />
-          <Route path="/operations" element={<Placeholder title="Operations" />} />
+          <Route path="/operations" element={<Operations />} />
           <Route path="/finance"    element={<Finance />} />
           <Route path="/finance/pl" element={<ProfitLoss />} />
           <Route path="/compliance" element={<Placeholder title="Compliance" />} />

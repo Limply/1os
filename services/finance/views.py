@@ -2,6 +2,7 @@ import io
 from django.http import HttpResponse
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem, Expense
 from .serializers import (
     QuotationSerializer, QuotationItemSerializer,
@@ -33,6 +34,25 @@ class QuotationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Quotation.objects.prefetch_related('items')
     serializer_class = QuotationSerializer
 
+    def perform_create(self, serializer):
+        quotation = serializer.save()
+        if quotation.project_no:
+            from django.apps import apps
+            Project = apps.get_model('projects', 'Project')
+            Project.objects.get_or_create(
+                project_no=quotation.project_no,
+                defaults={
+                    'name': quotation.client_name or quotation.project_no,
+                    'client_name': quotation.client_name,
+                    'client_contact': quotation.client_contact,
+                    'client_email': quotation.client_email,
+                    'client_phone': quotation.client_phone,
+                    'client_address': quotation.client_address,
+                    'start_date': quotation.issue_date,
+                    'status': 'planning',
+                }
+            )
+
     @action(detail=True, methods=['get'])
     def docx(self, request, pk=None):
         from shared.docx_generator import generate_quotation
@@ -43,6 +63,26 @@ class QuotationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 class QuotationItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = QuotationItem.objects.select_related('quotation')
     serializer_class = QuotationItemSerializer
+
+    @action(detail=False, methods=['get'])
+    def suggestions(self, request):
+        from django.db.models import Max
+        rows = (
+            QuotationItem.objects
+            .values('description', 'unit', 'unit_price')
+            .annotate(last_used=Max('created_at'))
+            .order_by('-last_used')[:200]
+        )
+        seen = {}
+        for r in rows:
+            key = r['description'].strip().lower()
+            if key not in seen:
+                seen[key] = {
+                    'description': r['description'],
+                    'unit': r['unit'] or '',
+                    'unit_price': str(r['unit_price']),
+                }
+        return Response(list(seen.values()))
 
 
 class InvoiceViewSet(TenantScopedMixin, viewsets.ModelViewSet):

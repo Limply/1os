@@ -23,10 +23,16 @@ const ALL_LINKS = [
     ],
   },
   { module: 'crm',        to: '/crm',        label: 'CRM' },
-  { module: 'operations', to: '/operations', label: 'Operations' },
+  {
+    module: 'operations', to: '/operations', label: 'Operations',
+    children: [
+      { module: 'operations', to: '/operations', label: 'Service Reports' },
+    ],
+  },
   {
     module: 'finance', to: '/finance', label: 'Finance',
     children: [
+      { module: 'finance', to: '/finance?tab=Service Reports', label: 'Service Reports' },
       { module: 'finance', to: '/finance/pl', label: 'P&L' },
     ],
   },

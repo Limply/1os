@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import { generateQuotationPDF } from '../utils/quotationPDF'
 
-const TABS = ['Quotations', 'Invoices', 'Delivery Orders', 'P&L']
+const TABS = ['Quotations', 'Invoices', 'Delivery Orders', 'Service Reports', 'P&L']
 
 const Q_STATUS   = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-primary-100 text-primary-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600', expired: 'bg-yellow-100 text-yellow-700' }
 const INV_STATUS = { unpaid: 'bg-yellow-100 text-yellow-700', partial: 'bg-primary-100 text-primary-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-600', void: 'bg-gray-100 text-gray-500' }
@@ -152,7 +154,134 @@ function PlSortTh({ label, colKey, align = 'right', sort, onSort }) {
   )
 }
 
-function ItemsTable({ items, setItems, showAmount = true }) {
+function DescriptionCell({ value, suggestions, onChange, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(value || '')
+  const ref = useRef(null)
+
+  useEffect(() => { setQuery(value || '') }, [value])
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const filtered = query.trim()
+    ? suggestions.filter(s => s.description.toLowerCase().includes(query.toLowerCase()))
+    : suggestions
+
+  function pick(s) {
+    setQuery(s.description)
+    setOpen(false)
+    onSelect(s)
+  }
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5"
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-30 left-0 top-full mt-0.5 w-full min-w-[320px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.slice(0, 30).map((s, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); pick(s) }}
+              className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-gray-50 last:border-0"
+            >
+              <p className="text-sm text-gray-800 truncate">{s.description}</p>
+              <p className="text-xs text-gray-400">{[s.unit, s.unit_price ? `$${parseFloat(s.unit_price).toFixed(2)}` : ''].filter(Boolean).join(' · ')}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const TYPE_BADGE = {
+  mcst: 'bg-blue-50 text-blue-600',
+  commercial: 'bg-amber-50 text-amber-600',
+  residential: 'bg-green-50 text-green-700',
+  government: 'bg-purple-50 text-purple-700',
+  other: 'bg-gray-100 text-gray-500',
+}
+
+function ClientDropdown({ value, clients, onChange, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(value || '')
+  const ref = useRef(null)
+
+  useEffect(() => { setQuery(value || '') }, [value])
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const filtered = query.trim()
+    ? clients.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
+    : clients
+
+  function pick(c) {
+    setQuery(c.name)
+    setOpen(false)
+    onSelect(c)
+  }
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <input
+        required
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Select or type client name…"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+        autoComplete="off"
+      />
+      {open && (
+        <div className="absolute z-30 left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+          {filtered.length === 0 && (
+            <p className="px-4 py-3 text-sm text-gray-400 italic">
+              "{query}" — not in list. Will be saved as new client.
+            </p>
+          )}
+          {filtered.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); pick(c) }}
+              className="w-full text-left px-4 py-2.5 hover:bg-primary-50 border-b border-gray-50 last:border-0 flex items-start gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{c.name}</p>
+                {c.primary_contact && (
+                  <p className="text-xs text-gray-400 truncate">
+                    {[c.primary_contact.name, c.primary_contact.phone].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
+              <span className={`text-xs px-1.5 py-0.5 rounded capitalize shrink-0 mt-0.5 ${TYPE_BADGE[c.type] || TYPE_BADGE.other}`}>
+                {c.type}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ItemsTable({ items, setItems, showAmount = true, suggestions = [] }) {
+  const [addCount, setAddCount] = useState(3)
   function update(i, field, val) {
     setItems(prev => {
       const next = [...prev]
@@ -161,6 +290,20 @@ function ItemsTable({ items, setItems, showAmount = true }) {
         const qty = parseFloat(field === 'qty' ? val : next[i].qty) || 0
         const up  = parseFloat(field === 'unit_price' ? val : next[i].unit_price) || 0
         next[i].amount = (qty * up).toFixed(2)
+      }
+      return next
+    })
+  }
+
+  function fillFromSuggestion(i, s) {
+    setItems(prev => {
+      const next = [...prev]
+      next[i] = {
+        ...next[i],
+        description: s.description,
+        unit: s.unit || next[i].unit,
+        unit_price: s.unit_price || next[i].unit_price,
+        amount: ((parseFloat(next[i].qty) || 1) * (parseFloat(s.unit_price) || 0)).toFixed(2),
       }
       return next
     })
@@ -186,8 +329,12 @@ function ItemsTable({ items, setItems, showAmount = true }) {
             <tr key={i}>
               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
               <td className="px-3 py-2">
-                <input value={item.description || ''} onChange={e => update(i, 'description', e.target.value)}
-                  className="w-full border-b border-gray-200 focus:border-primary-400 focus:outline-none text-sm py-0.5" />
+                <DescriptionCell
+                  value={item.description || ''}
+                  suggestions={suggestions}
+                  onChange={val => update(i, 'description', val)}
+                  onSelect={s => fillFromSuggestion(i, s)}
+                />
               </td>
               <td className="px-3 py-2">
                 <input value={item.unit || ''} onChange={e => update(i, 'unit', e.target.value)}
@@ -220,20 +367,30 @@ function ItemsTable({ items, setItems, showAmount = true }) {
           ))}
         </tbody>
       </table>
-      <button onClick={() => setItems(prev => [...prev, { description: '', unit: '', qty: 1, unit_price: '', amount: '', remarks: '' }])}
-        className="mt-2 ml-3 text-sm text-primary-600 hover:underline">+ Add line</button>
+      <div className="mt-2 ml-3 flex items-center gap-2">
+        <button onClick={() => {
+          const blank = { description: '', unit: '', qty: 1, unit_price: '', amount: '', remarks: '' }
+          setItems(prev => [...prev, ...Array(addCount).fill(null).map(() => ({ ...blank }))])
+        }} className="text-sm text-primary-600 hover:underline">+ Add lines</button>
+        <select value={addCount} onChange={e => setAddCount(Number(e.target.value))}
+          className="text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-500 focus:outline-none focus:border-primary-400">
+          {[1, 3, 5, 10].map(n => <option key={n} value={n}>+{n}</option>)}
+        </select>
+      </div>
     </div>
   )
 }
 
-function Totals({ items }) {
+function Totals({ items, gstRegistered }) {
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
-  const gst = subtotal * GST_RATE
+  const gst = gstRegistered ? subtotal * GST_RATE : 0
   const total = subtotal + gst
   return (
     <div className="text-sm text-right space-y-1 pr-3 pt-3 border-t border-gray-100">
       <div className="flex justify-end gap-8"><span className="text-gray-500">Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-      <div className="flex justify-end gap-8"><span className="text-gray-500">GST (9%)</span><span>${gst.toFixed(2)}</span></div>
+      {gstRegistered && (
+        <div className="flex justify-end gap-8"><span className="text-gray-500">GST (9%)</span><span>${gst.toFixed(2)}</span></div>
+      )}
       <div className="flex justify-end gap-8 font-bold"><span>Total</span><span>${total.toFixed(2)}</span></div>
     </div>
   )
@@ -242,10 +399,23 @@ function Totals({ items }) {
 export default function Finance() {
   const currentUser = getUser()
   const canEditFinance = ADMIN_ROLES.includes(currentUser?.role)
-  const [tab, setTab] = useState('Quotations')
+  const location = useLocation()
+  const initialTab = TABS.includes(new URLSearchParams(window.location.search).get('tab'))
+    ? new URLSearchParams(window.location.search).get('tab') : 'Quotations'
+  const [tab, setTab] = useState(initialTab)
+
+  // sync the active tab when navigated to via ?tab= (e.g. sidebar deep-link)
+  useEffect(() => {
+    const qTab = new URLSearchParams(location.search).get('tab')
+    if (qTab && TABS.includes(qTab)) setTab(qTab)
+  }, [location.search])
   const [quotations, setQuotations] = useState([])
   const [invoices, setInvoices] = useState([])
   const [dos, setDos] = useState([])
+  const [serviceJobs, setServiceJobs] = useState([])
+  const [srExpanded, setSrExpanded] = useState(null)
+  const [srExporting, setSrExporting] = useState('')
+  const [srLineDraft, setSrLineDraft] = useState({ description: '', quantity: 1, unit: 'lot', amount: '' })
   const [projects, setProjects] = useState([])
   const [plSort, setPlSort] = useState({ key: 'profit', dir: 'desc' })
   const [plExpanded, setPlExpanded] = useState(null)
@@ -254,7 +424,8 @@ export default function Finance() {
   const [expanded, setExpanded] = useState(null)
 
   // Quotation form
-  const [qForm, setQForm] = useState({ project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: '', valid_until: '', notes: '' })
+  const today = new Date().toISOString().slice(0, 10)
+  const [qForm, setQForm] = useState({ project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: today, valid_until: '', notes: '' })
   const [qItems, setQItems] = useState([{ description: '', unit: '', qty: 1, unit_price: '', amount: '' }])
 
   // Invoice form
@@ -266,43 +437,79 @@ export default function Finance() {
   const [dItems, setDItems] = useState([{ description: '', unit: '', qty: 1, remarks: '' }])
 
   const [saving, setSaving] = useState(false)
+  const [savedMsg, setSavedMsg] = useState('')
+  const [itemSuggestions, setItemSuggestions] = useState([])
+  const [crmClients, setCrmClients] = useState([])
+  const [tenant, setTenant] = useState(null)
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    fetchAll()
+    api.get('/finance/quotation-items/suggestions/').then(({ data }) => {
+      setItemSuggestions(Array.isArray(data) ? data : [])
+    }).catch(() => {})
+    api.get('/crm/clients/').then(({ data }) => {
+      setCrmClients(Array.isArray(data) ? data : data.results ?? [])
+    }).catch(() => {})
+    fetch('/api/auth/tenant-info/').then(r => r.json()).then(setTenant).catch(() => {})
+  }, [])
 
+  // eslint-disable-next-line no-unused-vars
   async function fetchAll() {
-    const [q, i, d, p] = await Promise.all([
+    const [q, i, d, p, s] = await Promise.all([
       api.get('/finance/quotations/'),
       api.get('/finance/invoices/'),
       api.get('/finance/delivery-orders/'),
       api.get('/projects/projects/'),
+      api.get('/ops/service-jobs/'),
     ])
     setQuotations(q.data.results || q.data)
     setInvoices(i.data.results || i.data)
     setDos(d.data.results || d.data)
     setProjects(p.data.results || p.data)
+    setServiceJobs(Array.isArray(s.data) ? s.data : s.data.results ?? [])
     setLoading(false)
   }
 
-  const [clientSuggestions, setClientSuggestions] = useState([])
-
-  async function searchClients(name) {
-    if (!name || name.length < 2) { setClientSuggestions([]); return }
-    try {
-      const res = await api.get(`/org/clients/?search=${name}`)
-      setClientSuggestions(res.data.results || res.data)
-    } catch {}
+  async function addServiceLine(job) {
+    const draft = srLineDraft
+    if (!draft.description) return
+    const nextNo = (job.line_items?.reduce((m, l) => Math.max(m, l.line_number), 0) ?? 0) + 1
+    await api.post('/ops/invoice-line-items/', {
+      job: job.id, line_number: nextNo,
+      description: draft.description, quantity: draft.quantity || 1,
+      unit: draft.unit, amount: draft.amount || 0,
+    })
+    setSrLineDraft({ description: '', quantity: 1, unit: 'lot', amount: '' })
+    fetchAll()
   }
 
-  function fillFromClient(client) {
+  async function deleteServiceLine(id) {
+    await api.delete(`/ops/invoice-line-items/${id}/`)
+    fetchAll()
+  }
+
+  async function exportServiceReport(job, kind) {
+    setSrExporting(`${job.id}:${kind}`)
+    try {
+      const res = await api.get(`/ops/service-jobs/${job.id}/${kind}/`, { responseType: 'blob' })
+      const href = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = href; a.download = `${job.service_number}.${kind}`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(href)
+    } finally { setSrExporting('') }
+  }
+
+  function fillFromCrmClient(client) {
+    const pc = client.primary_contact
     setQForm(f => ({
       ...f,
-      client_name: client.name,
-      client_contact: client.contact_name || '',
-      client_email: client.contact_email || '',
-      client_phone: client.contact_phone || '',
-      client_address: client.billing_address || '',
+      client_name:    client.name,
+      client_contact: pc?.name    || '',
+      client_email:   pc?.email   || '',
+      client_phone:   pc?.phone   || '',
+      client_address: client.address || '',
     }))
-    setClientSuggestions([])
   }
 
   async function lookupProject(project_no) {
@@ -319,18 +526,29 @@ export default function Finance() {
 
   function calcTotals(items) {
     const subtotal = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
-    return { subtotal: subtotal.toFixed(2), gst_amount: (subtotal * GST_RATE).toFixed(2), total: (subtotal * (1 + GST_RATE)).toFixed(2) }
+    const gst = tenant?.gst_registered ? subtotal * GST_RATE : 0
+    return { subtotal: subtotal.toFixed(2), gst_amount: gst.toFixed(2), total: (subtotal + gst).toFixed(2) }
+  }
+
+  function cleanDates(form) {
+    const out = { ...form }
+    for (const k of ['valid_until', 'issue_date', 'due_date', 'delivery_date', 'start_date', 'end_date']) {
+      if (k in out && out[k] === '') out[k] = null
+    }
+    return out
   }
 
   async function handleCreateQuotation(e) {
     e.preventDefault(); setSaving(true)
     try {
-      const q = await api.post('/finance/quotations/', { ...qForm, ...calcTotals(qItems) })
+      const q = await api.post('/finance/quotations/', { ...cleanDates(qForm), ...calcTotals(qItems) })
       await Promise.all(qItems.filter(i => i.description).map((item, idx) =>
         api.post('/finance/quotation-items/', { ...item, quotation: q.data.id, sort_order: idx })
       ))
+      setSavedMsg(`Quotation ${q.data.quote_no} saved`)
+      setTimeout(() => setSavedMsg(''), 4000)
       setShowForm(false)
-      setQForm({ project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: '', valid_until: '', notes: '' })
+      setQForm({ project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' })
       setQItems([{ description: '', unit: '', qty: 1, unit_price: '', amount: '' }])
       fetchAll()
     } finally { setSaving(false) }
@@ -339,7 +557,7 @@ export default function Finance() {
   async function handleCreateInvoice(e) {
     e.preventDefault(); setSaving(true)
     try {
-      const inv = await api.post('/finance/invoices/', { ...iForm, ...calcTotals(iItems) })
+      const inv = await api.post('/finance/invoices/', { ...cleanDates(iForm), ...calcTotals(iItems) })
       await Promise.all(iItems.filter(i => i.description).map((item, idx) =>
         api.post('/finance/invoice-items/', { ...item, invoice: inv.data.id, sort_order: idx })
       ))
@@ -353,7 +571,7 @@ export default function Finance() {
   async function handleCreateDO(e) {
     e.preventDefault(); setSaving(true)
     try {
-      const d = await api.post('/finance/delivery-orders/', dForm)
+      const d = await api.post('/finance/delivery-orders/', cleanDates(dForm))
       await Promise.all(dItems.filter(i => i.description).map((item, idx) =>
         api.post('/finance/delivery-order-items/', { ...item, delivery_order: d.data.id, sort_order: idx })
       ))
@@ -385,8 +603,16 @@ export default function Finance() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Finance</h1>
-        {tab !== 'P&L' && (
-          <button onClick={() => { setShowForm(true); setExpanded(null) }}
+        {tab !== 'P&L' && tab !== 'Service Reports' && (
+          <button onClick={async () => {
+            setShowForm(true); setExpanded(null)
+            if (tab === 'Quotations') {
+              try {
+                const res = await api.get('/projects/projects/next_no/')
+                setQForm(f => ({ ...f, project_no: res.data.project_no || '' }))
+              } catch {}
+            }
+          }}
             className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition">
             + New {tab === 'Quotations' ? 'Quotation' : tab === 'Invoices' ? 'Invoice' : 'Delivery Order'}
           </button>
@@ -408,34 +634,28 @@ export default function Finance() {
         <>
           {showForm && (
             <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-              <h2 className="font-semibold text-gray-700 mb-4">New Quotation <span className="text-xs text-gray-400 font-normal">(number auto-assigned)</span></h2>
+              <h2 className="font-semibold text-gray-700 mb-4">New Quotation <span className="text-xs text-gray-400 font-normal">(project number auto-filled, editable)</span></h2>
               <form onSubmit={handleCreateQuotation}>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Project No.</label>
-                    <input value={qForm.project_no} onChange={e => setQForm(f => ({ ...f, project_no: e.target.value }))}
+                    <input
+                      value={qForm.project_no}
+                      onChange={e => setQForm(f => ({ ...f, project_no: e.target.value }))}
                       onBlur={e => lookupProject(e.target.value)}
-                      placeholder="AST-26-001 — auto-fills client"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
+                      placeholder="e.g. SE-26-001"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 font-mono"
+                    />
                   </div>
                   {inp('Issue Date *', 'issue_date', qForm, setQForm, { required: true, type: 'date' })}
-                  <div className="relative">
+                  <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Client Name *</label>
-                    <input required value={qForm.client_name}
-                      onChange={e => { setQForm(f => ({ ...f, client_name: e.target.value })); searchClients(e.target.value) }}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
-                      placeholder="Type to search clients..." />
-                    {clientSuggestions.length > 0 && (
-                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                        {clientSuggestions.map(c => (
-                          <button key={c.id} type="button" onClick={() => fillFromClient(c)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-primary-50 text-sm border-b border-gray-100 last:border-0">
-                            <span className="font-medium text-gray-800">{c.name}</span>
-                            {c.contact_name && <span className="text-gray-400 ml-2 text-xs">· {c.contact_name}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <ClientDropdown
+                      value={qForm.client_name}
+                      clients={crmClients}
+                      onChange={val => setQForm(f => ({ ...f, client_name: val }))}
+                      onSelect={c => fillFromCrmClient(c)}
+                    />
                   </div>
                   {inp('Valid Until', 'valid_until', qForm, setQForm, { type: 'date' })}
                   {inp('Contact Person', 'client_contact', qForm, setQForm)}
@@ -448,10 +668,11 @@ export default function Finance() {
                   </div>
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
-                  <ItemsTable items={qItems} setItems={setQItems} />
-                  <Totals items={qItems} />
+                  <ItemsTable items={qItems} setItems={setQItems} suggestions={itemSuggestions} />
+                  <Totals items={qItems} gstRegistered={tenant?.gst_registered} />
                 </div>
-                <div className="flex gap-2 justify-end">
+                <div className="flex items-center justify-end gap-2">
+                  {savedMsg && <span className="text-sm text-green-600 mr-auto">{savedMsg}</span>}
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
                   <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
                     {saving ? 'Saving…' : 'Create Quotation'}
@@ -484,6 +705,8 @@ export default function Finance() {
                       <td className="px-4 py-3"><Badge label={q.status} map={Q_STATUS} /></td>
                       <td className="px-4 py-3 text-right font-medium">${parseFloat(q.total).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
+                        <button onClick={e => { e.stopPropagation(); generateQuotationPDF(q) }}
+                          className="text-xs text-green-600 hover:underline mr-2">PDF</button>
                         <button onClick={e => { e.stopPropagation(); downloadDocx('quotations', q.id, q.quote_no) }}
                           className="text-xs text-primary-600 hover:underline">DOCX</button>
                       </td>
@@ -539,8 +762,8 @@ export default function Finance() {
                   </div>
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
-                  <ItemsTable items={iItems} setItems={setIItems} />
-                  <Totals items={iItems} />
+                  <ItemsTable items={iItems} setItems={setIItems} suggestions={itemSuggestions} />
+                  <Totals items={iItems} gstRegistered={tenant?.gst_registered} />
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
@@ -630,7 +853,7 @@ export default function Finance() {
                   </div>
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
-                  <ItemsTable items={dItems} setItems={setDItems} showAmount={false} />
+                  <ItemsTable items={dItems} setItems={setDItems} showAmount={false} suggestions={itemSuggestions} />
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
@@ -825,6 +1048,117 @@ export default function Finance() {
           </>
         )
       })()}
+
+      {/* ── Service Reports (financial view) ── */}
+      {tab === 'Service Reports' && (
+        <>
+          <p className="text-sm text-gray-400 mb-4">Invoice line items &amp; totals for service reports. Create reports and edit findings under <span className="font-medium text-gray-600">Operations</span>.</p>
+          {serviceJobs.length === 0 && <p className="text-sm text-gray-400">No service reports yet.</p>}
+          <div className="space-y-3">
+            {serviceJobs.map(job => {
+              const open = srExpanded === job.id
+              return (
+                <div key={job.id} className="bg-white rounded-xl border border-gray-200">
+                  <button onClick={() => setSrExpanded(open ? null : job.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left">
+                    <div>
+                      <span className="font-medium text-gray-800 text-sm">{job.service_number}</span>
+                      <span className="text-sm text-gray-500 ml-2">{job.client_name} · {job.site_name}</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm font-semibold text-gray-700">{money(Number(job.total_amount) || 0)}</span>
+                      <span className="text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
+                    </div>
+                  </button>
+
+                  {open && (
+                    <div className="border-t border-gray-100 p-4">
+                      <table className="w-full text-sm mb-3">
+                        <thead>
+                          <tr className="text-xs text-gray-400 uppercase">
+                            <th className="text-left font-medium pb-1 w-10">#</th>
+                            <th className="text-left font-medium pb-1">Description</th>
+                            <th className="text-right font-medium pb-1 w-16">Qty</th>
+                            <th className="text-left font-medium pb-1 w-16 pl-3">Unit</th>
+                            <th className="text-right font-medium pb-1 w-28">Amount</th>
+                            <th className="w-8"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {(job.line_items ?? []).map(li => (
+                            <tr key={li.id}>
+                              <td className="py-1.5 text-gray-500">{li.line_number}</td>
+                              <td className="py-1.5 text-gray-700">{li.description}</td>
+                              <td className="py-1.5 text-right text-gray-600">{Number(li.quantity)}</td>
+                              <td className="py-1.5 text-gray-600 pl-3">{li.unit}</td>
+                              <td className="py-1.5 text-right text-gray-700">{money(Number(li.amount) || 0)}</td>
+                              <td className="py-1.5 text-right">
+                                {canEditFinance && (
+                                  <button onClick={() => deleteServiceLine(li.id)} className="text-gray-300 hover:text-red-600">✕</button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {(job.line_items ?? []).length === 0 && (
+                            <tr><td colSpan={6} className="py-2 text-gray-400 text-center text-xs">No line items.</td></tr>
+                          )}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 font-semibold">
+                            <td colSpan={4} className="pt-2 text-right text-gray-500 text-xs uppercase">Total</td>
+                            <td className="pt-2 text-right text-gray-800">{money(Number(job.total_amount) || 0)}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+
+                      {canEditFinance && (
+                        <div className="flex items-end gap-2 mb-3">
+                          <div className="flex-1">
+                            <label className="block text-xs text-gray-400 mb-1">Description</label>
+                            <input value={srLineDraft.description} onChange={e => setSrLineDraft(d => ({ ...d, description: e.target.value }))}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary-400" />
+                          </div>
+                          <div className="w-16">
+                            <label className="block text-xs text-gray-400 mb-1">Qty</label>
+                            <input type="number" min="0" step="0.01" value={srLineDraft.quantity} onChange={e => setSrLineDraft(d => ({ ...d, quantity: e.target.value }))}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
+                          </div>
+                          <div className="w-20">
+                            <label className="block text-xs text-gray-400 mb-1">Unit</label>
+                            <select value={srLineDraft.unit} onChange={e => setSrLineDraft(d => ({ ...d, unit: e.target.value }))}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none">
+                              {['lot', 'run', 'pcs', 'hrs', 'set', 'm'].map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </div>
+                          <div className="w-28">
+                            <label className="block text-xs text-gray-400 mb-1">Amount</label>
+                            <input type="number" min="0" step="0.01" value={srLineDraft.amount} onChange={e => setSrLineDraft(d => ({ ...d, amount: e.target.value }))}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
+                          </div>
+                          <button onClick={() => addServiceLine(job)}
+                            className="bg-primary-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-primary-700">Add</button>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button onClick={() => exportServiceReport(job, 'docx')} disabled={!!srExporting}
+                          className="text-xs border border-primary-200 text-primary-700 px-3 py-1.5 rounded-lg hover:bg-primary-50 disabled:opacity-50">
+                          {srExporting === `${job.id}:docx` ? 'Preparing…' : '⬇ Print DOCX'}
+                        </button>
+                        <button onClick={() => exportServiceReport(job, 'pdf')} disabled={!!srExporting}
+                          className="text-xs border border-primary-200 text-primary-700 px-3 py-1.5 rounded-lg hover:bg-primary-50 disabled:opacity-50">
+                          {srExporting === `${job.id}:pdf` ? 'Preparing…' : '⬇ Print PDF'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }

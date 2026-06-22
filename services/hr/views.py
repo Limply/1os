@@ -7,11 +7,12 @@ from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
     ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer, StaffDeploymentSerializer,
+    PersonalGoalSerializer,
 )
 from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
@@ -661,3 +662,14 @@ class ManpowerSettingsViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(self.get_serializer(obj).data)
+
+
+class PersonalGoalViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PersonalGoalSerializer
+
+    def get_queryset(self):
+        return PersonalGoal.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

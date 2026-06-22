@@ -242,6 +242,31 @@ See ADR at bottom of this file for full analysis.
 - No abstractions beyond what the task needs
 - Commit after every completed feature
 
+### Error Display Rule (Frontend)
+Every save / submit action **must** surface errors to the user — never use a silent `.catch(() => {})`.
+
+Pattern for any form that POSTs or PATCHes:
+```jsx
+const [error, setError] = useState('')
+
+function handleSave() {
+  setError('')
+  api.post('/some/endpoint/', payload)
+    .then(r => { /* success */ })
+    .catch(err => {
+      const msg = err.response?.data?.detail || err.response?.statusText || err.message || 'Failed to save'
+      setError(msg)
+    })
+}
+
+// In JSX, just above the action buttons:
+{error && <p className="text-xs text-red-500">{error}</p>}
+```
+
+- `setError('')` on each new attempt (clears previous error)
+- Clear error on Cancel too: `onClick={() => { setShowForm(false); setError('') }}`
+- Do **not** use `alert()` or `console.error()` — inline red text only
+
 ### Git
 - All code changes on `dev` branch — merge to `main` only when tested
 - Never edit `/opt/1os/` directly
@@ -372,6 +397,7 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 |---|---|---|
 | 1 | DB name `astronic` is shared between dev and prod — a dev migration could break prod | 🟡 Consider separate dev DB |
 | 2 | Two `Client` models: `organisation.Client` (billing record, used by Finance) and `crm.Client` (sales pipeline). Different fields, different purpose — no merge needed, but confusing naming | 🟢 Low — document clearly |
+| 3 | `SessionAuthentication` must NOT be in `DEFAULT_AUTHENTICATION_CLASSES` — if a Django admin session cookie exists in the browser, DRF enforces CSRF on all POST/PATCH/DELETE, causing 403. JWT-only auth in both dev and prod. Fixed June 2026. | 🔴 Do not re-add |
 
 ---
 

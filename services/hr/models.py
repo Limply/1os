@@ -239,3 +239,31 @@ class ManpowerSettings(BaseModel):
 
     def __str__(self):
         return "Manpower Settings"
+
+
+class PersonalGoal(BaseModel):
+    CATEGORIES = [
+        ('health',   'Health'),
+        ('finance',  'Finance'),
+        ('career',   'Career'),
+        ('learning', 'Learning'),
+        ('personal', 'Personal'),
+        ('family',   'Family'),
+    ]
+    GOAL_TYPES = [
+        ('main', 'Main'),
+        ('sub',  'Sub'),
+    ]
+    user        = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='personal_goals')
+    text        = models.CharField(max_length=300)
+    category    = models.CharField(max_length=20, choices=CATEGORIES, default='personal')
+    goal_type   = models.CharField(max_length=10, choices=GOAL_TYPES, default='sub')
+    is_achieved = models.BooleanField(default=False)
+    target_date = models.DateField(null=True, blank=True)
+    order       = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"{self.get_goal_type_display()}: {self.text[:60]}"

@@ -45,7 +45,7 @@ class Quotation(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.quote_no:
-            self.quote_no = _next_no(Quotation, 'quote_no', 'Q')
+            self.quote_no = self.project_no if self.project_no else _next_no(Quotation, 'quote_no', 'Q')
         super().save(*args, **kwargs)
 
     def __str__(self):

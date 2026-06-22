@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock, CalendarDays, ClipboardList, X, ArrowRight } from 'lucide-react'
+import { Clock, CalendarDays, ClipboardList, X, ArrowRight, Plus, Trash2, Check } from 'lucide-react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import CalendarView from '../components/CalendarView'
@@ -20,8 +20,28 @@ const LEAVE_STATUS_STYLE = {
 
 const TABS = [
   { key: 'overview',  label: 'Overview' },
+  { key: 'goals',     label: 'Goals' },
   { key: 'calendar',  label: 'Calendar' },
 ]
+
+const GOAL_CATEGORIES = [
+  { key: 'all',      label: 'All' },
+  { key: 'health',   label: 'Health' },
+  { key: 'finance',  label: 'Finance' },
+  { key: 'career',   label: 'Career' },
+  { key: 'learning', label: 'Learning' },
+  { key: 'personal', label: 'Personal' },
+  { key: 'family',   label: 'Family' },
+]
+
+const CATEGORY_COLOR = {
+  health:   'bg-rose-100 text-rose-700',
+  finance:  'bg-emerald-100 text-emerald-700',
+  career:   'bg-blue-100 text-blue-700',
+  learning: 'bg-purple-100 text-purple-700',
+  personal: 'bg-amber-100 text-amber-700',
+  family:   'bg-pink-100 text-pink-700',
+}
 
 export default function Personal() {
   const user     = getUser()
@@ -33,6 +53,15 @@ export default function Personal() {
   const [tab, setTab]     = useState('overview')
   const [selectedEvent, setSelectedEvent] = useState(null)
 
+  // Goals state
+  const [goals, setGoals]           = useState([])
+  const [goalCat, setGoalCat]       = useState('all')
+  const [showGoalForm, setShowGoalForm] = useState(false)
+  const [goalForm, setGoalForm]     = useState({ text: '', category: 'personal', goal_type: 'sub', target_date: '' })
+  const [goalSaving, setGoalSaving] = useState(false)
+  const [goalError, setGoalError]   = useState('')
+  const goalTextRef = useRef(null)
+
   useEffect(() => {
     Promise.all([
       api.get('/hr/employees/me/'),
@@ -43,6 +72,44 @@ export default function Personal() {
       setTasks(Array.isArray(taskData) ? taskData : (taskData.results ?? []))
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (tab === 'goals') {
+      api.get('/hr/personal-goals/').then(r => {
+      const d = r.data
+      setGoals(Array.isArray(d) ? d : (d.results ?? []))
+    }).catch(() => {})
+    }
+  }, [tab])
+
+  function toggleGoalAchieved(goal) {
+    const updated = { is_achieved: !goal.is_achieved }
+    api.patch(`/hr/personal-goals/${goal.id}/`, updated).then(r => {
+      setGoals(gs => gs.map(g => g.id === goal.id ? r.data : g))
+    }).catch(() => {})
+  }
+
+  function deleteGoal(id) {
+    api.delete(`/hr/personal-goals/${id}/`).then(() => {
+      setGoals(gs => gs.filter(g => g.id !== id))
+    }).catch(() => {})
+  }
+
+  function submitGoal(e) {
+    e.preventDefault()
+    if (!goalForm.text.trim()) return
+    setGoalSaving(true)
+    setGoalError('')
+    const payload = { ...goalForm, target_date: goalForm.target_date || null }
+    api.post('/hr/personal-goals/', payload).then(r => {
+      setGoals(gs => [...gs, r.data])
+      setGoalForm({ text: '', category: goalForm.category, goal_type: goalForm.goal_type, target_date: '' })
+      setShowGoalForm(false)
+    }).catch(err => {
+      const msg = err.response?.data?.detail || err.response?.statusText || err.message || 'Failed to save'
+      setGoalError(msg)
+    }).finally(() => setGoalSaving(false))
+  }
 
   const activeTasks = tasks.filter(t => t.status !== 'done')
   const doneTasks   = tasks.filter(t => t.status === 'done').length
@@ -265,6 +332,154 @@ export default function Personal() {
             </div>
           )}
         </>
+      )}
+
+      {tab === 'goals' && (
+        <div className="space-y-4">
+
+          {/* Header row */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500">
+              {goals.filter(g => g.is_achieved).length} of {goals.length} achieved
+            </p>
+            <button
+              onClick={() => { setShowGoalForm(true); setTimeout(() => goalTextRef.current?.focus(), 50) }}
+              className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition"
+            >
+              <Plus className="w-4 h-4" /> Add Goal
+            </button>
+          </div>
+
+          {/* Category filter chips */}
+          <div className="flex flex-wrap gap-2">
+            {GOAL_CATEGORIES.map(c => (
+              <button
+                key={c.key}
+                onClick={() => setGoalCat(c.key)}
+                className={`text-xs px-3 py-1 rounded-full font-medium transition ${
+                  goalCat === c.key
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Add goal inline form */}
+          {showGoalForm && (
+            <form onSubmit={submitGoal} className="bg-white border border-primary-200 rounded-xl p-4 space-y-3 shadow-sm">
+              <div className="flex gap-2">
+                <select
+                  value={goalForm.goal_type}
+                  onChange={e => setGoalForm(f => ({ ...f, goal_type: e.target.value }))}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white"
+                >
+                  <option value="main">Main Goal</option>
+                  <option value="sub">Sub Goal</option>
+                </select>
+                <select
+                  value={goalForm.category}
+                  onChange={e => setGoalForm(f => ({ ...f, category: e.target.value }))}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white capitalize"
+                >
+                  {GOAL_CATEGORIES.filter(c => c.key !== 'all').map(c => (
+                    <option key={c.key} value={c.key}>{c.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  value={goalForm.target_date}
+                  onChange={e => setGoalForm(f => ({ ...f, target_date: e.target.value }))}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white"
+                />
+              </div>
+              <input
+                ref={goalTextRef}
+                type="text"
+                value={goalForm.text}
+                onChange={e => setGoalForm(f => ({ ...f, text: e.target.value }))}
+                placeholder="What's your goal?"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-300"
+                maxLength={300}
+              />
+              {goalError && (
+                <p className="text-xs text-red-500">{goalError}</p>
+              )}
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => { setShowGoalForm(false); setGoalError('') }}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">
+                  Cancel
+                </button>
+                <button type="submit" disabled={goalSaving || !goalForm.text.trim()}
+                  className="text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-medium px-4 py-1.5 rounded-lg transition">
+                  {goalSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Goals list — main goals first, then sub */}
+          {(() => {
+            const filtered = goalCat === 'all' ? goals : goals.filter(g => g.category === goalCat)
+            const mainGoals = filtered.filter(g => g.goal_type === 'main')
+            const subGoals  = filtered.filter(g => g.goal_type === 'sub')
+            const ordered   = [...mainGoals, ...subGoals]
+
+            if (ordered.length === 0) return (
+              <p className="text-sm text-gray-400 text-center py-8">No goals yet. Add one above.</p>
+            )
+
+            return (
+              <div className="space-y-2">
+                {ordered.map(g => (
+                  <div
+                    key={g.id}
+                    className={`flex items-start gap-3 bg-white border rounded-xl px-4 py-3 group transition ${
+                      g.is_achieved ? 'border-gray-100 opacity-60' : 'border-gray-200'
+                    } ${g.goal_type === 'sub' ? 'ml-5' : ''}`}
+                  >
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => toggleGoalAchieved(g)}
+                      className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center transition ${
+                        g.is_achieved
+                          ? 'bg-green-500 border-green-500'
+                          : 'border-gray-300 hover:border-primary-400'
+                      }`}
+                    >
+                      {g.is_achieved && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                    </button>
+
+                    {/* Text */}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${g.is_achieved ? 'line-through text-gray-400' : 'text-gray-800'} ${g.goal_type === 'main' ? 'font-semibold' : ''}`}>
+                        {g.text}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLOR[g.category] ?? 'bg-gray-100 text-gray-500'}`}>
+                          {g.category}
+                        </span>
+                        {g.target_date && (
+                          <span className="text-xs text-gray-400">· {g.target_date}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => deleteGoal(g.id)}
+                      className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition mt-0.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </div>
       )}
 
       {tab === 'calendar' && (

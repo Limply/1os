@@ -9,7 +9,6 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.27', '192.168.1.71', '192.
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

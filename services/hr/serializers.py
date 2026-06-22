@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -174,3 +174,10 @@ class StaffDeploymentSerializer(serializers.ModelSerializer):
 
     def get_employee_name(self, obj):
         return obj.employee.full_name if obj.employee else None
+
+
+class PersonalGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PersonalGoal
+        fields = ['id', 'text', 'category', 'goal_type', 'is_achieved', 'target_date', 'order']
+        read_only_fields = ['id']

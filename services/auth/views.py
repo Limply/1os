@@ -8,8 +8,24 @@ from .serializers import TenantSerializer, UserSerializer, UserCreateSerializer,
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def tenant_info(request):
-    tenant = Tenant.objects.first()
-    return Response({'name': tenant.name if tenant else ''})
+    t = Tenant.objects.first()
+    if not t:
+        return Response({})
+    return Response({
+        'name': t.name,
+        'address': t.address,
+        'phone': t.phone,
+        'email': t.email,
+        'uen': t.uen,
+        'gst_number': t.gst_number,
+        'gst_registered': t.gst_registered,
+        'site_url': t.site_url,
+        'logo': t.logo,
+        'project_prefix': t.project_prefix,
+        'signatory_name': t.signatory_name,
+        'signatory_designation': t.signatory_designation,
+        'signatory_file': request.build_absolute_uri(t.signatory_file.url) if t.signatory_file else None,
+    })
 
 
 @api_view(['GET', 'PATCH'])

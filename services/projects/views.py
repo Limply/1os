@@ -1,10 +1,10 @@
 import os
 import re
 from rest_framework import viewsets, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, _generate_project_no
 from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer
 
 TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
@@ -64,9 +64,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Project.objects.order_by('-created_at')
         project_no = self.request.query_params.get('project_no')
+        client_name = self.request.query_params.get('client_name')
         if project_no:
             qs = qs.filter(project_no=project_no)
+        if client_name:
+            qs = qs.filter(client_name__icontains=client_name)
         return qs
+
+    @action(detail=False, methods=['get'])
+    def next_no(self, request):
+        return Response({'project_no': _generate_project_no()})
 
     def get_serializer_class(self):
         if self.action == 'list':

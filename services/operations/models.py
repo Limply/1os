@@ -224,6 +224,22 @@ class ServiceReportItem(BaseModel):
         return f"{self.job.service_number} – Item {self.item_number}: {self.title}"
 
 
+class ServiceReportPhoto(BaseModel):
+    """Photo attached to a report item, shown after its recommendation."""
+    item       = models.ForeignKey(
+        ServiceReportItem, on_delete=models.CASCADE, related_name='photos'
+    )
+    image      = models.ImageField(upload_to='service_reports/photos/')
+    caption    = models.CharField(max_length=255, blank=True, default='')
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order', 'created_at']
+
+    def __str__(self):
+        return f"{self.item} – photo {self.pk}"
+
+
 class InvoiceLineItem(BaseModel):
     UNIT_CHOICES = [
         ('lot', 'lot'),

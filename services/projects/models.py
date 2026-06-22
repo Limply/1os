@@ -6,12 +6,19 @@ from shared.storage import FileBrowserStorage  # used by HR attendance/employee 
 
 
 def _generate_project_no():
+    from django.apps import apps
+    Tenant = apps.get_model('accounts', 'Tenant')
+    tenant = Tenant.objects.first()
+    prefix_code = (tenant.project_prefix if tenant and tenant.project_prefix else 'SE').upper()
     year = str(datetime.date.today().year)[2:]
-    prefix = f'AST-{year}-'
-    last = Project.objects.filter(
-        project_no__startswith=prefix
-    ).order_by('-project_no').first()
-    seq = int(last.project_no.split('-')[-1]) + 1 if last else 1
+    prefix = f'{prefix_code}-{year}-'
+    candidates = Project.objects.filter(project_no__startswith=prefix).values_list('project_no', flat=True)
+    nums = []
+    for no in candidates:
+        tail = no[len(prefix):]
+        if tail.isdigit():
+            nums.append(int(tail))
+    seq = max(nums) + 1 if nums else 1
     return f'{prefix}{seq:03d}'
 
 

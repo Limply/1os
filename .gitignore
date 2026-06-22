@@ -33,3 +33,6 @@ frontend/.vite/
 # Tools
 .playwright/
 .claude/
+
+# Scratch / local working files
+TEMP/
