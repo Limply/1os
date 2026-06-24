@@ -8,6 +8,7 @@ from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, Project
 from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer, DailyReportSerializer, WSHPhotoSerializer
 
 TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
+from shared.permissions import user_can, P
 
 
 def _parse_template(filepath):
@@ -51,6 +52,7 @@ def task_templates(request):
     return Response(templates)
 
 from shared.permissions import user_can, P
+
 
 FINANCIAL_FIELDS = {'payment_record'}
 
