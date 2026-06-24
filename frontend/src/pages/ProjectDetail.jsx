@@ -82,14 +82,15 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
-  const foremen  = users.filter(u => ['foreman', 'supervisor'].includes(u.role))
-  const managers = users.filter(u => ['manager', 'admin', 'superadmin'].includes(u.role))
+  const foremen  = users.filter(u => u.role === 'superadmin' || u.position_title?.toLowerCase().includes('foreman') || u.position_title?.toLowerCase().includes('supervisor'))
+  const managers = users.filter(u => u.role === 'superadmin' || u.permissions?.includes(P.PROJECTS_EDIT))
   const [newGroupName, setNewGroupName] = useState('')
   const [addingGroup, setAddingGroup] = useState(false)
   const [newTask, setNewTask] = useState({})
   const [addingTaskTo, setAddingTaskTo] = useState(null)
   const [photoModalTask, setPhotoModalTask] = useState(null)
   const [docModalTask, setDocModalTask] = useState(null)
+  const [attachMenuTask, setAttachMenuTask] = useState(null)
   const [editingTask, setEditingTask] = useState(null) // taskId
   const [editValues, setEditValues] = useState({}) // { title, assigned_to }
   const [openComments, setOpenComments] = useState(new Set()) // task IDs with comments panel open
@@ -479,22 +480,34 @@ export default function ProjectDetail({ projectId, onBack }) {
                           <path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.564 4.14 1.547 5.874L0 24l6.302-1.519A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 0 1-5.001-1.374l-.36-.214-3.733.9.942-3.64-.235-.374A9.787 9.787 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
                         </svg>
                       </a>
-                      <button onClick={() => setPhotoModalTask(task)}
-                        className="relative text-gray-300 hover:text-primary-500 transition"
-                        title={task.photo_count > 0 ? `${task.photo_count} photo(s)` : 'Add photos'}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                        {task.photo_count > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />}
-                      </button>
-                      <button onClick={() => setDocModalTask(task)}
-                        className="relative text-gray-300 hover:text-primary-500 transition"
-                        title={task.doc_count > 0 ? `${task.doc_count} document(s)` : 'Add documents'}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-                        </svg>
-                        {task.doc_count > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />}
-                      </button>
+                      <div className="relative">
+                        <button onClick={() => setAttachMenuTask(attachMenuTask === task.id ? null : task.id)}
+                          className="relative text-gray-300 hover:text-primary-500 transition"
+                          title="Photos & Files">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                          </svg>
+                          {(task.photo_count > 0 || task.doc_count > 0) && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />}
+                        </button>
+                        {attachMenuTask === task.id && (
+                          <div className="absolute right-0 top-6 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[130px]">
+                            <button onClick={() => { setPhotoModalTask(task); setAttachMenuTask(null) }}
+                              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                              </svg>
+                              Photos {task.photo_count > 0 ? `(${task.photo_count})` : ''}
+                            </button>
+                            <button onClick={() => { setDocModalTask(task); setAttachMenuTask(null) }}
+                              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                              </svg>
+                              Files {task.doc_count > 0 ? `(${task.doc_count})` : ''}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => toggleComments(task.id)}
                         className="relative text-gray-300 hover:text-primary-500 transition"
@@ -778,7 +791,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.manager} onChange={e => setEditProject(p => ({ ...p, manager: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="">— None —</option>
-                    {managers.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</option>)}
+                    {managers.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}{u.position_title ? ` · ${u.position_title}` : ''}</option>)}
                   </select>
                 </div>
                 <div>
@@ -786,7 +799,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.supervisor} onChange={e => setEditProject(p => ({ ...p, supervisor: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="">— None —</option>
-                    {foremen.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</option>)}
+                    {foremen.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}{u.position_title ? ` · ${u.position_title}` : ''}</option>)}
                   </select>
                 </div>
                 <div>

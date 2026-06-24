@@ -56,9 +56,9 @@ function ActionCard({ acColor, acBg, icon, title, desc, badge, badgeBg, onClick 
   )
 }
 
-function ListCard({ iconBg, icon, title, sub, pillText, pillColor, pillBg }) {
+function ListCard({ iconBg, icon, title, sub, pillText, pillColor, pillBg, onClick }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+    <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
       <div style={{ width: 42, height: 42, borderRadius: 10, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {icon}
       </div>
@@ -218,7 +218,8 @@ export default function SupervisorHome() {
 
           <ActionCard
             acColor={C.yellow} acBg="rgba(245,197,24,0.1)"
-            title="Daily Check" desc="Mark tasks done for today"
+            title="Daily Manpower" desc="Submit manpower report"
+            onClick={() => navigate('/supervisor/daily-report')}
             icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.yellow} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/><polyline points="16 13 12.5 17 11 15.5"/></svg>}
           />
 
@@ -281,6 +282,7 @@ export default function SupervisorHome() {
               pillText={pill.text}
               pillColor={pill.color}
               pillBg={pill.bg}
+              onClick={() => navigate(`/supervisor/tasks/${t.id}`)}
             />
           )
         })}

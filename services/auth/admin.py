@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import Tenant, User, PermissionGroup
+from .models import Tenant, User
 
 ALL_MODULES = [
     ('dashboard',   'Dashboard'),
@@ -68,7 +68,3 @@ class UserAdmin(BaseUserAdmin):
     )
 
 
-@admin.register(PermissionGroup)
-class PermissionGroupAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_active']
-    search_fields = ['name']

@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from .models import Tenant, User, PermissionGroup
-from .serializers import TenantSerializer, UserSerializer, UserCreateSerializer, PermissionGroupSerializer
+from .models import Tenant, User
+from .serializers import TenantSerializer, UserSerializer, UserCreateSerializer
 
 
 @api_view(['GET'])
@@ -32,13 +32,17 @@ def tenant_info(request):
 @api_view(['GET', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def me(request):
+    user = User.objects.select_related(
+        'employee_profile__position',
+        'employee_profile__department',
+    ).get(pk=request.user.pk)
     if request.method == 'PATCH':
         allowed = {'preferences', 'first_name', 'last_name', 'avatar'}
         data = {k: v for k, v in request.data.items() if k in allowed}
         for k, v in data.items():
-            setattr(request.user, k, v)
-        request.user.save(update_fields=list(data.keys()))
-    return Response(UserSerializer(request.user).data)
+            setattr(user, k, v)
+        user.save(update_fields=list(data.keys()))
+    return Response(UserSerializer(user).data)
 
 
 @api_view(['POST'])
@@ -75,7 +79,10 @@ class UserViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return User.objects.all().order_by('first_name', 'last_name')
+        return User.objects.select_related(
+            'employee_profile__position',
+            'employee_profile__department',
+        ).order_by('first_name', 'last_name')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -83,10 +90,3 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserSerializer
 
 
-class PermissionGroupViewSet(viewsets.ModelViewSet):
-    """Permission group management."""
-    serializer_class = PermissionGroupSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return PermissionGroup.objects.all()

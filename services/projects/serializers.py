@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from collections import defaultdict
-from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport
 
 
 class TaskPhotoSerializer(serializers.ModelSerializer):
@@ -255,3 +255,37 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
         if not obj.author:
             return '?'
         return (obj.author.first_name[:1] + obj.author.last_name[:1]).upper() or obj.author.email[:2].upper()
+
+
+class DailyReportSerializer(serializers.ModelSerializer):
+    total_manpower  = serializers.ReadOnlyField()
+    photo_url       = serializers.SerializerMethodField()
+    submitted_by_name = serializers.SerializerMethodField()
+    project_name    = serializers.SerializerMethodField()
+    project_no      = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = DailyReport
+        fields = [
+            'id', 'project', 'project_name', 'project_no',
+            'submitted_by', 'submitted_by_name',
+            'date', 'company',
+            'supervisor_count', 'g_workers_count', 'total_manpower',
+            'activity_short', 'activity_items', 'personnel_names',
+            'work_start', 'work_end',
+            'photo', 'photo_url',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'submitted_by', 'created_at']
+
+    def get_photo_url(self, obj):
+        return obj.photo.url if obj.photo else None
+
+    def get_submitted_by_name(self, obj):
+        return obj.submitted_by.full_name if obj.submitted_by else None
+
+    def get_project_name(self, obj):
+        return obj.project.name if obj.project else None
+
+    def get_project_no(self, obj):
+        return obj.project.project_no if obj.project else None

@@ -53,47 +53,11 @@ class P:
         return [v for k, v in vars(cls).items() if not k.startswith('_') and isinstance(v, str)]
 
 
-# Default permissions seeded per role (used in Phase 2 data migration)
+# Role defaults — admin has full access, staff is the minimal fallback when no position is set.
+# All other permission levels are now defined on Position.permissions in the organisation service.
 ROLE_DEFAULT_PERMISSIONS = {
     'admin': [p for p in P.all() if p != P.ADMIN_TENANT],
-    'manager': [
-        P.DASHBOARD_VIEW,
-        P.PROJECTS_VIEW, P.PROJECTS_EDIT, P.PROJECTS_DELETE,
-        P.HR_VIEW, P.HR_MANAGE, P.HR_APPROVE_LEAVE,
-        P.OPERATIONS_VIEW, P.OPERATIONS_EDIT,
-        P.FINANCE_VIEW,
-        P.CRM_VIEW, P.CRM_EDIT,
-        P.COMPLIANCE_VIEW,
-        P.FILES_VIEW,
-        P.SETTINGS_VIEW,
-    ],
-    'supervisor': [
-        P.DASHBOARD_VIEW,
-        P.SUPERVISOR_APP,
-        P.PROJECTS_VIEW,
-        P.HR_VIEW,
-        P.FILES_VIEW,
-    ],
-    'foreman': [
-        P.SUPERVISOR_APP,
-        P.PROJECTS_VIEW,
-        P.HR_VIEW,
-    ],
-    'staff': [
-        P.DASHBOARD_VIEW,
-        P.HR_VIEW,
-        P.FILES_VIEW,
-    ],
-    'viewer': [
-        P.DASHBOARD_VIEW,
-        P.PROJECTS_VIEW,
-        P.HR_VIEW,
-        P.FINANCE_VIEW,
-        P.OPERATIONS_VIEW,
-        P.COMPLIANCE_VIEW,
-        P.CRM_VIEW,
-        P.FILES_VIEW,
-    ],
+    'staff': [P.DASHBOARD_VIEW, P.HR_VIEW],
 }
 
 
@@ -116,10 +80,7 @@ def user_can(user, perm):
         return False
     if user.role == 'superadmin':
         return True
-    resolved = getattr(user, '_resolved_permissions', None)
-    if resolved is not None:
-        return perm in resolved
-    return perm in (ROLE_DEFAULT_PERMISSIONS.get(user.role) or [])
+    return perm in (user.resolved_permissions or [])
 
 
 def make_module_permission(read_perm, write_perm=None):
@@ -153,5 +114,3 @@ class IsManager(BasePermission):
 class IsStaff(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and _rank(request.user.role) >= _rank('staff')
-
-

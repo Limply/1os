@@ -1,5 +1,5 @@
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
-import { isLoggedIn, getUser } from '../api/auth'
+import { NavLink, Outlet, Navigate, useNavigate } from 'react-router-dom'
+import { isLoggedIn, getUser, logout } from '../api/auth'
 
 const NAV = [
   {
@@ -64,8 +64,14 @@ const NAV = [
 export default function SupervisorLayout() {
   if (!isLoggedIn()) return <Navigate to="/login" replace />
 
+  const navigate = useNavigate()
   const user = getUser()
   const displayName = user.first_name || user.email || ''
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <div style={{ fontFamily: "'Barlow', sans-serif", background: '#0D1720', height: '100svh' }}
@@ -93,13 +99,15 @@ export default function SupervisorLayout() {
             <div style={{ fontSize: 10, color: '#7A90AA', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Hi,</div>
             <div style={{ fontSize: 13, color: '#EEF2F7', fontWeight: 700, lineHeight: 1.2 }}>{displayName}</div>
           </div>
-          <button style={{ background: '#273447', border: '1px solid #2F4060', borderRadius: '50%', width: 38, height: 38 }}
-            className="flex items-center justify-center relative flex-shrink-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EEF2F7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          <button onClick={handleLogout}
+            style={{ background: '#273447', border: '1px solid #2F4060', borderRadius: '50%', width: 38, height: 38 }}
+            className="flex items-center justify-center flex-shrink-0"
+            title="Log out">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            <span style={{ position: 'absolute', top: 7, right: 7, width: 7, height: 7, background: '#E74C3C', borderRadius: '50%', border: '1.5px solid #212D3E' }} />
           </button>
         </div>
       </header>

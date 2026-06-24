@@ -206,3 +206,31 @@ class ProjectComment(BaseModel):
 
     def __str__(self):
         return f"{self.project.project_no} — comment by {self.author}"
+
+
+class DailyReport(BaseModel):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='daily_reports')
+    submitted_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='daily_reports'
+    )
+    date            = models.DateField(default=datetime.date.today)
+    company         = models.CharField(max_length=255, blank=True)
+    supervisor_count = models.PositiveIntegerField(default=0)
+    g_workers_count  = models.PositiveIntegerField(default=0)
+    activity_short   = models.CharField(max_length=255, blank=True)
+    activity_items   = models.JSONField(default=list, blank=True)
+    personnel_names  = models.JSONField(default=list, blank=True)
+    work_start       = models.TimeField(null=True, blank=True)
+    work_end         = models.TimeField(null=True, blank=True)
+    photo            = models.ImageField(upload_to='daily_reports/', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+
+    @property
+    def total_manpower(self):
+        return self.supervisor_count + self.g_workers_count
+
+    def __str__(self):
+        return f"{self.project.project_no} — {self.date}"

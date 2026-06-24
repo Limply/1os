@@ -1,5 +1,7 @@
+from django import forms
 from django.contrib import admin
 from shared.admin import TenantModelAdmin
+from shared.permissions import P
 from .models import Company, Department, Team, Position, Site, Client
 
 
@@ -23,11 +25,48 @@ class TeamAdmin(TenantModelAdmin):
     list_filter = ['department']
 
 
+ALL_PERMISSIONS = [(p, p) for p in P.all()]
+
+
+class PositionForm(forms.ModelForm):
+    permission_flags = forms.MultipleChoiceField(
+        choices=ALL_PERMISSIONS,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label='Permissions',
+    )
+
+    class Meta:
+        model = Position
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['permission_flags'].initial = self.instance.permissions or []
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.permissions = self.cleaned_data.get('permission_flags', [])
+        if commit:
+            instance.save()
+        return instance
+
+
 @admin.register(Position)
 class PositionAdmin(TenantModelAdmin):
-    list_display = ['title', 'department', 'level']
+    form = PositionForm
+    list_display = ['title', 'department', 'level', 'permission_count']
     search_fields = ['title']
     list_filter = ['department']
+    fieldsets = (
+        (None, {'fields': ('title', 'department', 'level', 'is_active')}),
+        ('Permissions', {'fields': ('permission_flags',), 'description': 'Select which permissions holders of this position receive.'}),
+    )
+
+    def permission_count(self, obj):
+        return len(obj.permissions or [])
+    permission_count.short_description = 'Permissions'
 
 
 @admin.register(Site)

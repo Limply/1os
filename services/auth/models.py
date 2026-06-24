@@ -56,20 +56,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         choices=[
             ('superadmin', 'Super Admin'),
             ('admin', 'Admin'),
-            ('manager', 'Manager'),
-            ('supervisor', 'Supervisor'),
-            ('foreman', 'Foreman'),
             ('staff', 'Staff'),
-            ('viewer', 'Viewer'),
         ],
         default='staff',
-    )
-    permission_group = models.ForeignKey(
-        'PermissionGroup',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='users',
-        help_text='Custom permission group — overrides role defaults if set',
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -89,10 +78,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def resolved_permissions(self):
         from shared.permissions import ROLE_DEFAULT_PERMISSIONS
         if self.role == 'superadmin':
-            return None  # superadmin bypasses all checks
-        if self.permission_group_id and self.permission_group:
-            return self.permission_group.permissions
-        return ROLE_DEFAULT_PERMISSIONS.get(self.role, [])
+            return None
+        if self.role == 'admin':
+            return ROLE_DEFAULT_PERMISSIONS.get('admin', [])
+        try:
+            perms = self.employee_profile.position.permissions
+            if perms:
+                return perms
+        except Exception:
+            pass
+        return ROLE_DEFAULT_PERMISSIONS.get('staff', [])
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} <{self.email}>"
@@ -103,15 +98,3 @@ class User(AbstractBaseUser, PermissionsMixin):
         return name if name else self.email
 
 
-class PermissionGroup(models.Model):
-    """Custom permission bundle for a tenant."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='permission_groups', db_column='tenant_id')
-    name = models.CharField(max_length=100)
-    permissions = models.JSONField(default=list)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    is_active = models.BooleanField(default=True)
-
-    def __str__(self):
-        return self.name

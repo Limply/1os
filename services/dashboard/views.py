@@ -125,6 +125,7 @@ def supervisor_home(request):
     )
 
     site = None
+    project_info = None
     if active_project:
         site = {
             'name': active_project.name,
@@ -133,6 +134,11 @@ def supervisor_home(request):
             'site_address': active_project.site_address,
             'site_lat': str(active_project.site_lat) if active_project.site_lat else None,
             'site_lng': str(active_project.site_lng) if active_project.site_lng else None,
+        }
+        project_info = {
+            'id': str(active_project.id),
+            'name': active_project.name,
+            'project_no': active_project.project_no,
         }
 
     # Task counts across all active supervised projects
@@ -191,6 +197,7 @@ def supervisor_home(request):
     ]
 
     return Response({
+        'project': project_info,
         'site': site,
         'summary': {
             'workers_on_site': workers_on_site,

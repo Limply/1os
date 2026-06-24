@@ -56,6 +56,7 @@ class Position(BaseModel):
         Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='positions'
     )
     level = models.IntegerField(null=True, blank=True, help_text='Seniority level 1-10')
+    permissions = models.JSONField(default=list, blank=True, help_text='Permission strings granted to holders of this position')
 
     def __str__(self):
         return self.title

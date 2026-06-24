@@ -23,6 +23,8 @@ import Personal from './pages/Personal'
 import SupervisorLayout from './supervisor/SupervisorLayout'
 import SupervisorHome from './supervisor/pages/SupervisorHome'
 import SupervisorTasks from './supervisor/pages/SupervisorTasks'
+import SupervisorTaskDetail from './supervisor/pages/SupervisorTaskDetail'
+import SupervisorDailyReport from './supervisor/pages/SupervisorDailyReport'
 import SupervisorTeam from './supervisor/pages/SupervisorTeam'
 import SupervisorSettings from './supervisor/pages/SupervisorSettings'
 
@@ -49,8 +51,10 @@ export default function App() {
         <Route path="/camera-test" element={<CameraTest />} />
         <Route path="/supervisor" element={<SupervisorLayout />}>
           <Route index element={<SupervisorHome />} />
-          <Route path="tasks"    element={<SupervisorTasks />} />
-          <Route path="team"     element={<SupervisorTeam />} />
+          <Route path="tasks"           element={<SupervisorTasks />} />
+          <Route path="tasks/:taskId"   element={<SupervisorTaskDetail />} />
+          <Route path="daily-report"    element={<SupervisorDailyReport />} />
+          <Route path="team"          element={<SupervisorTeam />} />
           <Route path="clock-in" element={<ClockIn />} />
           <Route path="settings" element={<SupervisorSettings />} />
         </Route>
