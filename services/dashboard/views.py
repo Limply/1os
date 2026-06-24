@@ -212,8 +212,6 @@ def supervisor_home(request):
 PROBLEM_REPORT_RECIPIENTS = [
     'alain@astronic.com.sg',
     'steve.wong@astronic.com.sg',
-    'lucus@astronic.com.sg',
-    'lixin@astronic.com.sg',       # Benjamin Tan
     'admin@astronic.com.sg',       # HR Admin (Yan Ting)
 ]
 

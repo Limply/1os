@@ -26,8 +26,6 @@ const SEVERITY = [
 const RECIPIENTS = [
   { name: 'Alain',    email: 'alain@astronic.com.sg',      wa: '6596493863' },
   { name: 'Steve',    email: 'steve.wong@astronic.com.sg', wa: '6597927768' },
-  { name: 'Lucus',    email: 'lucus@astronic.com.sg',      wa: '6591234567' },
-  { name: 'Benjamin', email: 'lixin@astronic.com.sg',      wa: ''           },
   { name: 'HR Admin', email: 'admin@astronic.com.sg',      wa: ''           },
 ]
 
