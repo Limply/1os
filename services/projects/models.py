@@ -16,9 +16,6 @@ def _generate_project_no():
 
 
 class Project(BaseModel):
-    TYPE_CHOICES = [
-        ('client', 'Client Project'),
-    ]
     STATUS_CHOICES = [
         ('planning', 'Planning'),
         ('active', 'Active'),
@@ -35,7 +32,6 @@ class Project(BaseModel):
 
     project_no    = models.CharField(max_length=30, unique=True, blank=True)
     name          = models.CharField(max_length=255)
-    type          = models.CharField(max_length=20, choices=TYPE_CHOICES, default='client')
     status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
     priority      = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     description   = models.TextField(blank=True, null=True)

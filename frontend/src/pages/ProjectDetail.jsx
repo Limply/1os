@@ -166,7 +166,6 @@ export default function ProjectDetail({ projectId, onBack }) {
   function openEditProject() {
     setEditProject({
       name:           project.name || '',
-      type:           project.type || '',
       status:         project.status || '',
       priority:       project.priority || '',
       description:    project.description || '',
@@ -769,13 +768,6 @@ export default function ProjectDetail({ projectId, onBack }) {
                   className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Type</label>
-                  <select value={editProject.type} onChange={e => setEditProject(p => ({ ...p, type: e.target.value }))}
-                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
-                    <option value="client">Client Project</option>
-                  </select>
-                </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase">Status</label>
                   <select value={editProject.status} onChange={e => setEditProject(p => ({ ...p, status: e.target.value }))}

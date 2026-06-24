@@ -47,7 +47,7 @@ const PRIORITY_COLORS = {
 }
 
 const EMPTY_FORM = {
-  name: '', type: 'client', status: 'planning', priority: 'medium',
+  name: '', status: 'planning', priority: 'medium',
   client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '',
 }
 
@@ -217,7 +217,7 @@ export default function Projects() {
     const q = search.trim().toLowerCase()
     let list = q
       ? projects.filter(p =>
-          [p.project_no, p.name, p.type, p.status, p.priority,
+          [p.project_no, p.name, p.status, p.priority,
            p.client_name, p.client_contact, p.client_email, p.client_phone,
            p.start_date, p.end_date, p.manager_name, p.supervisor_name]
           .some(v => (v || '').toLowerCase().includes(q))
