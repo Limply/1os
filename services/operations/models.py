@@ -1,4 +1,5 @@
-from django.db import models
+from django.db import models, transaction
+from django.utils import timezone
 from shared.models import BaseModel
 
 
@@ -146,3 +147,103 @@ class Inspection(BaseModel):
 
     def __str__(self):
         return f"{self.type} @ {self.site} ({self.date})"
+
+
+def _generate_service_number():
+    year = timezone.now().strftime("%y")
+    prefix = f"SE-{year}-"
+    with transaction.atomic():
+        last = (
+            ServiceJob.objects
+            .select_for_update()
+            .filter(service_number__startswith=prefix)
+            .order_by('-created_at')
+            .first()
+        )
+        next_num = (int(last.service_number.split('-')[-1]) + 1) if last else 1
+        return f"{prefix}{next_num:03d}"
+
+
+class ServiceJob(BaseModel):
+    STATUS_CHOICES = [
+        ('draft',        'Draft'),
+        ('sent',         'Sent'),
+        ('acknowledged', 'Acknowledged'),
+        ('closed',       'Closed'),
+    ]
+
+    service_number = models.CharField(max_length=20, unique=True, editable=False)
+    client         = models.ForeignKey(
+        'organisation.Client', on_delete=models.PROTECT, related_name='service_jobs'
+    )
+    site           = models.ForeignKey(
+        'organisation.Site', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='service_jobs'
+    )
+    site_name      = models.CharField(max_length=255)
+    site_address   = models.TextField()
+    invoice_date   = models.DateField()
+    status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    remarks        = models.TextField(blank=True, default='')
+    created_by     = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, related_name='service_jobs'
+    )
+    acknowledged_by   = models.CharField(max_length=255, blank=True, null=True)
+    acknowledged_at   = models.DateField(null=True, blank=True)
+    generated_doc_url = models.CharField(max_length=500, blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.service_number:
+            self.service_number = _generate_service_number()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.service_number} — {self.client}"
+
+    @property
+    def total_amount(self):
+        return sum(item.amount for item in self.line_items.all())
+
+
+class ServiceReportItem(BaseModel):
+    job         = models.ForeignKey(ServiceJob, on_delete=models.CASCADE, related_name='report_items')
+    item_number = models.PositiveSmallIntegerField()
+    title       = models.CharField(max_length=150)
+    issue_points          = models.JSONField(default=list)
+    action_points         = models.JSONField(default=list)
+    recommendation_points = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ['item_number']
+        unique_together = [('job', 'item_number')]
+
+    def __str__(self):
+        return f"{self.job.service_number} – Item {self.item_number}: {self.title}"
+
+
+class InvoiceLineItem(BaseModel):
+    UNIT_CHOICES = [
+        ('lot', 'lot'),
+        ('run', 'run'),
+        ('pcs', 'pcs'),
+        ('hrs', 'hrs'),
+        ('set', 'set'),
+        ('m',   'm'),
+    ]
+
+    job         = models.ForeignKey(ServiceJob, on_delete=models.CASCADE, related_name='line_items')
+    line_number = models.PositiveSmallIntegerField()
+    description = models.TextField()
+    quantity    = models.DecimalField(max_digits=8, decimal_places=2)
+    unit        = models.CharField(max_length=10, choices=UNIT_CHOICES, default='lot')
+    amount      = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ['line_number']
+        unique_together = [('job', 'line_number')]
+
+    def __str__(self):
+        return f"{self.job.service_number} – Line {self.line_number}: {self.description[:50]}"

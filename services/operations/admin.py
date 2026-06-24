@@ -1,6 +1,6 @@
 from django.contrib import admin
 from shared.admin import TenantModelAdmin
-from .models import Job, WTSRequest, Asset, Inspection
+from .models import Job, WTSRequest, Asset, Inspection, ServiceJob, ServiceReportItem, InvoiceLineItem
 
 
 @admin.register(Job)
@@ -33,3 +33,25 @@ class InspectionAdmin(TenantModelAdmin):
     search_fields = ['type']
     list_filter = ['result']
     ordering = ['-date']
+
+
+class ServiceReportItemInline(admin.TabularInline):
+    model = ServiceReportItem
+    extra = 0
+    fields = ['item_number', 'title', 'issue_points', 'action_points', 'recommendation_points']
+
+
+class InvoiceLineItemInline(admin.TabularInline):
+    model = InvoiceLineItem
+    extra = 0
+    fields = ['line_number', 'description', 'quantity', 'unit', 'amount']
+
+
+@admin.register(ServiceJob)
+class ServiceJobAdmin(TenantModelAdmin):
+    list_display = ['service_number', 'client', 'site_name', 'invoice_date', 'status', 'total_amount']
+    search_fields = ['service_number', 'site_name', 'client__name']
+    list_filter = ['status']
+    ordering = ['-created_at']
+    readonly_fields = ['service_number', 'created_at', 'updated_at']
+    inlines = [ServiceReportItemInline, InvoiceLineItemInline]

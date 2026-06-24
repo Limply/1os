@@ -2,29 +2,8 @@ from django.db import models
 from shared.models import BaseModel
 
 
-class Client(BaseModel):
-    TYPE_CHOICES = [
-        ('mcst', 'MCST'),
-        ('commercial', 'Commercial'),
-        ('residential', 'Residential'),
-        ('government', 'Government'),
-        ('other', 'Other'),
-    ]
-    name    = models.CharField(max_length=255)
-    type    = models.CharField(max_length=20, choices=TYPE_CHOICES, default='mcst')
-    address = models.TextField(blank=True, null=True)
-    website = models.CharField(max_length=500, blank=True, null=True)
-    notes   = models.TextField(blank=True, null=True)
-
-    class Meta:
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
-
 class Contact(BaseModel):
-    client     = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='contacts')
+    client     = models.ForeignKey('organisation.Client', on_delete=models.CASCADE, related_name='contacts')
     name       = models.CharField(max_length=255)
     position   = models.CharField(max_length=255, blank=True, null=True)
     phone      = models.CharField(max_length=20, blank=True, null=True)
@@ -56,7 +35,7 @@ class Lead(BaseModel):
         ('tender',    'Tender'),
         ('other',     'Other'),
     ]
-    client          = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='leads')
+    client          = models.ForeignKey('organisation.Client', on_delete=models.CASCADE, related_name='leads')
     title           = models.CharField(max_length=255)
     description     = models.TextField(blank=True, null=True)
     status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')

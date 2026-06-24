@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions
-from .models import Client, Contact, Lead, Interaction
+from services.organisation.models import Client
+from .models import Contact, Lead, Interaction
 from .serializers import (
     ClientSerializer, ClientListSerializer,
     ContactSerializer, LeadSerializer, InteractionSerializer,
