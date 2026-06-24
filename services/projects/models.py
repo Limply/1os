@@ -234,3 +234,31 @@ class DailyReport(BaseModel):
 
     def __str__(self):
         return f"{self.project.project_no} — {self.date}"
+
+
+class WSHPhoto(BaseModel):
+    TYPE_CHOICES = [
+        ('safe',         'Safe Condition'),
+        ('unsafe',       'Unsafe Condition'),
+        ('near_miss',    'Near Miss'),
+        ('hazard',       'Hazard'),
+        ('daily_report', 'Daily Report'),
+    ]
+
+    project      = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='wsh_photos')
+    submitted_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='wsh_photos'
+    )
+    date             = models.DateField(default=datetime.date.today)
+    photo            = models.ImageField(upload_to='wsh/')
+    area             = models.CharField(max_length=255, blank=True)
+    observation_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='safe')
+    description      = models.TextField(blank=True)
+    action_taken     = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+
+    def __str__(self):
+        return f"{self.project.project_no} — WSH — {self.date}"

@@ -25,6 +25,9 @@ import SupervisorHome from './supervisor/pages/SupervisorHome'
 import SupervisorTasks from './supervisor/pages/SupervisorTasks'
 import SupervisorTaskDetail from './supervisor/pages/SupervisorTaskDetail'
 import SupervisorDailyReport from './supervisor/pages/SupervisorDailyReport'
+import SupervisorWSHPhoto from './supervisor/pages/SupervisorWSHPhoto'
+import SupervisorReports from './supervisor/pages/SupervisorReports'
+import SupervisorProblemReport from './supervisor/pages/SupervisorProblemReport'
 import SupervisorTeam from './supervisor/pages/SupervisorTeam'
 import SupervisorSettings from './supervisor/pages/SupervisorSettings'
 
@@ -54,6 +57,9 @@ export default function App() {
           <Route path="tasks"           element={<SupervisorTasks />} />
           <Route path="tasks/:taskId"   element={<SupervisorTaskDetail />} />
           <Route path="daily-report"    element={<SupervisorDailyReport />} />
+          <Route path="wsh-photo"       element={<SupervisorWSHPhoto />} />
+          <Route path="reports"          element={<SupervisorReports />} />
+          <Route path="problem-report"   element={<SupervisorProblemReport />} />
           <Route path="team"          element={<SupervisorTeam />} />
           <Route path="clock-in" element={<ClockIn />} />
           <Route path="settings" element={<SupervisorSettings />} />

@@ -208,3 +208,61 @@ def supervisor_home(request):
         'tasks': tasks_list,
         'team':  team_list,
     })
+
+PROBLEM_REPORT_RECIPIENTS = [
+    'alain@astronic.com.sg',
+    'steve.wong@astronic.com.sg',
+    'lucus@astronic.com.sg',
+    'lixin@astronic.com.sg',       # Benjamin Tan
+    'admin@astronic.com.sg',       # HR Admin (Yan Ting)
+]
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def problem_report(request):
+    user     = request.user
+    subject  = request.data.get('subject', '').strip() or 'Site Problem Report'
+    body     = request.data.get('body', '').strip()
+    severity = request.data.get('severity', 'medium')
+    project  = request.data.get('project', '')
+
+    if not body:
+        return Response({'detail': 'Body is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    full_subject = f"[{severity.upper()}] {subject}"
+    full_body    = (
+        f"Problem Report from {user.full_name} ({user.email})\n"
+        f"Project : {project}\n"
+        f"Severity: {severity}\n\n"
+        f"{body}\n\n"
+        f"-- Submitted via 1OS Supervisor App"
+    )
+
+    # Use frontend-selected recipients, filtered to known valid addresses
+    requested   = request.data.get('recipients', [])
+    valid_set   = set(PROBLEM_REPORT_RECIPIENTS)
+    recipient_list = [e for e in requested if e in valid_set] or PROBLEM_REPORT_RECIPIENTS
+
+    email_sent = False
+    email_error = ''
+    try:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        if getattr(settings, 'EMAIL_HOST', ''):
+            send_mail(
+                subject=full_subject,
+                message=full_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=recipient_list,
+                fail_silently=False,
+            )
+            email_sent = True
+    except Exception as e:
+        email_error = str(e)
+
+    return Response({
+        'ok': True,
+        'email_sent': email_sent,
+        'email_error': email_error,
+        'recipients': recipient_list,
+    })

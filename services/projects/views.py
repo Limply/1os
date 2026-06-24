@@ -4,8 +4,8 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, _generate_project_no
-from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer, DailyReportSerializer
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto, _generate_project_no
+from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer, DailyReportSerializer, WSHPhotoSerializer
 
 TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
 
@@ -215,6 +215,24 @@ class DailyReportViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = DailyReport.objects.select_related('project', 'submitted_by')
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        elif not user_can(self.request.user, P.PROJECTS_VIEW):
+            qs = qs.filter(submitted_by=self.request.user)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(submitted_by=self.request.user)
+
+
+class WSHPhotoViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class   = WSHPhotoSerializer
+    pagination_class   = None
+
+    def get_queryset(self):
+        qs = WSHPhoto.objects.select_related('project', 'submitted_by')
         project_id = self.request.query_params.get('project')
         if project_id:
             qs = qs.filter(project_id=project_id)

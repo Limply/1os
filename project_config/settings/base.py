@@ -101,6 +101,20 @@ DEFAULT_FILE_STORAGE = 'shared.storage.FileBrowserStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Email — configure SMTP_* vars in .env to enable sending
+_smtp_host = config('SMTP_HOST', default='')
+EMAIL_BACKEND = (
+    'django.core.mail.backends.smtp.EmailBackend'
+    if _smtp_host else
+    'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST          = _smtp_host
+EMAIL_PORT          = config('SMTP_PORT', default=587, cast=int)
+EMAIL_HOST_USER     = config('SMTP_USER', default='')
+EMAIL_HOST_PASSWORD = config('SMTP_PASSWORD', default='')
+EMAIL_USE_TLS       = True
+DEFAULT_FROM_EMAIL  = config('SMTP_USER', default='noreply@astronic.com.sg')
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),

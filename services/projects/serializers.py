@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from collections import defaultdict
-from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto
 
 
 class TaskPhotoSerializer(serializers.ModelSerializer):
@@ -289,3 +289,37 @@ class DailyReportSerializer(serializers.ModelSerializer):
 
     def get_project_no(self, obj):
         return obj.project.project_no if obj.project else None
+
+
+class WSHPhotoSerializer(serializers.ModelSerializer):
+    photo_url          = serializers.SerializerMethodField()
+    submitted_by_name  = serializers.SerializerMethodField()
+    project_name       = serializers.SerializerMethodField()
+    project_no         = serializers.SerializerMethodField()
+    observation_type_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = WSHPhoto
+        fields = [
+            'id', 'project', 'project_name', 'project_no',
+            'submitted_by', 'submitted_by_name',
+            'date', 'photo', 'photo_url', 'area',
+            'observation_type', 'observation_type_display',
+            'description', 'action_taken', 'created_at',
+        ]
+        read_only_fields = ['id', 'submitted_by', 'created_at']
+
+    def get_photo_url(self, obj):
+        return obj.photo.url if obj.photo else None
+
+    def get_submitted_by_name(self, obj):
+        return obj.submitted_by.full_name if obj.submitted_by else None
+
+    def get_project_name(self, obj):
+        return obj.project.name if obj.project else None
+
+    def get_project_no(self, obj):
+        return obj.project.project_no if obj.project else None
+
+    def get_observation_type_display(self, obj):
+        return obj.get_observation_type_display()
