@@ -10,7 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('projects', '0022_remove_project_type'),
+        ('projects', '0022_project_site_address_project_site_lat_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
