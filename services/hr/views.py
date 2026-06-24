@@ -7,6 +7,9 @@ from datetime import datetime
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
+from shared.permissions import make_module_permission, user_can, P
+
+HRPermission = make_module_permission(P.HR_VIEW, P.HR_MANAGE)
 from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
@@ -33,7 +36,7 @@ def fb_write_csv(path, rows, fields):
 
 
 class TenantScopedMixin:
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HRPermission]
 
     def get_queryset(self):
         return self.queryset.filter(is_active=True)
@@ -108,6 +111,8 @@ class LeaveApplicationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
+        if not user_can(request.user, P.HR_APPROVE_LEAVE):
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         leave = self.get_object()
         leave.status = 'approved'
         leave.approved_by = request.user
@@ -118,6 +123,8 @@ class LeaveApplicationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
+        if not user_can(request.user, P.HR_APPROVE_LEAVE):
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         leave = self.get_object()
         leave.status = 'rejected'
         leave.approved_by = request.user
@@ -324,7 +331,7 @@ def _enrich(row):
 
 
 class WorkScheduleViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HRPermission]
 
     def _all_emp_nos(self):
         return set(Employee.objects.filter(is_active=True).values_list('emp_no', flat=True))
@@ -559,11 +566,11 @@ class CertificationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 class PublicHolidayViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PublicHoliday.objects.all()
     serializer_class = PublicHolidaySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HRPermission]
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([HRPermission])
 def org_tree(request):
     """Return recursive org chart tree from root(s)."""
     roots = Employee.objects.filter(is_active=True, manager__isnull=True)
@@ -574,7 +581,7 @@ def org_tree(request):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([HRPermission])
 def employee_me(request):
     """Return the employee profile for the logged-in user."""
     try:
@@ -641,7 +648,7 @@ class StaffDeploymentViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 
 class ManpowerSettingsViewSet(viewsets.ModelViewSet):
     serializer_class = ManpowerSettingsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HRPermission]
     queryset = ManpowerSettings.objects.all()
 
     def get_queryset(self):
@@ -665,7 +672,7 @@ class ManpowerSettingsViewSet(viewsets.ModelViewSet):
 
 
 class PersonalGoalViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HRPermission]
     serializer_class = PersonalGoalSerializer
 
     def get_queryset(self):

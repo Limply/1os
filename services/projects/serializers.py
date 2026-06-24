@@ -59,16 +59,24 @@ class TaskSerializer(serializers.ModelSerializer):
     photo_count = serializers.SerializerMethodField()
     doc_count = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
+    project_no = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = [
-            'id', 'project', 'group', 'title', 'description',
+            'id', 'project', 'project_name', 'project_no', 'group', 'title', 'description',
             'assigned_to', 'assigned_to_name', 'assigned_to_phone',
             'status', 'priority', 'weightage', 'start_date', 'end_date', 'due_date', 'completed_at',
             'photo', 'photo_count', 'doc_count', 'comment_count', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'completed_at', 'created_at', 'updated_at']
+
+    def get_project_name(self, obj):
+        return obj.project.name if obj.project else None
+
+    def get_project_no(self, obj):
+        return obj.project.project_no if obj.project else None
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.full_name if obj.assigned_to else None
@@ -102,7 +110,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'project_no', 'name', 'type', 'status', 'priority',
+            'id', 'project_no', 'name', 'status', 'priority',
             'client_name', 'client_contact', 'client_email', 'client_phone',
             'start_date', 'end_date', 'manager', 'manager_name',
             'supervisor', 'supervisor_name', 'progress', 'task_count',
@@ -161,9 +169,10 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'project_no', 'name', 'type', 'status', 'priority',
+            'id', 'project_no', 'name', 'status', 'priority',
             'description', 'remarks',
             'client_name', 'client_contact', 'client_email', 'client_phone', 'client_address',
+            'site_address', 'site_lat', 'site_lng',
             'start_date', 'end_date',
             'manager', 'manager_name', 'supervisor', 'supervisor_name',
             'members', 'progress',

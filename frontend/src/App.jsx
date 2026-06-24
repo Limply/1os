@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { getUser } from './api/auth'
+import { can, P } from './utils/permissions'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import ClockIn from './pages/ClockIn'
@@ -23,6 +25,11 @@ import SupervisorHome from './supervisor/pages/SupervisorHome'
 import SupervisorTasks from './supervisor/pages/SupervisorTasks'
 import SupervisorTeam from './supervisor/pages/SupervisorTeam'
 import SupervisorSettings from './supervisor/pages/SupervisorSettings'
+
+function RootRedirect() {
+  if (can(P.SUPERVISOR_APP) && !can(P.DASHBOARD_VIEW)) return <Navigate to="/supervisor" replace />
+  return <Dashboard />
+}
 
 export default function App() {
   useEffect(() => {
@@ -48,7 +55,7 @@ export default function App() {
           <Route path="settings" element={<SupervisorSettings />} />
         </Route>
         <Route element={<Layout />}>
-          <Route path="/"           element={<Dashboard />} />
+          <Route path="/"           element={<RootRedirect />} />
           <Route path="/my"         element={<Personal />} />
           <Route path="/projects"   element={<Projects />} />
           <Route path="/hr"         element={<HR />} />

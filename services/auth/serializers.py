@@ -16,14 +16,20 @@ class TenantSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'tenant_id', 'tenant_name', 'email', 'first_name', 'last_name',
-            'role', 'is_active', 'mfa_enabled', 'avatar', 'modules', 'preferences', 'created_at',
+            'role', 'permissions', 'is_active', 'mfa_enabled', 'avatar', 'modules',
+            'preferences', 'created_at',
         ]
-        read_only_fields = ['id', 'tenant_name', 'created_at']
+        read_only_fields = ['id', 'tenant_name', 'permissions', 'created_at']
+
+    def get_permissions(self, obj):
+        # superadmin returns None — frontend can() treats None as all-access
+        return obj.resolved_permissions
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

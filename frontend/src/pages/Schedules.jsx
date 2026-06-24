@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 
 const todayStr = () => {
   const d = new Date()
@@ -57,7 +58,7 @@ const CHIP_COLORS = [
 
 export default function Schedules() {
   const user = getUser()
-  const isManager = ['superadmin', 'admin', 'manager'].includes(user?.role)
+  const isManager = can(P.HR_MANAGE)
 
   const [mainTab, setMainTab] = useState('schedules') // 'schedules' | 'deployments'
 

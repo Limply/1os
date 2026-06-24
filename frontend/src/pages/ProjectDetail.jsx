@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
@@ -72,15 +73,17 @@ const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Revi
 const STATUS_ROW_BG = { done: 'bg-green-50', in_progress: 'bg-orange-50', issue: 'bg-purple-50' }
 const PRIORITY_COLORS = { low: 'text-gray-400', medium: 'text-primary-500', high: 'text-orange-500', urgent: 'text-red-500' }
 
-const MANAGER_ROLES = ['manager', 'admin', 'superadmin']
+
 
 export default function ProjectDetail({ projectId, onBack }) {
   const user = getUser()
-  const isManager = MANAGER_ROLES.includes(user?.role)
+  const isManager = can(P.PROJECTS_EDIT)
 
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
+  const foremen  = users.filter(u => ['foreman', 'supervisor'].includes(u.role))
+  const managers = users.filter(u => ['manager', 'admin', 'superadmin'].includes(u.role))
   const [newGroupName, setNewGroupName] = useState('')
   const [addingGroup, setAddingGroup] = useState(false)
   const [newTask, setNewTask] = useState({})
@@ -99,15 +102,10 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [showEditProject, setShowEditProject] = useState(false)
   const [editProject, setEditProject] = useState({})
   const [savingProject, setSavingProject] = useState(false)
-  const [foremen, setForemen] = useState([])
-  const [managers, setManagers] = useState([])
-
   useEffect(() => {
     fetchProject()
     fetchUsers()
     fetchTemplates()
-    fetchForemen()
-    fetchManagers()
   }, [projectId])
 
   async function fetchProject() {
@@ -128,31 +126,6 @@ export default function ProjectDetail({ projectId, onBack }) {
     setUsers(res.data.results || res.data)
   }
 
-  async function fetchManagers() {
-    try {
-      const res = await api.get('/hr/employees/?is_active=true')
-      const emps = res.data.results || res.data
-      const MANAGER_TITLES = ['manager', 'director', 'admin', 'advisor', 'business development', 'it developer']
-      setManagers(emps.filter(e =>
-        e.user && MANAGER_TITLES.some(t => (e.position_name || '').toLowerCase().includes(t))
-      ))
-    } catch {
-      setManagers([])
-    }
-  }
-
-  async function fetchForemen() {
-    try {
-      const res = await api.get('/hr/employees/?is_active=true')
-      const emps = res.data.results || res.data
-      const FOREMAN_TITLES = ['foremen', 'supervisor', 'senior supervisor', 'engineer']
-      setForemen(emps.filter(e =>
-        e.user && FOREMAN_TITLES.some(t => (e.position_name || '').toLowerCase().includes(t))
-      ))
-    } catch {
-      setForemen([])
-    }
-  }
 
   async function fetchTemplates() {
     try {
@@ -175,6 +148,9 @@ export default function ProjectDetail({ projectId, onBack }) {
       client_email:   project.client_email || '',
       client_phone:   project.client_phone || '',
       client_address: project.client_address || '',
+      site_address:   project.site_address || '',
+      site_lat:       project.site_lat || '',
+      site_lng:       project.site_lng || '',
       start_date:     project.start_date || '',
       end_date:       project.end_date || '',
       manager:        project.manager || '',
@@ -802,7 +778,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.manager} onChange={e => setEditProject(p => ({ ...p, manager: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="">— None —</option>
-                    {managers.map(e => <option key={e.user} value={e.user}>{e.full_name} ({e.position_name})</option>)}
+                    {managers.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</option>)}
                   </select>
                 </div>
                 <div>
@@ -810,7 +786,7 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <select value={editProject.supervisor} onChange={e => setEditProject(p => ({ ...p, supervisor: e.target.value }))}
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
                     <option value="">— None —</option>
-                    {foremen.map(e => <option key={e.user} value={e.user}>{e.full_name} ({e.position_name})</option>)}
+                    {foremen.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</option>)}
                   </select>
                 </div>
                 <div>
@@ -855,6 +831,46 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <div className="col-span-2">
                     <label className="text-xs text-gray-400">Address</label>
                     <input value={editProject.client_address} onChange={e => setEditProject(p => ({ ...p, client_address: e.target.value }))}
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+              {/* Site Location */}
+              <div className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Site Location</p>
+                  <button type="button"
+                    onClick={() => {
+                      if (!navigator.geolocation) return
+                      navigator.geolocation.getCurrentPosition(pos => {
+                        setEditProject(p => ({
+                          ...p,
+                          site_lat: pos.coords.latitude.toFixed(7),
+                          site_lng: pos.coords.longitude.toFixed(7),
+                        }))
+                      })
+                    }}
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium">
+                    📍 Use Current Location
+                  </button>
+                </div>
+                <div className="col-span-2 mb-3">
+                  <label className="text-xs text-gray-400">Site Address</label>
+                  <input value={editProject.site_address} onChange={e => setEditProject(p => ({ ...p, site_address: e.target.value }))}
+                    placeholder="e.g. 123 Jurong East Street 13, Singapore 600123"
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400">Latitude</label>
+                    <input value={editProject.site_lat} onChange={e => setEditProject(p => ({ ...p, site_lat: e.target.value }))}
+                      placeholder="e.g. 1.3521000"
+                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400">Longitude</label>
+                    <input value={editProject.site_lng} onChange={e => setEditProject(p => ({ ...p, site_lng: e.target.value }))}
+                      placeholder="e.g. 103.8198000"
                       className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                   </div>
                 </div>

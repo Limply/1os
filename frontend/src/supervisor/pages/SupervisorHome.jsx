@@ -180,6 +180,20 @@ export default function SupervisorHome() {
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
               {site ? site.project_no : '—'}
             </div>
+            {site?.site_address && (
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.4 }}>
+                📍 {site.site_address}
+              </div>
+            )}
+            {site?.site_lat && site?.site_lng && (
+              <a
+                href={`https://maps.google.com/?q=${site.site_lat},${site.site_lng}`}
+                target="_blank" rel="noreferrer"
+                style={{ fontSize: 10, color: C.blue, marginTop: 3, display: 'inline-block' }}
+              >
+                {parseFloat(site.site_lat).toFixed(5)}, {parseFloat(site.site_lng).toFixed(5)} ↗
+              </a>
+            )}
           </div>
         </div>
         <div style={{ background: site ? 'rgba(46,204,113,0.13)' : 'rgba(122,144,170,0.13)', border: `1px solid ${site ? C.green : C.muted}`, color: site ? C.green : C.muted, borderRadius: 20, padding: '5px 11px', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 5 }}>

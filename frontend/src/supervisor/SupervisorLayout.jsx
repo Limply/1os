@@ -76,14 +76,7 @@ export default function SupervisorLayout() {
       <header style={{ background: '#212D3E', borderBottom: '1px solid #2F4060' }}
         className="flex items-center justify-between px-5 py-3 flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <div style={{ background: '#F5C518', borderRadius: 10, width: 38, height: 38 }}
-            className="flex items-center justify-center flex-shrink-0">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1A2332" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 21V8l9-5 9 5v13"/>
-              <path d="M9 21v-6h6v6"/>
-              <path d="M3 10h18"/>
-            </svg>
-          </div>
+          <img src="/favicon.svg" alt="Astronic" style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0 }} />
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 23, color: '#fff', letterSpacing: '0.05em', lineHeight: 1 }}>
               Astronic

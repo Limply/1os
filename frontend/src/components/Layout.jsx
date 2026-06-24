@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import NotificationBell from './NotificationBell'
 import { isLoggedIn, getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 
 // Maps URL path → module key (dashboard '/' is always accessible — no entry)
 const ROUTE_MODULE = {
@@ -25,7 +26,7 @@ export default function Layout() {
   const location = useLocation()
   const user = getUser()
   const allowed = user.modules || []
-  const isAdminPlus = ['admin', 'superadmin'].includes(user.role)
+  const isAdminPlus = can(P.ADMIN_USERS)
 
   // Block direct URL access for restricted users
   if (!isAdminPlus && allowed.length > 0) {

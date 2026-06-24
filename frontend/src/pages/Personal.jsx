@@ -279,6 +279,9 @@ export default function Personal() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-800 truncate">{t.title}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
+                          {t.project_no && <span className="text-gray-500 font-medium">{t.project_no}</span>}
+                          {t.project_name && <span className="ml-1">· {t.project_name}</span>}
+                          <span className="mx-1">·</span>
                           {s.label}
                           {t.due_date && <span className="ml-2">· Due {t.due_date}</span>}
                         </p>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login } from '../api/auth'
+import { login, getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -24,7 +25,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(email, password)
-      navigate('/')
+      navigate(can(P.SUPERVISOR_APP) && !can(P.DASHBOARD_VIEW) ? '/supervisor' : '/')
     } catch {
       setError('Invalid email or password')
     } finally {

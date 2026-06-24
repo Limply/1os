@@ -1,7 +1,7 @@
 # 1OS — Development Tracker
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-06-13
+**Last Updated:** 2026-06-24
 
 ---
 
@@ -12,26 +12,26 @@
 | **Branch** | `dev` | `main` |
 | **Frontend** | Vite `:6100` (hot reload, proxies API to :6001) | Nginx `:80` serves `frontend/dist/` |
 | **Backend** | Django `runserver :6001` | Gunicorn `:8000` (internal, Nginx proxies) |
-| **Public URL** | `https://dev.sim-eng.com` | `https://se-1os.sim-eng.com` |
-| **Start** | `./start_dev.sh` | systemd manages Nginx + Gunicorn |
+| **Public URL** | `https://1os-dev.astronic.com.sg` | `https://1os.astronic.com.sg` |
+| **Start** | systemd `1os-django` + `1os-vite` | systemd `gunicorn-1os` + `nginx` |
 
 > **Always code in `/home/lucus/1os-dev/`** — never edit `/opt/1os/` directly.
 
 ### Port Map
 | Port | Process | Purpose |
 |---|---|---|
-| `:80` | Nginx (prod) | Public — `se-1os.sim-eng.com` via Cloudflare |
+| `:80` | Nginx (prod) | Public — `1os.astronic.com.sg` via Cloudflare |
 | `:6001` | Django `runserver` (dev) | Internal — dev API backend |
-| `:6100` | Vite (dev) | Public — `dev.sim-eng.com` via Cloudflare |
+| `:6100` | Vite (dev) | Public — `1os-dev.astronic.com.sg` via Cloudflare |
 | `:8000` | Gunicorn (prod) | Internal — prod API, Nginx proxies here |
-| `:8080` | FileBrowser | Public — `se-files.sim-eng.com` via Cloudflare |
+| `:8080` | FileBrowser | Public — `files.astronic.com.sg` via Cloudflare |
 
 ### Cloudflare Tunnel
 | Hostname | Target |
 |---|---|
-| `se-1os.sim-eng.com` | `localhost:80` (prod Nginx) |
-| `dev.sim-eng.com` | `localhost:6100` (dev Vite) |
-| `se-files.sim-eng.com` | `localhost:8080` (FileBrowser) |
+| `1os.astronic.com.sg` | `localhost:80` (prod Nginx) |
+| `1os-dev.astronic.com.sg` | `localhost:6100` (dev Vite) |
+| `files.astronic.com.sg` | `localhost:8080` (FileBrowser) |
 | `ssh.sim-eng.com` | `localhost:22` |
 | `ssh-se1.sim-eng.com` | `localhost:22` |
 
@@ -67,11 +67,13 @@ sudo systemctl restart gunicorn-1os
 ```
 
 ### systemd Services
-| Service | Command |
-|---|---|
-| `gunicorn-1os` | `sudo systemctl restart gunicorn-1os` |
-| `nginx` | `sudo systemctl restart nginx` |
-| `cloudflared` | `sudo systemctl restart cloudflared` |
+| Service | Command | Scope |
+|---|---|---|
+| `1os-django` | `sudo systemctl restart 1os-django` | Dev Django backend |
+| `1os-vite` | `sudo systemctl restart 1os-vite` | Dev Vite frontend |
+| `gunicorn-1os` | `sudo systemctl restart gunicorn-1os` | Prod Gunicorn |
+| `nginx` | `sudo systemctl restart nginx` | Prod Nginx |
+| `cloudflared` | `sudo systemctl restart cloudflared` | Tunnel |
 
 ---
 
@@ -102,6 +104,50 @@ Services are fully independent. A change in one module must never break another.
 
 > **Exception:** `services/dashboard/views.py` imports from projects, hr, crm — intentional; dashboard is an aggregate read-only view.
 
+### RBAC — Role-Based Access Control (June 2026)
+
+Permission system lives in `shared/permissions.py` (backend) and `frontend/src/utils/permissions.js` (frontend mirror).
+
+**Roles** (lowest → highest): `viewer` · `staff` · `foreman` · `supervisor` · `manager` · `admin` · `superadmin`
+
+| Role | Access |
+|---|---|
+| `superadmin` | Bypasses all checks — short-circuits to `true` |
+| `admin` | All permissions except `admin.tenant` |
+| `manager` | Dashboard, Projects (edit/delete), HR (manage, approve leave), Operations, Finance (view), CRM, Compliance (view), Files, Settings (view) |
+| `supervisor` | Dashboard, Supervisor app, Projects (view), HR (view), Files |
+| `foreman` | Supervisor app, Projects (view), HR (view) — redirected to `/supervisor` on login |
+| `staff` | Dashboard, HR (view), Files |
+| `viewer` | Read-only across most modules |
+
+**Backend — `shared/permissions.py`**
+- `P` class: 21 permission constants (`dashboard.view`, `projects.edit`, `hr.approve_leave`, `supervisor.app`, etc.)
+- `ROLE_DEFAULT_PERMISSIONS`: maps each role to its default permission list
+- `user_can(user, perm)`: checks `PermissionGroup` if assigned, falls back to role defaults
+- `make_module_permission(read_perm, write_perm)`: factory returning a DRF `BasePermission` subclass — used to protect entire ViewSets (safe methods check `read_perm`, mutations check `write_perm`)
+
+**Frontend — `frontend/src/utils/permissions.js`**
+- `P` constants (mirrors backend)
+- `can(perm)` / `canAny(...perms)`: reads `user.permissions` from JWT payload or falls back to role defaults
+
+**ViewSet permission coverage (as of 2026-06-24)**
+| Service | Guard | Read | Write |
+|---|---|---|---|
+| `projects/` | `user_can()` inline | `projects.view` (implicit) | `projects.delete`, `finance.edit` per action |
+| `hr/` | `HRPermission` class | `hr.view` | `hr.manage` |
+| `hr/` approve/reject | `user_can()` inline | — | `hr.approve_leave` |
+| `finance/` | `FinancePermission` class | `finance.view` | `finance.edit` |
+| `operations/` | `OpsPermission` class | `operations.view` | `operations.edit` |
+| `compliance/` | `CompliancePermission` class | `compliance.view` | `compliance.edit` |
+| `crm/` | `CRMPermission` class | `crm.view` | `crm.edit` |
+| `organisation/` Company/Dept/Team/Position/Site | `OrgPermission` class | `hr.view` | `hr.manage` |
+| `organisation/` Client | `CRMPermission` class | `crm.view` | `crm.edit` |
+| `dashboard/overview` | `user_can()` inline | `dashboard.view` | — |
+| `dashboard/supervisor_home` | `user_can()` inline | `supervisor.app` | — |
+| `notifications/` approve | `user_can()` inline | — | `hr.approve_leave` |
+
+**PermissionGroup model** (in `services/auth`) allows custom per-user permission overrides. When a user has a `permission_group` assigned, `user_can()` uses that group's permission list instead of role defaults.
+
 ### Tenant Architecture — KIV Multi-Tenant
 
 Current state: **single tenant per server** (one Astronic installation). `BaseModel` has `tenant` FK and `TenantMiddleware` sets `request.tenant` from JWT — the plumbing is ready but there is only one `Tenant` record per deployment.
@@ -121,11 +167,12 @@ See ADR at bottom of this file for full analysis.
 │   └── urls.py
 ├── shared/
 │   ├── models.py          # BaseModel (UUID pk, tenant FK, timestamps, is_active)
+│   ├── permissions.py     # P constants, ROLE_DEFAULT_PERMISSIONS, user_can(), make_module_permission()
 │   ├── middleware.py       # TenantMiddleware + DynamicCORSMiddleware
 │   ├── storage.py         # FileBrowserStorage
 │   └── admin.py
 ├── services/
-│   ├── auth/              # Tenant, User, PermissionGroup
+│   ├── auth/              # Tenant (+ files_url), User (+ foreman/supervisor roles, permission_group FK), PermissionGroup
 │   ├── organisation/      # Company, Department, Team, Position, Site,
 │   │                      # Client (billing/company record for finance linking)
 │   ├── hr/                # Employee, LeaveType, LeaveBalance, LeaveApplication,
@@ -183,6 +230,7 @@ See ADR at bottom of this file for full analysis.
 │   │   │   ├── Compliance → Placeholder  ❌ not built
 │   │   │   └── CameraTest.jsx         🔧 dev tool only
 │   │   └── utils/
+│   │       ├── permissions.js     # P constants (mirror of backend), can(), canAny()
 │   │       └── roleFilters.js
 │   └── package.json
 ├── .env                   # secrets — never commit
@@ -328,8 +376,12 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 
 ### Backend
 - [x] Tenant model (single per server, KIV multi-tenant)
-- [x] User model — UUID pk, email login, role field (superadmin/admin/manager/staff/viewer)
-- [x] PermissionGroup model
+- [x] User model — UUID pk, email login, role field (superadmin/admin/manager/supervisor/foreman/staff/viewer)
+- [x] PermissionGroup model — custom per-user permission overrides
+- [x] RBAC system — `P` constants, `ROLE_DEFAULT_PERMISSIONS`, `user_can()`, `make_module_permission()` in `shared/permissions.py`
+- [x] Frontend permission mirror — `can()`, `canAny()`, `P` in `frontend/src/utils/permissions.js`
+- [x] Backend permission guards — all service ViewSets (projects, hr, finance, ops, compliance, crm, org, dashboard) protected by module permissions
+- [x] Tenant.files_url — FileBrowser URL stored in DB, read by frontend dynamically
 - [x] Organisation models — Company, Department, Team, Position, Site, Client
 - [x] HR models — Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, WorkSchedule, StaffDeployment, ManpowerSettings, PublicHoliday
 - [x] Projects models — Project (auto project_no), Task, TaskPhoto, TaskDocument, TaskComment
@@ -376,6 +428,12 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 - [x] Files — embedded FileBrowser
 - [x] Settings — 6 colour themes, save confirmation
 - [x] 26 worker accounts created (password `Astronic.7890`)
+- [x] foreman test user — `foreman@astronic.com.sg` / `Astronic.2468`
+- [x] Supervisor/foreman default redirect — login sends `supervisor`/`foreman` roles to `/supervisor` automatically
+- [x] Favicon — Astronic branded SVG at `frontend/public/favicon.svg` (both dev and prod)
+- [x] Personal page — shows project tasks (project_no · project_name · status · due date)
+- [x] Supervisor header logo — replaced house SVG with Astronic favicon
+- [x] ProjectDetail foreman/supervisor dropdowns — derived from `users` list by role, no extra API call
 - [ ] Operations page — Jobs list, WTS tracker
 - [ ] Compliance page — Licences, Incidents
 - [ ] HR Calendar — leave + public holidays (uses `CalendarView`)
@@ -398,6 +456,8 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 | 1 | DB name `astronic` is shared between dev and prod — a dev migration could break prod | 🟡 Consider separate dev DB |
 | 2 | Two `Client` models: `organisation.Client` (billing record, used by Finance) and `crm.Client` (sales pipeline). Different fields, different purpose — no merge needed, but confusing naming | 🟢 Low — document clearly |
 | 3 | `SessionAuthentication` must NOT be in `DEFAULT_AUTHENTICATION_CLASSES` — if a Django admin session cookie exists in the browser, DRF enforces CSRF on all POST/PATCH/DELETE, causing 403. JWT-only auth in both dev and prod. Fixed June 2026. | 🔴 Do not re-add |
+| 4 | 6 real Astronic foremen still have `role=staff` in DB (yeasinsamir, mdmanikmollah3, rs7212128, arjundasarjundas802, sakibsheikh89111, sheikhrahat061750). 1 senior supervisor (liton.ast@gmail.com) also still `staff`. Needs manual role update. | 🟡 Update via Django admin |
+| 5 | Frontend permission guards (sidebar, route blocks) rely on `user.modules` JSONField. Modules list and new RBAC `P` permissions are independent — no sync yet. Long-term: derive sidebar visibility from `can()` calls directly, remove `modules` JSONField. | 🟢 Low — KIV |
 
 ---
 
@@ -405,12 +465,12 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 
 | Item | Value |
 |---|---|
-| Dev URL | `https://dev.sim-eng.com` or `http://192.168.1.27:6100` |
-| Prod URL | `https://se-1os.sim-eng.com` |
+| Dev URL | `https://1os-dev.astronic.com.sg` or `http://192.168.1.27:6100` |
+| Prod URL | `https://1os.astronic.com.sg` |
 | Dev backend | `http://192.168.1.27:6001` |
 | Prod backend | `http://192.168.1.27:8000` (internal, Nginx proxies) |
-| FileBrowser | `https://se-files.sim-eng.com` → `:8080` |
-| Django Admin | `https://se-1os.sim-eng.com/admin/` |
+| FileBrowser | `https://files.astronic.com.sg` → `:8080` |
+| Django Admin | `https://1os.astronic.com.sg/admin/` |
 | Admin user | `admin@astronic.com.sg` / `Astronic.2468` |
 | DB | PostgreSQL `astronic`, user `astronic_user` (shared dev/prod) |
 | Code — dev | `/home/lucus/1os-dev/` (`dev` branch) |

@@ -1,6 +1,9 @@
 from rest_framework import viewsets, permissions
 from services.organisation.models import Client
 from .models import Contact, Lead, Interaction
+from shared.permissions import make_module_permission, P
+
+CRMPermission = make_module_permission(P.CRM_VIEW, P.CRM_EDIT)
 from .serializers import (
     ClientSerializer, ClientListSerializer,
     ContactSerializer, LeadSerializer, InteractionSerializer,
@@ -8,7 +11,7 @@ from .serializers import (
 
 
 class ClientViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CRMPermission]
     pagination_class = None
 
     def get_queryset(self):
@@ -24,7 +27,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
 
 class ContactViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CRMPermission]
     serializer_class = ContactSerializer
     pagination_class = None
 
@@ -40,7 +43,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
 
 class LeadViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CRMPermission]
     serializer_class = LeadSerializer
     pagination_class = None
 
@@ -62,7 +65,7 @@ class LeadViewSet(viewsets.ModelViewSet):
 
 
 class InteractionViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CRMPermission]
     serializer_class = InteractionSerializer
     pagination_class = None
 

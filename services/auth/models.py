@@ -8,6 +8,7 @@ class Tenant(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     site_url = models.CharField(max_length=255, blank=True, null=True, help_text='e.g. https://customer.sim-eng.com')
+    files_url = models.CharField(max_length=255, blank=True, null=True, help_text='FileBrowser URL, e.g. https://files.astronic.com.sg/')
     logo = models.CharField(max_length=500, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
@@ -56,10 +57,19 @@ class User(AbstractBaseUser, PermissionsMixin):
             ('superadmin', 'Super Admin'),
             ('admin', 'Admin'),
             ('manager', 'Manager'),
+            ('supervisor', 'Supervisor'),
+            ('foreman', 'Foreman'),
             ('staff', 'Staff'),
             ('viewer', 'Viewer'),
         ],
         default='staff',
+    )
+    permission_group = models.ForeignKey(
+        'PermissionGroup',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='users',
+        help_text='Custom permission group — overrides role defaults if set',
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -74,6 +84,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = ['first_name', 'last_name']
 
     objects = UserManager()
+
+    @property
+    def resolved_permissions(self):
+        from shared.permissions import ROLE_DEFAULT_PERMISSIONS
+        if self.role == 'superadmin':
+            return None  # superadmin bypasses all checks
+        if self.permission_group_id and self.permission_group:
+            return self.permission_group.permissions
+        return ROLE_DEFAULT_PERMISSIONS.get(self.role, [])
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} <{self.email}>"

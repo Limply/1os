@@ -3,6 +3,9 @@ from django.http import HttpResponse
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from shared.permissions import make_module_permission, P
+
+FinancePermission = make_module_permission(P.FINANCE_VIEW, P.FINANCE_EDIT)
 from .models import Quotation, QuotationItem, Invoice, InvoiceItem, Payment, DeliveryOrder, DeliveryOrderItem, Expense
 from .serializers import (
     QuotationSerializer, QuotationItemSerializer,
@@ -12,7 +15,7 @@ from .serializers import (
 
 
 class TenantScopedMixin:
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [FinancePermission]
 
     def get_queryset(self):
         return self.queryset.filter(is_active=True)

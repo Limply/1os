@@ -3,6 +3,7 @@ import { Tree, TreeNode } from 'react-organizational-chart'
 import html2canvas from 'html2canvas'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 
 // Colour by depth level
 const LEVEL_COLORS = {
@@ -151,7 +152,7 @@ export default function OrgChart() {
   const [orientation, setOrientation] = useState('top') // 'top' = vertical, 'left' = horizontal
   const treeRef = useRef(null)
   const currentUser = getUser()
-  const isManager = ['superadmin', 'admin', 'manager'].includes(currentUser?.role)
+  const isManager = can(P.HR_MANAGE)
 
   useEffect(() => {
     api.get('/hr/org-tree/').then(res => {

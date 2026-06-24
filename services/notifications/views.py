@@ -65,7 +65,8 @@ def _generate_for_user(user):
         pass
 
     # Leave applications pending approval — managers only
-    if user.role in ('admin', 'superadmin', 'manager'):
+    from shared.permissions import user_can, P
+    if user_can(user, P.HR_APPROVE_LEAVE):
         try:
             from services.hr.models import LeaveApplication
             for leave in LeaveApplication.objects.filter(status='pending'):

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useMatch } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 
 const ALL_LINKS = [
   {
@@ -95,7 +96,7 @@ export default function Sidebar({ onCollapse }) {
   const navigate = useNavigate()
   const user = getUser()
   const allowed = user.modules || []
-  const isAdminPlus = ['admin', 'superadmin'].includes(user.role)
+  const isAdminPlus = can(P.ADMIN_USERS)
   const visibleLinks = ALL_LINKS.filter(link => canSee(link.module, allowed, isAdminPlus))
   const [logoUrl, setLogoUrl] = useState(null)
 

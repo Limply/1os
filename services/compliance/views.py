@@ -1,10 +1,13 @@
 from rest_framework import viewsets, permissions
 from .models import Licence, Incident
 from .serializers import LicenceSerializer, IncidentSerializer
+from shared.permissions import make_module_permission, P
+
+CompliancePermission = make_module_permission(P.COMPLIANCE_VIEW, P.COMPLIANCE_EDIT)
 
 
 class TenantScopedMixin:
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CompliancePermission]
 
     def get_queryset(self):
         return self.queryset.filter(is_active=True)

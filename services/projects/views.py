@@ -50,10 +50,8 @@ def task_templates(request):
                     pass
     return Response(templates)
 
-MANAGER_ROLES = {'manager', 'admin', 'superadmin'}
+from shared.permissions import user_can, P
 
-
-ADMIN_ROLES = ('admin', 'superadmin')
 FINANCIAL_FIELDS = {'payment_record'}
 
 
@@ -84,7 +82,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def partial_update(self, request, *args, **kwargs):
-        if request.user.role not in ADMIN_ROLES:
+        if not user_can(request.user, P.FINANCE_EDIT):
             touching_finance = FINANCIAL_FIELDS & set(request.data.keys())
             if touching_finance:
                 from rest_framework.response import Response
@@ -120,7 +118,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def destroy(self, request, *args, **kwargs):
-        if request.user.role not in MANAGER_ROLES:
+        if not user_can(request.user, P.PROJECTS_DELETE):
             raise PermissionDenied('Only managers can delete tasks.')
         return super().destroy(request, *args, **kwargs)
 
@@ -181,7 +179,7 @@ class TaskCommentViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         obj = self.get_object()
-        if obj.author != request.user and request.user.role not in ('admin', 'superadmin'):
+        if obj.author != request.user and not user_can(request.user, P.PROJECTS_DELETE):
             raise PermissionDenied('You can only delete your own comments.')
         return super().destroy(request, *args, **kwargs)
 
@@ -205,6 +203,6 @@ class ProjectCommentViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         obj = self.get_object()
-        if obj.author != request.user and request.user.role not in ('admin', 'superadmin'):
+        if obj.author != request.user and not user_can(request.user, P.PROJECTS_DELETE):
             raise PermissionDenied('You can only delete your own comments.')
         return super().destroy(request, *args, **kwargs)

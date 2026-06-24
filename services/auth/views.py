@@ -20,6 +20,7 @@ def tenant_info(request):
         'gst_number': t.gst_number,
         'gst_registered': t.gst_registered,
         'site_url': t.site_url,
+        'files_url': t.files_url,
         'logo': t.logo,
         'project_prefix': t.project_prefix,
         'signatory_name': t.signatory_name,

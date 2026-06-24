@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 import { generateQuotationPDF } from '../utils/quotationPDF'
 
 const TABS = ['Quotations', 'Invoices', 'Delivery Orders', 'Service Reports', 'P&L']
@@ -11,7 +12,7 @@ const INV_STATUS = { unpaid: 'bg-yellow-100 text-yellow-700', partial: 'bg-prima
 const DO_STATUS  = { draft: 'bg-gray-100 text-gray-600', issued: 'bg-primary-100 text-primary-700', delivered: 'bg-purple-100 text-purple-700', acknowledged: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
 
 const GST_RATE = 0.09
-const ADMIN_ROLES = ['admin', 'superadmin']
+
 
 const PROJECT_STATUSES = [
   { value: 'planning',  label: 'Planning',  cls: 'bg-gray-100 text-gray-500' },
@@ -398,7 +399,7 @@ function Totals({ items, gstRegistered }) {
 
 export default function Finance() {
   const currentUser = getUser()
-  const canEditFinance = ADMIN_ROLES.includes(currentUser?.role)
+  const canEditFinance = can(P.FINANCE_EDIT)
   const location = useLocation()
   const initialTab = TABS.includes(new URLSearchParams(window.location.search).get('tab'))
     ? new URLSearchParams(window.location.search).get('tab') : 'Quotations'

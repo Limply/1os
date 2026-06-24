@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 import ManpowerCalendar from '../components/ManpowerCalendar'
 import ManpowerSettings from '../components/ManpowerSettings'
 import { useManpowerSettings } from '../hooks/useManpowerSettings'
 
-const MANAGER_ROLES = ['superadmin', 'admin', 'manager']
+
 
 const STATUS_COLORS = {
   pending:   'bg-yellow-100 text-yellow-700',
@@ -42,7 +43,7 @@ function SubTabs({ tabs, active, onChange }) {
 
 export default function HR() {
   const currentUser = getUser()
-  const isManager = MANAGER_ROLES.includes(currentUser?.role)
+  const isManager = can(P.HR_MANAGE)
   const { settings: manpowerSettings, updateSettings: updateManpowerSettings } = useManpowerSettings()
   const [showManpowerSettings, setShowManpowerSettings] = useState(false)
 

@@ -23,9 +23,6 @@ def _generate_project_no():
 
 
 class Project(BaseModel):
-    TYPE_CHOICES = [
-        ('client', 'Client Project'),
-    ]
     STATUS_CHOICES = [
         ('planning', 'Planning'),
         ('active', 'Active'),
@@ -42,7 +39,6 @@ class Project(BaseModel):
 
     project_no    = models.CharField(max_length=30, unique=True, blank=True)
     name          = models.CharField(max_length=255)
-    type          = models.CharField(max_length=20, choices=TYPE_CHOICES, default='client')
     status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
     priority      = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     description   = models.TextField(blank=True, null=True)
@@ -53,6 +49,11 @@ class Project(BaseModel):
     client_email   = models.EmailField(blank=True, null=True)
     client_phone   = models.CharField(max_length=20, blank=True, null=True)
     client_address = models.TextField(blank=True, null=True)
+
+    # Site location
+    site_address = models.TextField(blank=True, null=True)
+    site_lat     = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    site_lng     = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
 
     start_date = models.DateField(null=True, blank=True)
     end_date   = models.DateField(null=True, blank=True)

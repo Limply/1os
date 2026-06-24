@@ -1,14 +1,18 @@
 import datetime
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
+from shared.permissions import user_can, P
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def overview(request):
+    if not user_can(request.user, P.DASHBOARD_VIEW):
+        return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
     today = timezone.now().date()
     month_start = today.replace(day=1)
     month_end = (month_start.replace(month=month_start.month % 12 + 1, day=1)
@@ -105,6 +109,8 @@ def overview(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def supervisor_home(request):
+    if not user_can(request.user, P.SUPERVISOR_APP):
+        return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
     from services.projects.models import Project, Task
     from services.hr.models import Attendance
 
@@ -124,6 +130,9 @@ def supervisor_home(request):
             'name': active_project.name,
             'project_no': active_project.project_no,
             'status': active_project.status,
+            'site_address': active_project.site_address,
+            'site_lat': str(active_project.site_lat) if active_project.site_lat else None,
+            'site_lng': str(active_project.site_lng) if active_project.site_lng else None,
         }
 
     # Task counts across all active supervised projects

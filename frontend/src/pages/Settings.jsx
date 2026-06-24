@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { THEMES, useTheme } from '../context/ThemeContext'
 import { getUser } from '../api/auth'
+import { can, P } from '../utils/permissions'
 import api from '../api/axios'
 
 const MODES = [
@@ -12,7 +13,7 @@ const MODES = [
 export default function Settings() {
   const { theme, setTheme, darkMode, setDarkMode } = useTheme()
   const user = getUser()
-  const isAdmin = ['admin', 'superadmin'].includes(user?.role)
+  const isAdmin = can(P.SETTINGS_EDIT)
 
   const [pendingTheme, setPendingTheme] = useState(theme)
   const [pendingMode, setPendingMode]   = useState(darkMode)

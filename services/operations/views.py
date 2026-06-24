@@ -1,6 +1,9 @@
 from django.http import FileResponse
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
+from shared.permissions import make_module_permission, P
+
+OpsPermission = make_module_permission(P.OPERATIONS_VIEW, P.OPERATIONS_EDIT)
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import (
     Job, WTSRequest, Asset, Inspection,
@@ -15,7 +18,7 @@ from . import documents
 
 
 class TenantScopedMixin:
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [OpsPermission]
 
     def get_queryset(self):
         return self.queryset.filter(is_active=True)
