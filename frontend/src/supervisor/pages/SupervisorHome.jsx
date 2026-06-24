@@ -16,12 +16,11 @@ const C = {
   muted:  '#7A90AA',
 }
 
-const STATUS_PILL = {
-  todo:        { text: 'To Do',       color: C.muted,   bg: 'rgba(122,144,170,0.15)' },
-  in_progress: { text: 'In Progress', color: C.yellow,  bg: 'rgba(245,197,24,0.15)'  },
-  review:      { text: 'Review',      color: C.blue,    bg: 'rgba(58,142,230,0.15)'  },
-  done:        { text: 'Done',        color: C.green,   bg: 'rgba(46,204,113,0.15)'  },
-  issue:       { text: 'Issue',       color: C.red,     bg: 'rgba(231,76,60,0.15)'   },
+const PROJECT_STATUS = {
+  active:   { text: 'Active',   color: C.green,  bg: 'rgba(46,204,113,0.15)'  },
+  planning: { text: 'Planning', color: C.blue,   bg: 'rgba(58,142,230,0.15)'  },
+  on_hold:  { text: 'On Hold',  color: C.amber,  bg: 'rgba(232,148,42,0.15)'  },
+  done:     { text: 'Done',     color: C.muted,  bg: 'rgba(122,144,170,0.15)' },
 }
 
 // ── reusable tiny components ───────────────────────────────────────────────────
@@ -111,15 +110,13 @@ const IconAlertRed = () => (
   </svg>
 )
 
-function IconTask(color) {
+function IconProject(color) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6"/>
-      <line x1="8" y1="12" x2="21" y2="12"/>
-      <line x1="8" y1="18" x2="21" y2="18"/>
-      <line x1="3" y1="6" x2="3.01" y2="6"/>
-      <line x1="3" y1="12" x2="3.01" y2="12"/>
-      <line x1="3" y1="18" x2="3.01" y2="18"/>
+      <rect x="2" y="7" width="20" height="14" rx="2"/>
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+      <line x1="12" y1="12" x2="12" y2="16"/>
+      <line x1="10" y1="14" x2="14" y2="14"/>
     </svg>
   )
 }
@@ -155,10 +152,10 @@ export default function SupervisorHome() {
     )
   }
 
-  const site    = data?.site
-  const summary = data?.summary || {}
-  const tasks   = data?.tasks   || []
-  const team    = data?.team    || []
+  const site     = data?.site
+  const summary  = data?.summary  || {}
+  const projects = data?.projects || []
+  const team     = data?.team     || []
 
   return (
     <div style={{ background: '#1A2332' }}>
@@ -266,25 +263,24 @@ export default function SupervisorHome() {
           />
         ))}
 
-        {/* Today's Tasks */}
-        <SectionHead>Today's Tasks</SectionHead>
+        {/* Projects */}
+        <SectionHead>Projects</SectionHead>
 
-        {tasks.length === 0 ? (
-          <div style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '16px 0' }}>No open tasks</div>
-        ) : tasks.map(t => {
-          const pill = STATUS_PILL[t.status] || STATUS_PILL.todo
-          const iconColor = t.priority === 'urgent' ? C.red : t.priority === 'high' ? C.amber : C.yellow
+        {projects.length === 0 ? (
+          <div style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '16px 0' }}>No projects assigned</div>
+        ) : projects.map(p => {
+          const pill = PROJECT_STATUS[p.status] || PROJECT_STATUS.planning
           return (
             <ListCard
-              key={t.id}
+              key={p.id}
               iconBg="rgba(245,197,24,0.1)"
-              icon={IconTask(iconColor)}
-              title={t.title}
-              sub={`${t.project_no} · ${t.group || 'General'}`}
+              icon={IconProject(C.yellow)}
+              title={p.name}
+              sub={`${p.project_no}${p.end_date ? ' · Due ' + p.end_date : ''}${p.progress != null ? ' · ' + p.progress + '%' : ''}`}
               pillText={pill.text}
               pillColor={pill.color}
               pillBg={pill.bg}
-              onClick={() => navigate(`/supervisor/tasks/${t.id}`)}
+              onClick={() => navigate('/supervisor/tasks')}
             />
           )
         })}

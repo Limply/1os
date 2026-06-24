@@ -157,25 +157,30 @@ def supervisor_home(request):
         project__supervisor=user,
     ).count()
 
-    # Today's task list (non-done, assigned to logged-in user or on supervised projects)
-    task_qs = (
-        supervised_tasks
-        .exclude(status='done')
-        .filter(Q(assigned_to=user) | Q(assigned_to__isnull=False))
-        .select_related('project')
-        .order_by('priority', 'due_date')[:10]
-    )
-    tasks_list = [
-        {
-            'id':         str(t.id),
-            'title':      t.title,
-            'group':      t.group,
-            'status':     t.status,
-            'priority':   t.priority,
-            'project':    t.project.name,
-            'project_no': t.project.project_no,
+    def _project_dict(p):
+        return {
+            'id':           str(p.id),
+            'name':         p.name,
+            'project_no':   p.project_no,
+            'status':       p.status,
+            'progress':     p.progress,
+            'end_date':     str(p.end_date) if p.end_date else None,
+            'supervisor':   p.supervisor.full_name if p.supervisor else None,
         }
-        for t in task_qs
+
+    # Projects supervised by this user
+    my_projects = list(
+        Project.objects.filter(supervisor=user).order_by('-status', 'name')
+    )
+    projects_list = [_project_dict(p) for p in my_projects]
+
+    # All other active/planning projects
+    other_projects_list = [
+        _project_dict(p)
+        for p in Project.objects
+            .exclude(supervisor=user)
+            .filter(status__in=['active', 'planning'])
+            .order_by('-status', 'name')
     ]
 
     # Team today — employees clocked in on supervised projects
@@ -205,8 +210,9 @@ def supervisor_home(request):
             'tasks_pending':   tasks_pending,
             'tasks_urgent':    tasks_urgent,
         },
-        'tasks': tasks_list,
-        'team':  team_list,
+        'projects':       projects_list,
+        'other_projects': other_projects_list,
+        'team':           team_list,
     })
 
 PROBLEM_REPORT_RECIPIENTS = [
