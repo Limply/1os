@@ -103,7 +103,7 @@ export default function Sidebar({ onCollapse }) {
   useEffect(() => {
     fetch('/api/auth/tenant-info/')
       .then(r => r.json())
-      .then(data => { if (data.logo) setLogoUrl(`/media/${data.logo}`) })
+      .then(data => { if (data.logo) setLogoUrl(`/media/${data.logo}?v=2`) })
       .catch(() => {})
   }, [])
 
