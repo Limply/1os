@@ -92,9 +92,13 @@ def overview(request):
     project_status = {s: projects.filter(status=s).count()
                       for s in ['planning', 'active', 'on_hold', 'completed', 'cancelled']}
     project_status['total'] = projects.count()
-    project_status['avg_active_progress'] = round(
-        projects.filter(status='active').aggregate(a=Avg('progress'))['a'] or 0
-    )
+    active_qs = projects.filter(status='active')
+    project_status['avg_active_progress'] = round(active_qs.aggregate(a=Avg('progress'))['a'] or 0)
+    project_status['active_progress'] = {
+        'not_started': active_qs.filter(progress=0).count(),
+        'in_progress': active_qs.filter(progress__gt=0, progress__lt=90).count(),
+        'near_done':   active_qs.filter(progress__gte=90).count(),
+    }
 
     # ---- Manpower today (field staff who clock in; managers don't) ----
     from services.hr.models import Attendance

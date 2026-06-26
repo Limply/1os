@@ -44,18 +44,6 @@ function KpiCard({ label, value, sub, accent = 'blue', onClick }) {
   )
 }
 
-const STATUS_COLORS = {
-  active:    '#3b82f6',
-  planning:  '#a78bfa',
-  on_hold:   '#f59e0b',
-  completed: '#10b981',
-  cancelled: '#9ca3af',
-}
-const STATUS_LABELS = {
-  active: 'Active', planning: 'Planning', on_hold: 'On Hold',
-  completed: 'Completed', cancelled: 'Cancelled',
-}
-const STATUS_ORDER = ['active', 'planning', 'on_hold', 'completed', 'cancelled']
 const money = n => `$${Number(n || 0).toLocaleString('en-SG', { maximumFractionDigits: 0 })}`
 
 function Donut({ segments, total, centerLabel, centerSub }) {
@@ -122,73 +110,54 @@ export default function Dashboard() {
         <p className="text-gray-400 text-sm">Loading…</p>
       ) : (
         <>
-          {/* KPI grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KpiCard
-              label="Active Projects"
-              value={k.active_projects}
-              sub={`${k.planning_projects ?? 0} planning · ${k.on_hold_projects ?? 0} on hold`}
-              accent="blue"
-              onClick={() => navigate('/projects')}
-            />
-            <KpiCard
-              label="Ending This Month"
-              value={k.projects_ending_this_month}
-              sub="Active projects"
-              accent="purple"
-              onClick={() => navigate('/projects')}
-            />
-            <KpiCard
-              label="Overdue Tasks"
-              value={k.overdue_tasks}
-              sub={`${k.tasks_due_this_week ?? 0} due this week`}
-              accent={k.overdue_tasks > 0 ? 'red' : 'green'}
-              onClick={() => navigate('/projects')}
-            />
-            <KpiCard
-              label="Staff on Leave"
-              value={k.staff_on_leave_today}
-              sub={`of ${k.total_employees ?? '—'} employees`}
-              accent="yellow"
-              onClick={() => navigate('/hr')}
-            />
-            <KpiCard
-              label="Open Leads"
-              value={k.open_leads}
-              sub={`${k.won_leads_this_month ?? 0} won this month`}
-              accent="green"
-              onClick={() => navigate('/crm')}
-            />
-          </div>
-
           {/* Company-wide graphical overview */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-            {/* Project status donut */}
+            {/* Active projects by progress */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Project Status</h2>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Active Projects</h2>
               {(() => {
                 const ps = data?.project_status ?? {}
-                const total = ps.total || 0
-                const segs = STATUS_ORDER.map(s => ({ value: ps[s] || 0, color: STATUS_COLORS[s] })).filter(s => s.value > 0)
+                const ap = ps.active_progress ?? {}
+                const buckets = [
+                  { key: 'not_started', label: 'Not started', color: '#9ca3af', value: ap.not_started || 0 },
+                  { key: 'in_progress', label: 'In progress', color: '#3b82f6', value: ap.in_progress || 0 },
+                  { key: 'near_done',   label: 'Near done',   color: '#10b981', value: ap.near_done || 0 },
+                ]
+                const activeTotal = ps.active || 0
+                const segs = buckets.filter(b => b.value > 0)
                 return (
-                  <div className="flex items-center gap-4">
-                    <Donut segments={segs} total={total} centerLabel={total} centerSub="projects" />
-                    <div className="flex-1 space-y-1.5">
-                      {STATUS_ORDER.map(s => (
-                        <div key={s} className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-2 text-gray-600">
-                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[s] }} />
-                            {STATUS_LABELS[s]}
-                          </span>
-                          <span className="font-semibold text-gray-700">{ps[s] || 0}</span>
+                  <>
+                    <div className="flex items-center gap-4">
+                      <Donut segments={segs} total={activeTotal} centerLabel={activeTotal} centerSub="active" />
+                      <div className="flex-1 space-y-1.5">
+                        {buckets.map(b => (
+                          <div key={b.key} className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-2 text-gray-600">
+                              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: b.color }} />
+                              {b.label}
+                            </span>
+                            <span className="font-semibold text-gray-700">{b.value}</span>
+                          </div>
+                        ))}
+                        <div className="pt-1.5 mt-1 border-t border-gray-100 text-xs text-gray-400">
+                          Avg progress {ps.avg_active_progress || 0}%
                         </div>
-                      ))}
-                      <div className="pt-1.5 mt-1 border-t border-gray-100 text-xs text-gray-400">
-                        Avg active progress {ps.avg_active_progress || 0}%
                       </div>
                     </div>
-                  </div>
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={() => navigate('/projects')}
+                        className="flex-1 rounded-lg bg-purple-50 hover:bg-purple-100 p-2 text-left transition">
+                        <p className="text-lg font-bold text-purple-700 leading-none">{k.projects_ending_this_month ?? 0}</p>
+                        <p className="text-[11px] text-purple-700 opacity-70 mt-0.5">ending this month</p>
+                      </button>
+                      <button onClick={() => navigate('/projects')}
+                        className={`flex-1 rounded-lg p-2 text-left transition ${k.overdue_tasks > 0 ? 'bg-red-50 hover:bg-red-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                        <p className={`text-lg font-bold leading-none ${k.overdue_tasks > 0 ? 'text-red-600' : 'text-gray-600'}`}>{k.overdue_tasks ?? 0}</p>
+                        <p className={`text-[11px] opacity-70 mt-0.5 ${k.overdue_tasks > 0 ? 'text-red-600' : 'text-gray-500'}`}>overdue tasks</p>
+                      </button>
+                    </div>
+                  </>
                 )
               })()}
             </div>
@@ -261,6 +230,12 @@ export default function Dashboard() {
             </div>
 
           </div>
+
+          {/* CRM mini line */}
+          <button onClick={() => navigate('/crm')}
+            className="text-xs text-gray-500 hover:text-gray-700 transition">
+            Open leads {k.open_leads ?? 0} · {k.won_leads_this_month ?? 0} won this month →
+          </button>
 
           {/* Detail rows */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
