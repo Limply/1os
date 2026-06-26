@@ -4,8 +4,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Q
-from shared.permissions import user_can, P
+from django.db.models import Q, Count, Sum, Avg, F
+from shared.permissions import user_can, P, _rank
 
 
 @api_view(['GET'])
@@ -88,6 +88,48 @@ def overview(request):
         t['due_date'] = str(t['due_date'])
         t['days_overdue'] = (today - datetime.date.fromisoformat(t['due_date'])).days
 
+    # ---- Project status (company-wide) ----
+    project_status = {s: projects.filter(status=s).count()
+                      for s in ['planning', 'active', 'on_hold', 'completed', 'cancelled']}
+    project_status['total'] = projects.count()
+    project_status['avg_active_progress'] = round(
+        projects.filter(status='active').aggregate(a=Avg('progress'))['a'] or 0
+    )
+
+    # ---- Manpower today (field staff who clock in; managers don't) ----
+    from services.hr.models import Attendance
+    todays_att = Attendance.objects.filter(date=today, clock_in__isnull=False)
+    by_site = []
+    for r in (todays_att.values('project__project_no', 'project__name')
+              .annotate(n=Count('id')).order_by('-n')):
+        by_site.append({
+            'project_no': r['project__project_no'],
+            'name': r['project__name'] or 'Unassigned site',
+            'count': r['n'],
+        })
+    manpower = {
+        'clocked_in_today': todays_att.count(),
+        'on_site_now':      todays_att.filter(clock_out__isnull=True).count(),
+        'on_leave_today':   staff_on_leave,
+        'total_employees':  employees.count(),
+        'by_site':          by_site,
+    }
+
+    # ---- Financials this month (manager and above only) ----
+    financials = None
+    if _rank(request.user.role) >= _rank('manager'):
+        from services.finance.models import Invoice, Payment, Expense
+        unpaid = Invoice.objects.exclude(status='paid')
+        overdue = unpaid.filter(due_date__lt=today)
+        financials = {
+            'outstanding_receivables': float(unpaid.aggregate(s=Sum(F('total') - F('paid_amount')))['s'] or 0),
+            'revenue_this_month':      float(Payment.objects.filter(payment_date__gte=month_start, payment_date__lt=month_end).aggregate(s=Sum('amount'))['s'] or 0),
+            'invoiced_this_month':     float(Invoice.objects.filter(issue_date__gte=month_start, issue_date__lt=month_end).aggregate(s=Sum('total'))['s'] or 0),
+            'expenses_this_month':     float(Expense.objects.filter(expense_date__gte=month_start, expense_date__lt=month_end).aggregate(s=Sum('amount'))['s'] or 0),
+            'overdue_invoices_count':  overdue.count(),
+            'overdue_invoices_amount': float(overdue.aggregate(s=Sum(F('total') - F('paid_amount')))['s'] or 0),
+        }
+
     return Response({
         'kpis': {
             'active_projects':           active_projects,
@@ -101,7 +143,10 @@ def overview(request):
             'won_leads_this_month':      won_leads_this_month,
             'open_leads':                open_leads,
         },
-        'ending_soon':    ending_soon,
+        'project_status':     project_status,
+        'manpower':           manpower,
+        'financials':         financials,
+        'ending_soon':        ending_soon,
         'overdue_tasks_list': recent_overdue,
     })
 
