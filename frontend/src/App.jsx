@@ -20,6 +20,7 @@ import Settings from './pages/Settings'
 import CRM from './pages/CRM'
 import Operations from './pages/Operations'
 import Personal from './pages/Personal'
+import MockupPage from './pages/MockupPage'
 import SupervisorLayout from './supervisor/SupervisorLayout'
 import SupervisorHome from './supervisor/pages/SupervisorHome'
 import SupervisorTasks from './supervisor/pages/SupervisorTasks'
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/files"      element={<Files />} />
           <Route path="/calendar"   element={<Calendar />} />
           <Route path="/settings"   element={<Settings />} />
+          <Route path="/mock_up_page" element={<MockupPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
