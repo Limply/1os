@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, Claim, ClaimItem, ClaimAttachment
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -181,3 +181,62 @@ class PersonalGoalSerializer(serializers.ModelSerializer):
         model = PersonalGoal
         fields = ['id', 'text', 'category', 'goal_type', 'is_achieved', 'target_date', 'order']
         read_only_fields = ['id']
+
+
+class ClaimAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClaimAttachment
+        fields = ['id', 'item', 'file', 'filename', 'url', 'uploaded_by', 'created_at']
+        read_only_fields = ['id', 'filename', 'uploaded_by', 'created_at']
+        extra_kwargs = {'file': {'write_only': True}}
+
+    def get_url(self, obj):
+        try:
+            return obj.file.url if obj.file else None
+        except Exception:
+            return None
+
+
+class ClaimItemSerializer(serializers.ModelSerializer):
+    attachments = ClaimAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ClaimItem
+        fields = ['id', 'claim', 'expense_date', 'category', 'description', 'amount', 'project_no', 'attachments', 'created_at']
+        read_only_fields = ['id', 'attachments', 'created_at']
+
+
+class ClaimSerializer(serializers.ModelSerializer):
+    items = ClaimItemSerializer(many=True, read_only=True)
+    claimant_name = serializers.SerializerMethodField()
+    approver_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Claim
+        fields = ['id', 'claimant', 'claimant_name', 'title', 'period_month', 'status',
+                  'total_amount', 'notes', 'submitted_at', 'approver', 'approver_name',
+                  'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'remarks', 'items',
+                  'created_at', 'updated_at']
+        read_only_fields = ['id', 'claimant', 'status', 'total_amount', 'submitted_at',
+                            'approver', 'reviewed_by', 'reviewed_at', 'remarks',
+                            'created_at', 'updated_at']
+
+    def _emp_name(self, user):
+        if not user:
+            return None
+        emp = getattr(user, 'employee_profile', None)
+        if emp:
+            return emp.full_name
+        return (user.get_full_name() or '').strip() or user.email
+
+    def get_claimant_name(self, obj):
+        return self._emp_name(obj.claimant)
+
+    def get_approver_name(self, obj):
+        return self._emp_name(obj.approver)
+
+    def get_reviewed_by_name(self, obj):
+        return self._emp_name(obj.reviewed_by)

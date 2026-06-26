@@ -4,7 +4,7 @@ from .views import (
     EmployeeViewSet, LeaveTypeViewSet, LeaveBalanceViewSet,
     LeaveApplicationViewSet, AttendanceViewSet, CertificationViewSet, PublicHolidayViewSet,
     WorkScheduleViewSet, ManpowerSettingsViewSet, StaffDeploymentViewSet, employee_me, org_tree,
-    PersonalGoalViewSet,
+    PersonalGoalViewSet, ClaimViewSet, ClaimItemViewSet, ClaimAttachmentViewSet,
 )
 
 router = DefaultRouter()
@@ -19,6 +19,9 @@ router.register('work-schedules', WorkScheduleViewSet, basename='work-schedule')
 router.register('manpower-settings', ManpowerSettingsViewSet, basename='manpower-settings')
 router.register('staff-deployments', StaffDeploymentViewSet, basename='staff-deployment')
 router.register('personal-goals',    PersonalGoalViewSet,    basename='personal-goal')
+router.register('claims',             ClaimViewSet,           basename='claim')
+router.register('claim-items',        ClaimItemViewSet,       basename='claim-item')
+router.register('claim-attachments',  ClaimAttachmentViewSet, basename='claim-attachment')
 
 urlpatterns = [
     path('employees/me/', employee_me, name='employee-me'),

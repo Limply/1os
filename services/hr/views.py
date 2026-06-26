@@ -4,18 +4,24 @@ import openpyxl
 from django.utils import timezone
 from django.http import HttpResponse
 from datetime import datetime
+from django.db.models import Q
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from shared.permissions import make_module_permission, user_can, P
 
 HRPermission = make_module_permission(P.HR_VIEW, P.HR_MANAGE)
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal
+# Claims are self-service: any employee with HR access manages their own claims
+# (querysets scoped to the owner); approve/reject is gated to the supervisor.
+ClaimPermission = make_module_permission(P.HR_VIEW)
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, Claim, ClaimItem, ClaimAttachment
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
     ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer, StaffDeploymentSerializer,
-    PersonalGoalSerializer,
+    PersonalGoalSerializer, ClaimSerializer, ClaimItemSerializer, ClaimAttachmentSerializer,
 )
 from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
@@ -680,3 +686,158 @@ class PersonalGoalViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+# ---------------------------------------------------------------------------
+# Monthly expense claims (self-service; approved by reporting supervisor)
+# ---------------------------------------------------------------------------
+class ClaimViewSet(viewsets.ModelViewSet):
+    permission_classes = [ClaimPermission]
+    serializer_class = ClaimSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = (Claim.objects
+              .select_related('claimant', 'approver', 'reviewed_by')
+              .prefetch_related('items__attachments'))
+        # Base visibility: own claims + claims awaiting my approval (HR_MANAGE sees all)
+        if not user_can(user, P.HR_MANAGE):
+            qs = qs.filter(Q(claimant=user) | Q(approver=user))
+        scope = self.request.query_params.get('scope')
+        status_f = self.request.query_params.get('status')
+        if scope == 'mine':
+            qs = qs.filter(claimant=user)
+        elif scope == 'to_approve':
+            qs = qs.filter(approver=user)
+        if status_f:
+            qs = qs.filter(status=status_f)
+        return qs.distinct()
+
+    def perform_create(self, serializer):
+        serializer.save(claimant=self.request.user)
+
+    def _owner_editable(self, claim):
+        return claim.claimant_id == self.request.user.id and claim.status in ('draft', 'rejected')
+
+    def update(self, request, *args, **kwargs):
+        if not self._owner_editable(self.get_object()):
+            raise PermissionDenied('Only your own draft/rejected claims can be edited.')
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not self._owner_editable(self.get_object()):
+            raise PermissionDenied('Only your own draft/rejected claims can be deleted.')
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        claim = self.get_object()
+        if claim.claimant_id != request.user.id:
+            raise PermissionDenied('Not your claim.')
+        if claim.status not in ('draft', 'rejected'):
+            return Response({'detail': 'Claim has already been submitted.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not claim.items.exists():
+            return Response({'detail': 'Add at least one item before submitting.'}, status=status.HTTP_400_BAD_REQUEST)
+        emp = getattr(request.user, 'employee_profile', None)
+        supervisor = emp.manager if emp else None
+        approver_user = supervisor.user if (supervisor and supervisor.user_id) else None
+        if not approver_user:
+            return Response(
+                {'detail': 'No reporting supervisor assigned — contact HR.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        claim.approver = approver_user
+        claim.status = 'submitted'
+        claim.submitted_at = timezone.now()
+        claim.reviewed_by = None
+        claim.reviewed_at = None
+        claim.remarks = ''
+        claim.save()
+        claim.recalculate_total()
+        return Response(ClaimSerializer(claim).data)
+
+    def _can_review(self, claim, user):
+        return claim.approver_id == user.id or user_can(user, P.HR_MANAGE)
+
+    def _review(self, request, new_status):
+        claim = self.get_object()
+        if not self._can_review(claim, request.user):
+            raise PermissionDenied('Only the reporting supervisor can review this claim.')
+        if claim.status != 'submitted':
+            return Response({'detail': 'Only submitted claims can be reviewed.'}, status=status.HTTP_400_BAD_REQUEST)
+        claim.status = new_status
+        claim.reviewed_by = request.user
+        claim.reviewed_at = timezone.now()
+        claim.remarks = request.data.get('remarks', '')
+        claim.save()
+        return Response(ClaimSerializer(claim).data)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        return self._review(request, 'approved')
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        return self._review(request, 'rejected')
+
+
+class ClaimItemViewSet(viewsets.ModelViewSet):
+    permission_classes = [ClaimPermission]
+    serializer_class = ClaimItemSerializer
+
+    def get_queryset(self):
+        qs = (ClaimItem.objects
+              .select_related('claim')
+              .prefetch_related('attachments')
+              .filter(claim__claimant=self.request.user))
+        claim_id = self.request.query_params.get('claim')
+        if claim_id:
+            qs = qs.filter(claim_id=claim_id)
+        return qs
+
+    def _guard(self, claim):
+        if claim.claimant_id != self.request.user.id:
+            raise PermissionDenied('Not your claim.')
+        if claim.status not in ('draft', 'rejected'):
+            raise PermissionDenied('Cannot edit items of a submitted claim.')
+
+    def perform_create(self, serializer):
+        self._guard(serializer.validated_data['claim'])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._guard(serializer.instance.claim)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._guard(instance.claim)
+        instance.delete()
+
+
+class ClaimAttachmentViewSet(viewsets.ModelViewSet):
+    permission_classes = [ClaimPermission]
+    serializer_class = ClaimAttachmentSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        qs = (ClaimAttachment.objects
+              .select_related('item__claim')
+              .filter(item__claim__claimant=self.request.user))
+        item_id = self.request.query_params.get('item')
+        if item_id:
+            qs = qs.filter(item_id=item_id)
+        return qs
+
+    def _guard(self, item):
+        if item.claim.claimant_id != self.request.user.id:
+            raise PermissionDenied('Not your claim.')
+        if item.claim.status not in ('draft', 'rejected'):
+            raise PermissionDenied('Cannot change attachments of a submitted claim.')
+
+    def perform_create(self, serializer):
+        self._guard(serializer.validated_data['item'])
+        serializer.save(uploaded_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        self._guard(instance.item)
+        instance.delete()

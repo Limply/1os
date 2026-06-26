@@ -267,3 +267,96 @@ class PersonalGoal(BaseModel):
 
     def __str__(self):
         return f"{self.get_goal_type_display()}: {self.text[:60]}"
+
+
+class Claim(BaseModel):
+    """Monthly expense claim submitted by an employee for reimbursement."""
+    STATUS_CHOICES = [
+        ('draft',     'Draft'),
+        ('submitted', 'Submitted'),
+        ('approved',  'Approved'),
+        ('rejected',  'Rejected'),
+    ]
+
+    claimant     = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='claims')
+    title        = models.CharField(max_length=200)
+    period_month = models.DateField(help_text='First day of the claim month')
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    notes        = models.TextField(blank=True, null=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approver     = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='claims_to_approve', help_text='Reporting supervisor, resolved at submission'
+    )
+    reviewed_by  = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_claims'
+    )
+    reviewed_at  = models.DateTimeField(null=True, blank=True)
+    remarks      = models.TextField(blank=True, null=True, help_text='Approver review notes')
+
+    class Meta:
+        ordering = ['-period_month', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} — {self.claimant} ({self.status})"
+
+    def recalculate_total(self):
+        from django.db.models import Sum
+        self.total_amount = self.items.aggregate(t=Sum('amount'))['t'] or 0
+        self.save(update_fields=['total_amount'])
+
+
+class ClaimItem(BaseModel):
+    """A single receipt line within a claim; can carry one or many attachments."""
+    CATEGORIES = [
+        ('transport',     'Transport'),
+        ('meals',         'Meals'),
+        ('material',      'Material'),
+        ('equipment',     'Equipment'),
+        ('accommodation', 'Accommodation'),
+        ('misc',          'Miscellaneous'),
+    ]
+
+    claim        = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name='items')
+    expense_date = models.DateField()
+    category     = models.CharField(max_length=20, choices=CATEGORIES, default='misc')
+    description  = models.CharField(max_length=255)
+    amount       = models.DecimalField(max_digits=12, decimal_places=2)
+    project_no   = models.CharField(max_length=30, blank=True, null=True, help_text='Linked project number for record')
+
+    class Meta:
+        ordering = ['expense_date', 'created_at']
+
+    def __str__(self):
+        return f"{self.description} ${self.amount}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.claim.recalculate_total()
+
+    def delete(self, *args, **kwargs):
+        claim = self.claim
+        super().delete(*args, **kwargs)
+        claim.recalculate_total()
+
+
+class ClaimAttachment(BaseModel):
+    """Receipt file or photo attached to a claim item (one item can have many)."""
+    item        = models.ForeignKey(ClaimItem, on_delete=models.CASCADE, related_name='attachments')
+    file        = models.FileField(storage=FileBrowserStorage(subfolder='claims'))
+    filename    = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='claim_attachments'
+    )
+
+    class Meta:
+        ordering = ['created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.filename and self.file:
+            self.filename = self.file.name.split('/')[-1]
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.filename or f"attachment {self.id}"

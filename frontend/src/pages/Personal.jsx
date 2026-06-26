@@ -4,6 +4,7 @@ import { Clock, CalendarDays, ClipboardList, X, ArrowRight, Plus, Trash2, Check 
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import CalendarView from '../components/CalendarView'
+import ClaimsTab from '../components/ClaimsTab'
 
 const TASK_STATUS_STYLE = {
   todo:        { dot: 'bg-gray-400',    label: 'To Do',      color: '#9ca3af' },
@@ -21,6 +22,7 @@ const LEAVE_STATUS_STYLE = {
 const TABS = [
   { key: 'overview',  label: 'Overview' },
   { key: 'goals',     label: 'Goals' },
+  { key: 'claims',    label: 'Claims' },
   { key: 'calendar',  label: 'Calendar' },
 ]
 
@@ -484,6 +486,8 @@ export default function Personal() {
           })()}
         </div>
       )}
+
+      {tab === 'claims' && <ClaimsTab />}
 
       {tab === 'calendar' && (
         <div className="space-y-4">
