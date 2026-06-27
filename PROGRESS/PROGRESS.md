@@ -1,7 +1,7 @@
 # 1OS — Project Progress Log
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-06-10 (session 6)
+**Last Updated:** 2026-06-27
 
 ---
 
@@ -9,13 +9,18 @@
 
 | | Dev | Prod |
 |---|---|---|
-| **Code here** | `/opt/1os/` (`dev` branch) | `/home/lucus/1os-prod/` (`main` branch) |
-| **Frontend** | Vite `:8100` → `ast2.sim-eng.com` | Nginx `:8000` → `ast1.sim-eng.com` |
-| **Backend** | Django `runserver :8001` | Gunicorn `:8002` (internal) |
-| **Start dev** | `./start_dev.sh` | systemd auto-manages |
+| **Code here** | `/home/lucus/1os-dev/` (`dev` branch) | `/opt/1os/` (`main` branch) |
+| **Frontend** | Vite `:6100` → `dev.sim-eng.com` | Nginx → `1os.sim-eng.com` |
+| **Backend** | Django `:6001` (`--noreload`) | Gunicorn `:6000` (`1os.service`, 3 workers) |
+| **DB** | PostgreSQL `1os_db` (shared) | ← same `1os_db` (dev edits live prod data) |
+| **Restart** | `sudo systemctl restart 1os-dev-django.service` | `sudo systemctl restart 1os.service` |
 
-**Deploy:** merge `dev` → `main`, `git pull` in prod, `npm run build`, `collectstatic`, `sudo systemctl restart gunicorn-1os`.
-See `DEVELOPMENT.md` for full steps.
+> ⚠️ Dev and prod **share the same `1os_db`** — editing on `dev.sim-eng.com` mutates live data.
+> Dev Django runs `--noreload`; **restart `1os-dev-django.service` after any backend edit** or it serves stale code.
+> Per-server ports/hosts (Vite + `dev.py`/prod `ALLOWED_HOSTS`/CSRF) are now **env-driven via `.env`** (committed, pull-safe).
+
+**Deploy:** `scripts/backup_db.sh` → `git pull` in `/opt/1os` → `pip install` → `migrate` → `npm run build` → `collectstatic` → `sudo systemctl restart 1os.service`.
+Always back up the DB before `migrate`. See `DEVELOPMENT.md` / `BACKUP.md` for full steps.
 
 ---
 
@@ -125,21 +130,68 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 
 | Item | Dev | Prod |
 |---|---|---|
-| Path | `/opt/1os/` | `/home/lucus/1os-prod/` |
+| Path | `/home/lucus/1os-dev/` | `/opt/1os/` |
 | Branch | `dev` | `main` |
-| Frontend | Vite `:8100` → `ast2.sim-eng.com` | Nginx `:8000` → `ast1.sim-eng.com` |
-| Backend | Django `runserver :8001` | Gunicorn `:8002` (internal) |
-| DB | PostgreSQL `astronic` (shared) | ← same |
-| Admin | `https://ast1.sim-eng.com/admin/` (via Nginx) | ← same |
+| Frontend | Vite `:6100` → `dev.sim-eng.com` | Nginx → `1os.sim-eng.com` |
+| Backend | Django `:6001` (`--noreload`) | Gunicorn `:6000` (`1os.service`) |
+| DB | PostgreSQL `1os_db` (shared) | ← same `1os_db` |
+| Admin | `https://dev.sim-eng.com/admin/` | `https://1os.sim-eng.com/admin/` |
 | GitHub | `github.com/Limply/1os` (private) | ← same |
+
+---
+
+## What Was Built (Sessions 7+, 2026-06-12 → 2026-06-27)
+
+> Platform generalised from the Astronic pilot to **1OS**; domains migrated to
+> `1os.sim-eng.com` (prod) / `dev.sim-eng.com` (dev). Prod/dev folders swapped
+> (prod now `/opt/1os`, dev now `/home/lucus/1os-dev`).
+
+### Projects & Finance
+- Project financial fields + bulk import of ~150 SE projects from AppSheet CSV
+- Projects page: status filter tabs, sortable column headers, grouping & search,
+  pagination disabled (returns all)
+- **Operations page** (Jobs, WTS) and **Finance page** (Quotations, Invoices)
+- **Quotation PDF** export; service report module + docs
+- **Payments tracking (2026-06-27):** Payments page + `PaymentViewSet` that
+  recomputes invoice `paid_amount`/`status`/`paid_date`, records `recorded_by`,
+  and marks the linked project **completed** + appends to `payment_record` when
+  fully paid. Finance signals keep Quotation `subtotal`/`gst_amount`/`total` in
+  sync with line items on admin/API edits (preserves each quote's GST treatment).
+
+### Org / Data model
+- **Unified `Client` into `Organisation`** (data migration + dropped FK cols, irreversible) — deployed to prod
+- **CRM module** scaffold (Client, Contact, Lead, Interaction)
+- My Tools / My Personal pages
+
+### RBAC & Supervisor mobile app
+- **RBAC foundation**: new roles + permission guards across all services & frontend routes
+- Supervisor mobile app: clock-in tab, task list, task detail page, daily manpower report,
+  Projects accordion, desktop frame (max 480px centred)
+- WSH Photo, Daily Reports, Reports tab, Problem Report flows
+
+### HR & Dashboard
+- **Monthly expense claims** with receipt attachments
+- Company-wide **dashboard**: project status, manpower & financials, consolidated graphical KPI panels
+- Colour theme settings (6 themes) with Save confirmation
+- Unlisted `/mock_up_page` for live design previews
+
+### DevOps / Config
+- Per-server config (Vite port/proxy/hosts, `ALLOWED_HOSTS`/CSRF) driven from `.env` (pull-safe)
+- **DB backup script** `scripts/backup_db.sh` + backup/restore docs (`BACKUP.md`)
+- Migration numbering realigned so dev & prod histories stay compatible
+- nginx `client_max_body_size 20M` (mobile photo upload fix)
+
+### Planned / Approved (not yet built)
+- **1OS ↔ NAS project-file integration** — plan approved 2026-06-26, see `NAS_INTEGRATION_PLAN.md`
+  (1OS auto-creates/manages the NAS `Projects/` tree; prod tree → `/mnt/data/SE-Bizz/Projects`)
 
 ---
 
 ## What's Next (Priority Order)
 
 ### Frontend
-- [ ] Operations page (Jobs, WTS)
-- [ ] Finance page (Quotations, Invoices, Payments)
+- [x] Operations page (Jobs, WTS)
+- [x] Finance page (Quotations, Invoices, Payments)
 - [ ] Compliance page (Licences, Incidents)
 - [ ] HR Calendar (leave, public holidays) — uses `CalendarView`
 - [ ] Ops Calendar (jobs, site visits) — uses `CalendarView`
@@ -151,9 +203,12 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 - [ ] Job status transitions + auto-numbering (Operations)
 - [ ] WTS GPS live tracking
 - [ ] Quotation → Invoice conversion (Finance)
-- [ ] GST auto-calculation on save (9%)
+- [x] GST auto-calculation on save (9%) — via finance signals (2026-06-27)
 - [ ] Licence expiry alerts (Compliance)
-- [ ] Dashboard aggregate endpoint (active jobs, pending approvals, revenue MTD)
+- [x] Dashboard aggregate endpoint (active jobs, pending approvals, revenue MTD)
+
+### Next-up / In flight
+- [ ] 1OS ↔ NAS project-file integration (plan approved — `NAS_INTEGRATION_PLAN.md`)
 
 ### Backend — Quality
 - [ ] Write API contracts per service (`api-contract.yml`)
@@ -170,6 +225,7 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 | Issue | Status |
 |---|---|
 | **[FIXED 2026-06-16] Photo upload fails on mobile browser** | nginx default `client_max_body_size` is 1MB; mobile camera photos are 3–8MB. Fix: added `client_max_body_size 20M;` to `/etc/nginx/sites-available/1os-prod` on the server. Desktop worked because gallery picks are smaller. |
+| Dev/prod share one `1os_db` | By design, but dev edits hit live data — be careful on `dev.sim-eng.com` |
 | `services/core/` exists but has no purpose | Unused — can be deleted |
 | Django Admin has no models registered | Needs `admin.py` wiring |
 | Compliance module has no assigned dev | Needs owner assignment |
