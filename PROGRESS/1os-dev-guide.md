@@ -1,338 +1,240 @@
 # 1OS — Team Development Guide
 ## Architecture, Standards & Workflow
 
-> **Platform:** 1OS by Simply Engineering Pte Ltd | **Updated:** 2026-05-23
+> **Platform:** 1OS by Simply Engineering Pte Ltd | **Updated:** 2026-06-27
+> **Mode:** Multi-developer · Single Django monolith · No Docker · Single-tenant for now (multi-tenant deferred)
 
 ---
 
-## 1. Architecture Rules (Non-Negotiable)
+## 0. What 1OS Is (read first)
 
-### 1.1 Each App is Fully Self-Contained
-Every service owns its own models, serializers, views, URLs, and tests. No exceptions.
+- **One Django project** (`project_config`) — **not** microservices. All apps run in a single
+  process and share one PostgreSQL DB (`1os_db`).
+- **Multi-developer**: each dev *owns* one or more **service apps** under `services/`. Collaboration
+  happens through **git branches + PRs**, not separate deployments.
+- **Single-tenant for now**: we run one tenant (Astronic). The tenant scaffolding
+  (`BaseModel.tenant`, `TenantScopedMixin`) stays wired so multi-tenant is possible later, but
+  **building/onboarding new tenants is out of scope** until further notice.
+- **No Docker**: dev runs the Django dev server + Vite directly; prod runs Gunicorn + Nginx via systemd.
+
+---
+
+## 1. Architecture Rules
+
+### 1.1 Each app is self-contained
+Every service owns its own models, serializers, views, urls, admin, tests.
 
 ```
 services/hr/
 ├── models.py        # HR models only
-├── serializers.py   # HR serializers only
-├── views.py         # HR views only
-├── urls.py          # HR URLs only
-├── tests.py
+├── serializers.py
+├── views.py
+├── urls.py
 ├── admin.py
+├── tests.py
 └── apps.py
 ```
 
-### 1.2 Cross-App Communication via API Only
-Apps never import from each other directly.
+### 1.2 Cross-service linking (monolith reality)
+We are one process, so direct ORM imports are *allowed*, but keep service boundaries clean and follow
+the linking rules in **`DATA-MODEL.md`**:
 
-```python
-# ❌ WRONG — direct import
-from services.hr.models import Employee
+- **Within a service** → `ForeignKey` (hard link).
+- **Across services** → prefer a **loose string ref** (`project_no`, `client_name`) so apps stay
+  decoupled; use `ref_type` + `ref_id` for generic links.
+- **Cross-service `FK✱`** is allowed only for the blessed exceptions documented in `DATA-MODEL.md`
+  (`accounts.User`, `organisation.Site`, and the few named ones). Don't add new cross-service FKs
+  without updating that doc.
 
-# ✅ RIGHT — API call
-import requests
-response = requests.get('http://localhost/api/hr/employees/')
-```
+> When you import another service's model directly, you've coupled to it — note it in `DATA-MODEL.md`.
 
-### 1.3 Shared Code Goes to `shared/` Only
+### 1.3 Shared code goes to `shared/` only
 ```
 shared/
-├── models.py       # BaseModel (created_at, updated_at, tenant_id)
-├── permissions.py  # Role-based permission classes
-├── utils.py        # PDF, email, Telegram helpers
-├── middleware.py   # Tenant detection, JWT validation
-└── responses.py    # Standard API response format
+├── models.py        # BaseModel (id=UUID, created_at, updated_at, tenant)
+├── storage.py       # FileBrowserStorage
+├── permissions.py   # RBAC permission classes
+├── middleware.py
+└── responses.py
 ```
-No business logic in `shared/`. Utilities and base classes only.
+Utilities and base classes only — **no business logic** in `shared/`.
 
-### 1.4 Standard API Response Format
-All endpoints must return this structure:
-```json
-{
-  "success": true,
-  "data": {},
-  "message": "",
-  "errors": []
-}
-```
+### 1.4 API response shape (current standard)
+Endpoints return **plain DRF output**, not a custom envelope:
+- List endpoints return either a **plain array** or a **paginated object** (`{count, next, previous, results}`).
+- **Frontend must guard every list** with `Array.isArray(...)` before setting state (DRF can return either).
+- Errors return DRF's `{field: [msgs]}` / `{detail: msg}` — **surface them inline** (no silent `.catch`).
 
-### 1.5 Always Filter by Tenant
-Every query must be scoped to the current tenant.
-```python
-# ✅ Correct
-Employee.objects.filter(tenant=request.tenant)
-
-# ❌ Wrong
-Employee.objects.all()
-```
+### 1.5 Tenant scoping (single-tenant for now)
+- Keep using `TenantScopedMixin` on ViewSets and `tenant` on `BaseModel` — it's already wired and cheap to leave in.
+- But **do not build multi-tenant features** (tenant onboarding, schema isolation, per-tenant billing) yet.
+- One tenant (Astronic) is assumed everywhere.
 
 ---
 
 ## 2. Project Structure
 
 ```
-/opt/1os/
-├── project_config/     # Django settings, root URLs
+1os/  (dev: /home/lucus/1os-dev · prod: /opt/1os)
+├── project_config/     # Django settings, root urls, wsgi
 ├── services/
-│   ├── auth/           # Auth, JWT, MFA
-│   ├── organisation/   # Company, dept, team, positions
-│   ├── hr/             # Employee, leave, attendance, payroll
-│   ├── operations/     # Jobs, scheduling, WTS, assets
-│   ├── finance/        # Quotations, invoices, expenses
-│   ├── notifications/  # Telegram, email, in-app
-│   └── dashboard/      # Aggregated views
-├── shared/             # BaseModel, utils, middleware
+│   ├── auth/           # Tenant, User, JWT  (app label: accounts)
+│   ├── organisation/   # Company, Department, Team, Position, Site, Client
+│   ├── hr/             # Employee, leave, attendance, schedules, claims, goals
+│   ├── projects/       # Project, Task, daily reports, WSH photos
+│   ├── operations/     # Jobs, WTS, assets, inspections, service reports
+│   ├── finance/        # Quotations, invoices, delivery orders, expenses, payments
+│   ├── crm/            # Contact, Lead, Interaction
+│   ├── compliance/     # Licence, Incident
+│   ├── notifications/  # Notification
+│   └── dashboard/      # Aggregated read-only views (no models)
+├── shared/             # BaseModel, storage, permissions, middleware
 ├── frontend/           # Vite + React
-├── gateway/            # Nginx config
-├── docker-compose.yml
+├── scripts/            # backup_db.sh, etc.
 └── manage.py
 ```
 
 ---
 
-## 3. Team Structure
+## 3. Team Structure (one owner per service)
 
-| Dev | Owns | Service Port |
+| Owner | Service app(s) |
+|---|---|
+| Dev 1 | `auth` + `organisation` |
+| Dev 2 | `hr` |
+| Dev 3 | `operations` (+ WTS, service reports) |
+| Dev 4 | `finance` |
+| Dev 5 | `frontend` (React) |
+| Dev 6 | `projects` + `crm` |
+| **Lucus** | Architecture, DevOps, review, `compliance`/`dashboard`/`shared` |
+
+**Rule:** one owner per service. Touching someone else's service → coordinate + get review.
+Everyone shares the one dev server and one DB; there are **no per-service ports**.
+
+---
+
+## 4. Environments
+
+| | Dev | Prod |
 |---|---|---|
-| Dev 1 | Auth + Organisation | 9001, 9002 |
-| Dev 2 | HR | 9003 |
-| Dev 3 | Operations + WTS | 9004 |
-| Dev 4 | Finance | 9005 |
-| Dev 5 | Frontend (React) | 5173 |
-| **Lucus** | Architecture, DevOps, Review | — |
+| Path | `/home/lucus/1os-dev/` | `/opt/1os/` |
+| Branch | `dev` | `main` |
+| Backend | Django `:6001` (`--noreload`, `1os-dev-django.service`) | Gunicorn `:6000` (`1os.service`, 3 workers) |
+| Frontend | Vite `:6100` → `dev.sim-eng.com` | Nginx → `1os.sim-eng.com` |
+| DB | PostgreSQL `1os_db` | ← **same `1os_db`** |
+| Admin | `dev.sim-eng.com/admin/` | `1os.sim-eng.com/admin/` |
 
-**Rule:** One dev per service. No overlap without lead approval.
-
----
-
-## 4. Gateway Routing (Nginx)
-
-All services merge at the gateway level only. Code never merges — only routes do.
-
-```
-ast1.sim-eng.com
-├── /api/auth/      → auth-service:9001
-├── /api/org/       → org-service:9002
-├── /api/hr/        → hr-service:9003
-├── /api/ops/       → ops-service:9004
-├── /api/finance/   → finance-service:9005
-├── /api/notify/    → notify-service:9006
-└── /               → frontend:5173
-```
+> ⚠️ Dev and prod **share one DB** — editing on `dev.sim-eng.com` mutates live data. Be careful.
+> Dev runs `--noreload`: **restart `1os-dev-django.service` after backend edits** or it serves stale code.
+> Per-server ports/hosts are **env-driven via `.env`** (committed, pull-safe).
 
 ---
 
-## 5. Git Branching Strategy
+## 5. Git Workflow
 
 ```
-main          ← stable, production only
-develop       ← integration branch
-feature/hr-leave
-feature/ops-wts
-feature/finance-quotation
-fix/auth-token-expiry
+main     ← production (deploys from /opt/1os)
+dev      ← shared integration branch (deploys to dev.sim-eng.com)
+feature/<service>-<name>     e.g. feature/finance-payments
+fix/<service>-<name>         e.g. fix/hr-leave-balance
 ```
 
 ### Rules
-- **Never push directly to `main`**
-- All work on `feature/` or `fix/` branches
-- PR to `develop` — must pass tests before merge
-- Weekly merge `develop` → `main` by lead
-- Branch naming: `feature/<service>-<feature>` e.g. `feature/hr-leave`
-- Commit messages: `[service] action: description` e.g. `[hr] add: leave application endpoint`
+- Branch off `dev`; PR back into `dev`. **Don't commit straight to `main`.**
+- `dev` → `main` is the **deploy promotion** (lead/Lucus), fast-forward when clean.
+- **Conventional Commits**: `feat(finance): …`, `fix(hr): …`, `docs(progress): …`, `refactor(...)`, `chore(...)`.
+- **Back up the DB before any `migrate`** (`scripts/backup_db.sh`) — dev migrations hit the live DB.
+- Keep migrations linear so dev and prod histories stay compatible.
 
 ---
 
-## 6. API Contract (Define Before Coding)
+## 6. API Contract (recommended, not yet adopted)
 
-Every service must define its API contract **before** writing code. Frontend and backend code against the contract independently.
+For multi-dev work, agreeing endpoints up front lets frontend + backend proceed in parallel.
+Lightweight is fine — a short list in the service's PR description or a `services/<name>/api-contract.yml`:
 
-### Template
 ```yaml
-# services/hr/api-contract.yml
-
 service: hr
 base_url: /api/hr/
-
 endpoints:
-  - method: GET
-    path: /employees/
-    description: List all employees
-    auth: required
-    permissions: [admin, manager]
-    response: paginated list of Employee
-
-  - method: POST
-    path: /employees/
-    description: Create employee
-    auth: required
-    permissions: [admin]
-    body: {name, email, department, position}
-
-  - method: GET
-    path: /employees/{id}/
-    description: Get employee detail
-    auth: required
-    permissions: [admin, manager, self]
-
-  - method: POST
-    path: /leave/apply/
-    description: Submit leave application
-    auth: required
-    permissions: [all staff]
-    body: {leave_type, start_date, end_date, reason}
+  - GET  /employees/        list (paginated)        auth, [admin, manager]
+  - POST /employees/        create                  auth, [admin]
+  - GET  /employees/me/     current user's employee auth, [all]
 ```
+
+> Status: no contract files exist yet. Optional, but encouraged for any new multi-endpoint feature.
 
 ---
 
 ## 7. Coding Standards
 
 ### Models
-- Always inherit `BaseModel` from `shared/`
-- Use `UUID` as primary key
-- Always include `__str__` method
-- Add docstring to every model
-
-```python
-from shared.models import BaseModel
-
-class Employee(BaseModel):
-    """Represents a staff member within a tenant organisation."""
-    name = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
-
-    def __str__(self):
-        return self.name
-```
+- Inherit `BaseModel` (UUID PK, `created_at`, `updated_at`, `tenant`).
+- `__str__` + docstring on every model.
+- FK naming: model name, **no `_id` suffix** (`quotation`, not `quotation_id`). Loose refs use `_no`/`_name`. See `DATA-MODEL.md`.
+- Auto-numbering is year-based per doc type (`Q-YY-NNN`, `INV-YY-NNN`, `SE-YY-NNN`, …).
 
 ### Views
-- Use DRF `ViewSet` or `APIView`
-- Always use `shared/permissions.py` for access control
-- Docstring on every view
-- Handle errors explicitly — no bare `except`
+- DRF `ViewSet` / `APIView`; apply `TenantScopedMixin` + `shared/permissions`.
+- Handle errors explicitly — **no bare `except`**.
 
 ### Serializers
-- One serializer per use case (List, Detail, Create, Update)
-- Never expose sensitive fields (password, internal IDs)
+- Expose `*_display` / related labels read-only as needed; never expose secrets.
+- Remember the frontend's `Array.isArray` contract (§1.4).
+
+### Frontend
+- Guard list state with `Array.isArray`.
+- Every save/submit shows **inline red error text** — never a silent `.catch(() => {})`.
 
 ### Tests
-- Minimum 1 test per endpoint
-- Test happy path + at least 1 error case
-- Use Django `TestCase` or `pytest-django`
-
-```python
-def test_employee_list_requires_auth(self):
-    response = self.client.get('/api/hr/employees/')
-    self.assertEqual(response.status_code, 401)
-```
+- Target: ≥1 happy + ≥1 error test per endpoint.
+- **Current reality:** only `hr` has tests (16). Everything else is at 0 — adding tests when you touch a service is the fastest way to close this.
 
 ---
 
-## 8. Docker Workflow
+## 8. Environment Variables
 
-Each dev runs only their service locally.
+- **One `.env` per server** (dev and prod each have their own). **Never commit `.env`.**
+- Per-server settings (Vite port/proxy/hosts, `ALLOWED_HOSTS`, CSRF) are read from `.env` so a plain
+  `git pull` is safe on every server.
 
 ```bash
-# Dev working on HR only
-docker-compose up hr-service db
-
-# Full stack
-docker-compose up
+# .env (per server) — values differ dev vs prod
+DEBUG=True|False
+SECRET_KEY=…
+DB_NAME=1os_db
+DB_HOST=localhost
+DB_PORT=5432
+ALLOWED_HOSTS=dev.sim-eng.com,localhost,127.0.0.1   # prod: 1os.sim-eng.com,…
+VITE_PORT=6100
+VITE_API_TARGET=http://127.0.0.1:6001
+FILEBROWSER_URL=http://localhost:8080
 ```
 
-### Per-service Dockerfile template
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["gunicorn", "project_config.wsgi:application", "--bind", "0.0.0.0:9003"]
-```
-
-### docker-compose.yml structure
-```yaml
-services:
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: 1os
-      POSTGRES_USER: 1os_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-
-  auth-service:
-    build: ./services/auth
-    ports: ["9001:9001"]
-    depends_on: [db]
-
-  hr-service:
-    build: ./services/hr
-    ports: ["9003:9003"]
-    depends_on: [db, auth-service]
-
-  frontend:
-    build: ./frontend
-    ports: ["5173:5173"]
-
-  gateway:
-    image: nginx
-    ports: ["9000:80"]
-    depends_on: [auth-service, hr-service, frontend]
-```
+`.gitignore`: `.env`, `*.env`, `venv/`, `__pycache__/`, `*.pyc`
 
 ---
 
-## 9. Environment Variables
+## 9. Pre-Coding Checklist (per feature)
 
-Each service has its own `.env` file. Never commit `.env` to git.
-
-```bash
-# .env template per service
-DEBUG=False
-SECRET_KEY=your-secret-key
-DB_HOST=db
-DB_NAME=1os
-DB_USER=1os_user
-DB_PASSWORD=
-ALLOWED_HOSTS=ast1.sim-eng.com,localhost
-TENANT_ID=astronic
-TELEGRAM_BOT_TOKEN=
-```
-
-Add `.env` to `.gitignore`:
-```
-.env
-*.env
-venv/
-__pycache__/
-*.pyc
-```
-
----
-
-## 10. Pre-Coding Checklist (per service)
-
-Before any dev starts writing code:
-
-- [ ] API contract defined (`api-contract.yml`)
-- [ ] DB schema drawn (`dbdiagram.io` or draw.io)
+- [ ] Pulled latest `dev`
 - [ ] Feature branch created (`feature/<service>-<name>`)
-- [ ] Docker service entry added to `docker-compose.yml`
-- [ ] `.env` template updated
-- [ ] Reviewed this guide
+- [ ] Endpoints agreed (PR description or `api-contract.yml`) if multi-endpoint
+- [ ] Cross-service links follow `DATA-MODEL.md` (ref vs FK✱)
+- [ ] DB backed up before any `migrate`
+- [ ] Tests for new endpoints; restart `1os-dev-django.service` after backend edits
 
 ---
 
-## 11. Key Documents
+## 10. Key Documents
 
-| Document | Location | Status |
+| Document | Location | Purpose |
 |---|---|---|
-| Module Tree | `1os-module-tree.md` | ✅ Done |
-| Dev Guide (this) | `1os-dev-guide.md` | ✅ Done |
-| API Contracts | `services/<name>/api-contract.yml` | 🔲 Per dev |
-| DB Schemas | `services/<name>/schema.md` | 🔲 Per dev |
-| Coding Standards | This doc § 7 | ✅ Done |
-| Git Guide | This doc § 5 | ✅ Done |
+| Module Tree (as-built) | `1os-module-tree.md` | What modules/features exist |
+| Data Model | `DATA-MODEL.md` | Relationships, naming, FK/ref rules |
+| Progress Log | `PROGRESS.md` | What's built / what's next |
+| Backup & Restore | `BACKUP.md` | `scripts/backup_db.sh` usage |
+| Dev Guide (this) | `1os-dev-guide.md` | Architecture, standards, workflow |
 
 ---
 

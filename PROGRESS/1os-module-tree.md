@@ -1,331 +1,93 @@
 # 1OS — One Operating System
-## Module & Sub-Module Tree
+## Module & Sub-Module Tree (as-built)
 
-> **Platform:** Multi-tenant SaaS | **Stack:** Django + DRF + React + Vite | **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-
----
-
-## 🏗️ Platform Layer
-
-### AUTH
-- Login / Logout
-- JWT Token Management
-- Refresh Token
-- Password Reset
-- Multi-Factor Authentication (MFA)
-- OAuth2 (Google, Microsoft)
-- Session Management
-
-### TENANT MANAGEMENT
-- Tenant Registration
-- Tenant Settings (branding, timezone, currency)
-- Schema Management (django-tenants)
-- Subscription Plan (Starter / Business / Enterprise)
-- Module Toggle (enable/disable per tenant)
-- Billing & Invoicing (platform-level)
-
-### USER MANAGEMENT
-- User Profiles
-- Role Definitions (Super Admin, Admin, Manager, Staff, Viewer)
-- Permission Groups
-- Invite / Onboard Users
-- Deactivate / Offboard Users
+> **Platform:** Multi-tenant | **Stack:** Django + DRF + React + Vite | **Pilot Tenant:** Astronic Services & Trading
+> **Scope:** What actually exists in the codebase (models + API routes + frontend pages). Aspirational/unbuilt items are in *Planned* at the bottom.
 
 ---
 
-## 🏢 ORGANISATION Module
+## 🔐 AUTH — `/api/auth/` *(service label `accounts`)*
+- **Tenant** — multi-tenant root; `project_prefix` drives project numbering
+- **User** — UUID, email login, role (superadmin/admin/manager/staff/viewer) + RBAC guards
+- JWT auth (simplejwt): token, refresh, users, tenants, permission-groups
 
-### Company
-- Company Profile
-- Registered Address
-- UEN / Business Registration
-- Logos & Branding
-
-### Structure
-- Departments
-- Teams
-- Positions / Job Titles
-- Reporting Lines
-
-### Locations
-- Office / Branch / Site
-- GPS Coordinates
-- Site Contacts
+## 🏢 ORGANISATION — `/api/org/`
+- **Company** · **Department** · **Team** · **Position** · **Site** · **Client**
+- (Client unified into Organisation; `org-tree/` endpoint for the org chart)
 
 ---
 
-## 👥 HR Module
+## 📋 PROJECTS — `/api/projects/`
+- **Project** — `project_no` (auto `<prefix>-YY-NNN`), status, priority, client info, site+GPS, manager/supervisor, members, weighted `progress`, `payment_record`
+- **Task** — group, status (todo/in_progress/review/done/issue), weightage → drives project progress; photo
+- **TaskPhoto** · **TaskDocument** · **TaskComment** · **ProjectComment**
+- **DailyReport** — manpower counts, activities, personnel, photo (feeds dashboard)
+- **WSHPhoto** — workplace safety & health observations (safe/unsafe/near_miss/hazard)
+- *Pages:* Projects, Project Detail, Project Calendar, supervisor mobile app
 
-### Recruitment
-- Job Postings
-- Applicant Tracking
-- Interview Scheduling
-- Offer Letters
+## 👥 HR — `/api/hr/`
+- **Employee** — emp_no, pass type/expiry, dept/position, manager (supervisor), photo, `can_clock_in` (+ `employees/me/`)
+- **Leave** — LeaveType · LeaveBalance (per emp/type/year) · LeaveApplication (pending→approved/rejected)
+- **Attendance** — clock in/out, hours, OT, photos + GPS + address, project link (geofenced clock-in)
+- **Certification** — issuer, cert no, expiry, alert days
+- **WorkSchedule** (one-off) · **StaffDeployment** (recurring pattern) · **PublicHoliday** (SG, shared)
+- **ManpowerSettings** — per-tenant manpower dashboard visibility
+- **PersonalGoal** — "My Tools" goal tracker
+- **Claims** — Claim → ClaimItem → ClaimAttachment (monthly expense claims w/ receipts)
+- *Pages:* HR (tabs), Clock In, Schedules, Personal
 
-### Employee
-- Employee Profiles
-- Employment Contracts
-- Emergency Contacts
-- Document Vault (NRIC, certs, MOM pass)
+## ⚙️ OPERATIONS — `/api/ops/`
+- **Job** — job card; type (installation/maintenance/repair/inspection/wts), status, assigned_to
+- **WTSRequest** — Weight Test Scheduling *(Astronic-specific)*: delivery status, driver, live GPS, sign-off, result
+- **Asset** — equipment/tool/vehicle/IT registry, warranty/next-service
+- **Inspection** — checklist (JSON), pass/fail/conditional, photos, next due
+- **Service Reports** — ServiceJob (`SE-YY-NNN`) → ServiceReportItem (issue/action/recommendation) → ServiceReportPhoto; InvoiceLineItem
+- *Pages:* Operations (incl. Service Reports)
 
-### Attendance
-- Clock In / Clock Out
-- Timesheet
-- Overtime Tracking
-- Work Schedule / Shift Management
-
-### Leave
-- Leave Types (Annual, MC, Unpaid, etc.)
-- Leave Application
-- Approval Workflow
-- Leave Balance Tracker
-- Public Holiday Calendar (Singapore)
-
-### Payroll
-- Salary Structure
-- CPF Contribution
-- Claims & Reimbursements
-- Payslip Generation
-- IR8A / Tax Filing
-
-### Performance
-- KPI Setting
-- Appraisal Cycles
-- Performance Reviews
-- Goal Tracking
-
-### Training & Certification
-- Course Registry
-- Training Records
-- Certification Tracking
-- Expiry Alerts (BizSAFE, LEW, SSCET, etc.)
+## 💰 FINANCE — `/api/finance/`
+- **Quotation** (`Q-YY-NNN` or project_no) → **QuotationItem** — totals auto-synced via signals, GST 9%
+- **Invoice** (`INV-YY-NNN`) → **InvoiceItem** — status unpaid/partial/paid, `balance_due`
+- **Payment** — against invoice *or* quotation; recomputes invoice + marks project completed when fully paid
+- **DeliveryOrder** (`DO-YY-NNN`) → **DeliveryOrderItem**
+- **Expense** — project-tagged costs (feeds P&L)
+- *Pages:* Finance (tabs), Payments, P&L
 
 ---
 
-## ⚙️ OPERATIONS Module
+## 📌 COMPLIANCE — `/api/compliance/`
+- **Licence** · **Incident** *(models exist; frontend page not yet built)*
 
-### Job Management
-- Job Cards
-- Job Assignment
-- Job Status (Draft → Assigned → In Progress → Completed)
-- Job Types (Installation, Maintenance, Repair, Inspection)
-- Priority Levels
-- Site Instructions / Remarks
+## 🤝 CRM — `/api/crm/`
+- **Contact** · **Lead** · **Interaction** (standalone service, no cross-service imports)
+- *Page:* CRM
 
-### Scheduling
-- Calendar View (daily / weekly / monthly)
-- Technician Availability
-- Drag-and-Drop Scheduling
-- Conflict Detection
+## 🔔 NOTIFICATIONS — `/api/notify/`
+- **Notification** (single model)
 
-### Weight Test Scheduling (WTS) *(Astronic-specific)*
-- Test Request Creation
-- Weight Delivery Scheduling
-- Geo-Tracking (Leaflet + GPS)
-- Delivery Status
-- Telegram Bot Notifications
-- Test Completion Sign-off
+## 📊 DASHBOARD — `/api/dashboard/`
+- No models — aggregates company-wide project status, manpower & financials into KPI panels
 
-### Inspection
-- Inspection Checklists
-- Pass / Fail Records
-- Photo Uploads
-- Inspector Sign-off
-- Regulatory Report Generation
-
-### Asset Management
-- Equipment Registry
-- Tool Tracking
-- Vehicle Fleet
-- Maintenance Schedule
-- Breakdown Reports
-
-### Inventory
-- Parts & Consumables
-- Stock In / Out
-- Low Stock Alerts
-- Supplier Registry
-- Purchase Requests
-
-### Site Management
-- Site Registry
-- Site Contacts
-- Site Documents
-- Site History / Audit Trail
+## 📁 FILES
+- Embedded FileBrowser (`files.sim-eng.com`); `api/files/proxy/`
 
 ---
 
-## 💰 FINANCE Module
-
-### Quotations
-- Quotation Builder (BOQ)
-- Line Items (labour, materials, markup)
-- PDF Generation
-- Send to Client
-- Quotation Status (Draft → Sent → Accepted → Rejected)
-- Revision Tracking
-
-### Invoicing
-- Invoice Generation from Quotation
-- Payment Terms
-- Payment Status (Unpaid / Partial / Paid)
-- Overdue Alerts
-- GST Handling (9%)
-
-### Expenses & Claims
-- Expense Submission
-- Receipt Upload
-- Approval Workflow
-- Reimbursement Tracking
-
-### Financial Dashboard
-- Revenue Summary
-- Outstanding Invoices
-- Monthly P&L (basic)
-- Top Clients by Revenue
-
----
-
-## 📋 COMPLIANCE Module
-
-### Licence Registry
-- Licence Types (BCA CRS, SPF LSSP, LEW, BizSAFE, etc.)
-- Expiry Dates
-- Renewal Reminders
-- Document Uploads
-
-### Regulatory Calendar
-- MOM Inspection Dates
-- BCA Submission Deadlines
-- Permit Expiry
-- Audit Schedule
-
-### Incident Reporting
-- Incident Types (injury, near-miss, property damage)
-- Incident Reports
-- Investigation Records
-- Corrective Actions
-
----
-
-## 🔔 NOTIFICATIONS Module
-
-### Channels
-- In-App Notifications
-- Email (SMTP)
-- Telegram Bot
-- SMS (future)
-
-### Triggers
-- Job Assignment
-- Leave Approval / Rejection
-- Licence Expiry (30 / 14 / 7 days)
-- Overdue Invoice
-- WTS Delivery Status
-- Inspection Due
-
-### Notification Log
-- Sent History
-- Read / Unread Status
-- Retry Failed
-
----
-
-## 📊 DASHBOARD Module
-
-### Overview
-- Active Jobs Count
-- Staff On-Site
-- Pending Approvals
-- Revenue MTD
-
-### Operations Dashboard
-- Job Status Breakdown
-- Technician Utilisation
-- Site Map (Leaflet)
-
-### HR Dashboard
-- Headcount
-- Leave Summary
-- Attendance Rate
-- Upcoming Contract Expiry
-
-### Finance Dashboard
-- Revenue vs Target
-- Accounts Receivable
-- Top Pending Quotations
-
-### Compliance Dashboard
-- Licences Expiring Soon
-- Overdue Inspections
-- Open Incidents
-
----
-
-## 📁 DOCUMENTS Module
-
-### File Storage
-- Upload / Download
-- Folder Structure (per job, per employee, per site)
-- Version Control
-
-### Templates
-- Quotation Templates
-- Contract Templates
-- Report Templates
-- Letter Templates
-
----
-
-## 🔧 SETTINGS Module (per tenant)
-
-### General
-- Company Info
-- Timezone / Currency / Language
-- Logo & Branding
-
-### Modules
-- Enable / Disable Modules
-- Module Configuration
-
-### Integrations
-- AppSheet Connector
-- Google Sheets Sync
-- Telegram Bot Config
-- WireGuard VPN (CondoWatch)
-- Ollama AI (local inference)
-
-### Audit Log
-- User Activity Log
-- Data Change History
-- Login History
-
----
-
-## 🧱 SHARED / PLATFORM SERVICES
-
-| Service | Description |
+## 🧱 Shared / platform
+| Piece | Role |
 |---|---|
-| `shared/models` | BaseModel (created_at, updated_at, tenant) |
-| `shared/utils` | PDF gen, email, Telegram helpers |
-| `shared/middleware` | Tenant detection, JWT validation |
-| `shared/permissions` | Role-based permission classes |
-| `gateway/` | Nginx config, routing rules |
+| `shared/models` | BaseModel (id, created_at, updated_at, tenant) |
+| `shared/storage` | FileBrowserStorage (HR photos, claim receipts) |
+| `shared/permissions`, middleware | RBAC + tenant/JWT |
+| `gateway/` (Nginx) | serves `frontend/dist`, proxies API |
 
 ---
 
-## 🗺️ Development Roadmap
-
-| Phase | Modules | Status |
-|---|---|---|
-| v0.1 | Auth, Organisation, User Management | 🔲 Planned |
-| v0.2 | Operations (Jobs, Scheduling, WTS) | 🔲 Planned |
-| v0.3 | HR (Employee, Leave, Attendance) | 🔲 Planned |
-| v0.4 | Finance (Quotations, Invoicing) | 🔲 Planned |
-| v0.5 | Compliance, Notifications | 🔲 Planned |
-| v0.6 | Dashboard, Documents | 🔲 Planned |
-| v1.0 | Multi-tenant, Billing, Public Launch | 🔲 Planned |
+## 🗺️ Planned / not yet built
+- **NAS project-file integration** — auto-create/manage NAS `Projects/` tree (plan approved, see `NAS_INTEGRATION_PLAN.md`)
+- Compliance frontend page; HR & Ops calendars; Notifications/Telegram bot
+- Leave approval workflow + balance deduction; Quotation→Invoice conversion; licence expiry alerts
+- Not in v1: Recruitment, Payroll/CPF, Performance, Inventory, document templates
 
 ---
 
-*Generated: 2026-05-23 | Platform: 1OS by Simply Engineering Pte Ltd*
+*Updated: 2026-06-27 | Reflects current `dev` branch | 1OS by Simply Engineering Pte Ltd*
