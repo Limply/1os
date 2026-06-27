@@ -7,6 +7,7 @@ import api from '../api/axios'
 const MODES = [
   { key: 'light',  label: 'Light',  icon: '☀️' },
   { key: 'dark',   label: 'Dark',   icon: '🌙' },
+  { key: 'vscode', label: 'VS Code', icon: '🟦' },
   { key: 'system', label: 'System', icon: '💻' },
 ]
 

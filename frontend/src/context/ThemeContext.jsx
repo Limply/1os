@@ -28,8 +28,9 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     const root = document.documentElement
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const isDark = darkMode === 'dark' || (darkMode === 'system' && prefersDark)
+    const isDark = darkMode === 'dark' || darkMode === 'vscode' || (darkMode === 'system' && prefersDark)
     root.classList.toggle('dark', isDark)
+    root.setAttribute('data-dark', darkMode === 'vscode' ? 'vscode' : 'default')
     localStorage.setItem('darkMode', darkMode)
   }, [darkMode])
 

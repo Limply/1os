@@ -26,10 +26,18 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    invoice_no = serializers.CharField(source='invoice.invoice_no', read_only=True)
+    quote_no = serializers.CharField(source='quotation.quote_no', read_only=True)
+    method_display = serializers.CharField(source='get_method_display', read_only=True)
+    recorded_by_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Payment
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'recorded_by', 'created_at', 'updated_at']
+
+    def get_recorded_by_name(self, obj):
+        return obj.recorded_by.full_name if obj.recorded_by else None
 
 
 class InvoiceSerializer(serializers.ModelSerializer):

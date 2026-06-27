@@ -104,9 +104,96 @@ class InvoiceItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     serializer_class = InvoiceItemSerializer
 
 
+def _recompute_invoice(invoice):
+    """Sync an invoice's stored paid_amount / status / paid_date from its payments."""
+    from django.db.models import Sum
+    from decimal import Decimal
+    paid = invoice.payments.aggregate(t=Sum('amount'))['t'] or Decimal('0')
+    invoice.paid_amount = paid
+    total = invoice.total or Decimal('0')
+    if total > 0 and paid >= total:
+        invoice.status = 'paid'
+        last = invoice.payments.order_by('-payment_date').first()
+        invoice.paid_date = last.payment_date if last else None
+    elif paid > 0:
+        invoice.status = 'partial'
+        invoice.paid_date = None
+    else:
+        invoice.status = 'unpaid'
+        invoice.paid_date = None
+    invoice.save()
+
+
+def _resolve_project_no(payment):
+    if payment.project_no:
+        return payment.project_no
+    if payment.invoice and payment.invoice.project_no:
+        return payment.invoice.project_no
+    if payment.quotation and payment.quotation.project_no:
+        return payment.quotation.project_no
+    return None
+
+
+def _target_fully_paid(payment):
+    """Is the document this payment targets (invoice, else quotation) now fully paid?"""
+    from django.db.models import Sum
+    from decimal import Decimal
+    target = payment.invoice or payment.quotation
+    if not target:
+        return False
+    total = target.total or Decimal('0')
+    paid = target.payments.aggregate(t=Sum('amount'))['t'] or Decimal('0')
+    return total > 0 and paid >= total
+
+
+def _update_project_on_payment(payment, append_record):
+    """Mark the linked project completed when fully paid; optionally log the payment."""
+    project_no = _resolve_project_no(payment)
+    if not project_no:
+        return
+    from services.projects.models import Project
+    project = Project.objects.filter(project_no=project_no).first()
+    if not project:
+        return
+    fully_paid = _target_fully_paid(payment)
+    changed = False
+    if append_record:
+        note = f"[{payment.payment_date}] ${payment.amount} via {payment.get_method_display()}"
+        if payment.reference:
+            note += f" (ref {payment.reference})"
+        if fully_paid:
+            note += " — FULLY PAID"
+        existing = project.payment_record or ''
+        project.payment_record = existing + ('\n' if existing else '') + note
+        changed = True
+    if fully_paid and project.status != 'completed':
+        project.status = 'completed'
+        changed = True
+    if changed:
+        project.save()
+
+
 class PaymentViewSet(TenantScopedMixin, viewsets.ModelViewSet):
-    queryset = Payment.objects.select_related('invoice')
+    queryset = Payment.objects.select_related('invoice', 'quotation')
     serializer_class = PaymentSerializer
+
+    def perform_create(self, serializer):
+        payment = serializer.save(recorded_by=self.request.user)
+        if payment.invoice:
+            _recompute_invoice(payment.invoice)
+        _update_project_on_payment(payment, append_record=True)
+
+    def perform_update(self, serializer):
+        payment = serializer.save()
+        if payment.invoice:
+            _recompute_invoice(payment.invoice)
+        _update_project_on_payment(payment, append_record=False)
+
+    def perform_destroy(self, instance):
+        invoice = instance.invoice
+        instance.delete()
+        if invoice:
+            _recompute_invoice(invoice)
 
 
 class DeliveryOrderViewSet(TenantScopedMixin, viewsets.ModelViewSet):

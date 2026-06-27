@@ -58,6 +58,55 @@
 .dark .shadow-xl  { box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important; }
 .dark .shadow-lg  { box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important; }
 
+/* ── VS Code "Dark Modern" variant ─────────────────────────────── */
+/* Higher specificity than plain .dark so it wins over the navy palette. */
+
+/* Sidebar */
+.dark[data-dark="vscode"] .bg-gray-900 { background-color: #181818 !important; }
+
+/* Page & layout background */
+.dark[data-dark="vscode"] .bg-gray-50  { background-color: #1f1f1f !important; }
+.dark[data-dark="vscode"] main         { background-color: #1f1f1f !important; }
+.dark[data-dark="vscode"] .min-h-screen.bg-gray-100,
+.dark[data-dark="vscode"] .flex.min-h-screen.bg-gray-100 { background-color: #1f1f1f !important; }
+
+/* Cards (elevated surface) */
+.dark[data-dark="vscode"] .bg-white    { background-color: #252526 !important; }
+
+/* Hover / secondary surfaces */
+.dark[data-dark="vscode"] .bg-gray-100 { background-color: #2a2d2e !important; }
+.dark[data-dark="vscode"] .bg-gray-200 { background-color: #2d2d2d !important; }
+.dark[data-dark="vscode"] .bg-gray-50.border-b { background-color: #252526 !important; }
+.dark[data-dark="vscode"] tr:hover     { background-color: #2a2d2e !important; }
+
+/* Borders */
+.dark[data-dark="vscode"] .border-gray-100,
+.dark[data-dark="vscode"] .border-gray-200 { border-color: #313131 !important; }
+.dark[data-dark="vscode"] .border-gray-300 { border-color: #3c3c3c !important; }
+.dark[data-dark="vscode"] .divide-gray-100 > * + *,
+.dark[data-dark="vscode"] .divide-gray-200 > * + *,
+.dark[data-dark="vscode"] .border-b.border-gray-200,
+.dark[data-dark="vscode"] .border-t.border-gray-200 { border-color: #313131 !important; }
+.dark[data-dark="vscode"] .border-gray-700 { border-color: #2b2b2b !important; }
+
+/* Text */
+.dark[data-dark="vscode"] .text-gray-800 { color: #e0e0e0 !important; }
+.dark[data-dark="vscode"] .text-gray-700 { color: #cccccc !important; }
+.dark[data-dark="vscode"] .text-gray-600 { color: #c0c0c0 !important; }
+.dark[data-dark="vscode"] .text-gray-500 { color: #9d9d9d !important; }
+.dark[data-dark="vscode"] .text-gray-400 { color: #858585 !important; }
+
+/* Inputs & selects */
+.dark[data-dark="vscode"] input,
+.dark[data-dark="vscode"] select,
+.dark[data-dark="vscode"] textarea {
+  background-color: #3c3c3c !important;
+  border-color: #3c3c3c !important;
+  color: #e0e0e0 !important;
+}
+.dark[data-dark="vscode"] input::placeholder,
+.dark[data-dark="vscode"] textarea::placeholder { color: #858585 !important; }
+
 /* Blue (default) */
 :root {
   --color-primary-50:  239 246 255;

@@ -34,6 +34,7 @@ const ALL_LINKS = [
     module: 'finance', to: '/finance', label: 'Finance',
     children: [
       { module: 'finance', to: '/finance?tab=Service Reports', label: 'Service Reports' },
+      { module: 'finance', to: '/finance/payments', label: 'Payments' },
       { module: 'finance', to: '/finance/pl', label: 'P&L' },
     ],
   },
