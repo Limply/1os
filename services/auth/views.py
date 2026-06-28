@@ -22,6 +22,7 @@ def tenant_info(request):
         'site_url': t.site_url,
         'files_url': t.files_url,
         'logo': t.logo,
+        'modules': t.modules,
         'project_prefix': t.project_prefix,
         'signatory_name': t.signatory_name,
         'signatory_designation': t.signatory_designation,
@@ -66,10 +67,17 @@ def change_password(request):
 
 
 class TenantViewSet(viewsets.ModelViewSet):
-    """CRUD for tenants. Superadmin only."""
+    """CRUD for tenants. Company fields are editable by staff/admins; changing the
+    enabled `modules` (plan entitlement) is restricted to superadmins."""
     queryset = Tenant.objects.all()
     serializer_class = TenantSerializer
     permission_classes = [permissions.IsAdminUser]
+
+    def update(self, request, *args, **kwargs):
+        # Covers PATCH too (partial_update delegates to update()).
+        if 'modules' in request.data and getattr(request.user, 'role', None) != 'superadmin':
+            return Response({'detail': 'Only a superadmin can change modules.'}, status=403)
+        return super().update(request, *args, **kwargs)
 
 
 class UserViewSet(viewsets.ModelViewSet):

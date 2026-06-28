@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { getUser } from './api/auth'
 import { can, P } from './utils/permissions'
+import { fetchTenantInfo } from './utils/tenant'
 import Layout from './components/Layout'
+import ModuleGate from './components/ModuleGate'
 import Login from './pages/Login'
 import ClockIn from './pages/ClockIn'
 import CameraTest from './pages/CameraTest'
@@ -40,12 +42,9 @@ function RootRedirect() {
 
 export default function App() {
   useEffect(() => {
-    fetch('/api/auth/tenant-info/')
-      .then(r => r.json())
-      .then(data => {
-        if (data.project_prefix) document.title = `${data.project_prefix} 1OS`
-      })
-      .catch(() => {})
+    fetchTenantInfo().then(data => {
+      if (data.project_prefix) document.title = `${data.project_prefix} 1OS`
+    })
   }, [])
 
   return (
@@ -69,18 +68,18 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/"           element={<RootRedirect />} />
           <Route path="/my"         element={<Personal />} />
-          <Route path="/projects"   element={<Projects />} />
-          <Route path="/hr"         element={<HR />} />
-          <Route path="/schedules"  element={<Schedules />} />
+          <Route path="/projects"   element={<ModuleGate module="projects" title="Projects"><Projects /></ModuleGate>} />
+          <Route path="/hr"         element={<ModuleGate module="hr" title="HR"><HR /></ModuleGate>} />
+          <Route path="/schedules"  element={<ModuleGate module="hr" title="Schedules"><Schedules /></ModuleGate>} />
           <Route path="/orgchart"   element={<OrgChart />} />
-          <Route path="/crm"        element={<CRM />} />
-          <Route path="/operations" element={<Operations />} />
-          <Route path="/finance"    element={<Finance />} />
-          <Route path="/finance/pl" element={<ProfitLoss />} />
-          <Route path="/finance/payments" element={<Payments />} />
-          <Route path="/compliance" element={<Placeholder title="Compliance" />} />
-          <Route path="/files"      element={<Files />} />
-          <Route path="/calendar"   element={<Calendar />} />
+          <Route path="/crm"        element={<ModuleGate module="crm" title="CRM"><CRM /></ModuleGate>} />
+          <Route path="/operations" element={<ModuleGate module="operations" title="Operations"><Operations /></ModuleGate>} />
+          <Route path="/finance"    element={<ModuleGate module="finance" title="Finance"><Finance /></ModuleGate>} />
+          <Route path="/finance/pl" element={<ModuleGate module="finance" title="P&L"><ProfitLoss /></ModuleGate>} />
+          <Route path="/finance/payments" element={<ModuleGate module="finance" title="Payments"><Payments /></ModuleGate>} />
+          <Route path="/compliance" element={<ModuleGate module="compliance" title="Compliance"><Placeholder title="Compliance" /></ModuleGate>} />
+          <Route path="/files"      element={<ModuleGate module="files" title="Files"><Files /></ModuleGate>} />
+          <Route path="/calendar"   element={<ModuleGate module="projects" title="Project Calendar"><Calendar /></ModuleGate>} />
           <Route path="/settings"   element={<Settings />} />
           <Route path="/mock_up_page" element={<MockupPage />} />
         </Route>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { THEMES, useTheme } from '../context/ThemeContext'
 import { getUser } from '../api/auth'
 import { can, P } from '../utils/permissions'
+import { FEATURE_MODULES, CORE_MODULES, isModulePaid } from '../utils/tenant'
 import api from '../api/axios'
 
 const MODES = [
@@ -15,6 +16,7 @@ export default function Settings() {
   const { theme, setTheme, darkMode, setDarkMode } = useTheme()
   const user = getUser()
   const isAdmin = can(P.SETTINGS_EDIT)
+  const isSuperAdmin = can(P.ADMIN_TENANT)  // reserved for superadmin only
 
   const [pendingTheme, setPendingTheme] = useState(theme)
   const [pendingMode, setPendingMode]   = useState(darkMode)
@@ -32,6 +34,12 @@ export default function Settings() {
   const [tenantErr, setTenantErr]   = useState('')
   const [tenantSaving, setTenantSaving] = useState(false)
 
+  // Module on/off toggles (enabled feature-module keys)
+  const [enabledModules, setEnabledModules] = useState([])
+  const [modMsg, setModMsg]       = useState('')
+  const [modErr, setModErr]       = useState('')
+  const [modSaving, setModSaving] = useState(false)
+
   useEffect(() => {
     if (!isAdmin) return
     api.get('/auth/tenants/').then(res => {
@@ -47,6 +55,8 @@ export default function Settings() {
           gst_number:     t.gst_number     ?? '',
           project_prefix: t.project_prefix ?? 'SE',
         })
+        // A module is "on" if the tenant has paid for it (empty list = all on).
+        setEnabledModules(FEATURE_MODULES.filter(m => isModulePaid(m.key, t.modules)).map(m => m.key))
       }
     }).catch(() => {})
   }, [isAdmin])
@@ -90,6 +100,28 @@ export default function Settings() {
       setTenantErr(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save.')
     } finally {
       setTenantSaving(false)
+    }
+  }
+
+  function toggleModule(key) {
+    setEnabledModules(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  }
+
+  async function handleSaveModules() {
+    setModErr('')
+    setModMsg('')
+    setModSaving(true)
+    try {
+      // Always persist core modules so the list is never empty once configured —
+      // that keeps "empty = brand-new install = everything on" unambiguous.
+      const modules = [...CORE_MODULES, ...FEATURE_MODULES.filter(m => enabledModules.includes(m.key)).map(m => m.key)]
+      const res = await api.patch(`/auth/tenants/${tenant.id}/`, { modules })
+      setTenant(t => ({ ...t, modules: res.data.modules ?? modules }))
+      setModMsg('Modules saved. Users may need to refresh.')
+    } catch (err) {
+      setModErr(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save modules.')
+    } finally {
+      setModSaving(false)
     }
   }
 
@@ -228,6 +260,47 @@ export default function Settings() {
               {tenantSaving ? 'Saving...' : 'Save Company Settings'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Modules (superadmin only) */}
+      {isSuperAdmin && tenant && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Modules</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Switch modules on or off for this company. A switched-off module is locked
+            (“Coming soon”) and inaccessible for <span className="font-medium">all</span> users, admins included.
+          </p>
+          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+            {FEATURE_MODULES.map(m => {
+              const on = enabledModules.includes(m.key)
+              return (
+                <label key={m.key} className="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none">
+                  <span className="text-sm text-gray-700">{m.label}</span>
+                  <span className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${on ? 'text-green-600' : 'text-gray-400'}`}>
+                      {on ? 'On' : 'Off'}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggleModule(m.key)}
+                      className="accent-primary-600 w-4 h-4"
+                    />
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+          {modErr && <p className="text-red-500 text-sm mt-3">{modErr}</p>}
+          {modMsg && <p className="text-green-600 text-sm mt-3">✓ {modMsg}</p>}
+          <button
+            onClick={handleSaveModules}
+            disabled={modSaving}
+            className="mt-4 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+          >
+            {modSaving ? 'Saving...' : 'Save Modules'}
+          </button>
         </div>
       )}
 

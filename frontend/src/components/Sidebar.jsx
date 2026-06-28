@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { NavLink, useNavigate, useMatch } from 'react-router-dom'
+import { NavLink, useNavigate, useMatch, useLocation } from 'react-router-dom'
 import { logout, getUser } from '../api/auth'
 import { can, P } from '../utils/permissions'
+import { useTenantInfo, isModulePaid } from '../utils/tenant'
 
 const ALL_LINKS = [
   {
@@ -49,10 +49,44 @@ function canSee(module, allowed, isAdminPlus) {
   return allowed.includes(module)
 }
 
+// Shown when the tenant hasn't paid for a module: greyed, non-clickable, with a
+// lock + "Coming soon" badge. Tenant-wide — shows for admins too.
+function LockedNavItem({ label }) {
+  return (
+    <div
+      title="Not included in your current plan"
+      className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-gray-500 cursor-not-allowed select-none"
+    >
+      <span>{label}</span>
+      <span className="flex items-center gap-1 text-[10px] text-gray-500">
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round"
+            d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 0h10.5a2.25 2.25 0 0 1 2.25 2.25v6A2.25 2.25 0 0 1 17.25 21H6.75A2.25 2.25 0 0 1 4.5 18.75v-6a2.25 2.25 0 0 1 2.25-2.25Z" />
+        </svg>
+        Coming soon
+      </span>
+    </div>
+  )
+}
+
 function NavItem({ link, allowed, isAdminPlus }) {
-  const isParentActive = useMatch({ path: link.to, end: link.to === '/' })
+  const location = useLocation()
+  const isParentActive = useMatch({ path: link.to.split('?')[0], end: link.to === '/' })
   const visibleChildren = link.children?.filter(c => canSee(c.module, allowed, isAdminPlus))
-  const isChildActive = visibleChildren?.some(c => window.location.pathname === c.to)
+
+  // A child is active only on an exact pathname match AND when every query param
+  // in its `to` matches the current URL — so tab-based links (e.g.
+  // /finance?tab=Service Reports) don't stay lit on sibling routes.
+  const childActive = (c) => {
+    const [path, query] = c.to.split('?')
+    if (location.pathname !== path) return false
+    if (!query) return true
+    const want = new URLSearchParams(query)
+    const have = new URLSearchParams(location.search)
+    for (const [k, v] of want) if (have.get(k) !== v) return false
+    return true
+  }
+  const isChildActive = visibleChildren?.some(childActive)
 
   return (
     <>
@@ -76,9 +110,9 @@ function NavItem({ link, allowed, isAdminPlus }) {
             <NavLink
               key={child.to}
               to={child.to}
-              className={({ isActive }) =>
+              className={
                 `block px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  isActive
+                  childActive(child)
                     ? 'text-white bg-primary-500'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
                 }`
@@ -98,15 +132,9 @@ export default function Sidebar({ onCollapse }) {
   const user = getUser()
   const allowed = user.modules || []
   const isAdminPlus = can(P.ADMIN_USERS)
-  const visibleLinks = ALL_LINKS.filter(link => canSee(link.module, allowed, isAdminPlus))
-  const [logoUrl, setLogoUrl] = useState(null)
-
-  useEffect(() => {
-    fetch('/api/auth/tenant-info/')
-      .then(r => r.json())
-      .then(data => { if (data.logo) setLogoUrl(`/media/${data.logo}?v=2`) })
-      .catch(() => {})
-  }, [])
+  const { info } = useTenantInfo()
+  const tenantModules = info.modules
+  const logoUrl = info.logo ? `/media/${info.logo}?v=2` : null
 
   function handleLogout() {
     logout()
@@ -126,9 +154,15 @@ export default function Sidebar({ onCollapse }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {visibleLinks.map(link => (
-          <NavItem key={link.to} link={link} allowed={allowed} isAdminPlus={isAdminPlus} />
-        ))}
+        {ALL_LINKS.map(link => {
+          // Tenant didn't pay → locked "Coming soon" (overrides per-user access).
+          if (!isModulePaid(link.module, tenantModules)) {
+            return <LockedNavItem key={link.to} label={link.label} />
+          }
+          // Paid, but this user has no access → hide.
+          if (!canSee(link.module, allowed, isAdminPlus)) return null
+          return <NavItem key={link.to} link={link} allowed={allowed} isAdminPlus={isAdminPlus} />
+        })}
       </nav>
 
       <div className="px-3 py-4 border-t border-gray-700 shrink-0">
