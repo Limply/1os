@@ -60,6 +60,17 @@ ROLE_DEFAULT_PERMISSIONS = {
     'staff': [P.DASHBOARD_VIEW, P.HR_VIEW],
 }
 
+# Level-based permissions for staff users (position.level → permission list).
+# Positions without a matching level fall back to position.permissions JSONField.
+LEVEL_PERMISSIONS = {
+    1:  [P.SUPERVISOR_APP],
+    3:  [P.SUPERVISOR_APP, P.PROJECTS_VIEW, P.HR_VIEW],
+    5:  [P.DASHBOARD_VIEW, P.SUPERVISOR_APP, P.PROJECTS_VIEW, P.HR_VIEW, P.FILES_VIEW],
+    7:  [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.HR_VIEW, P.CRM_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],
+    9:  [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.PROJECTS_EDIT, P.HR_VIEW, P.OPERATIONS_VIEW, P.CRM_VIEW, P.COMPLIANCE_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],
+    10: [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.PROJECTS_EDIT, P.HR_VIEW, P.HR_MANAGE, P.OPERATIONS_VIEW, P.OPERATIONS_EDIT, P.FINANCE_VIEW, P.CRM_VIEW, P.CRM_EDIT, P.COMPLIANCE_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],
+}
+
 
 # ---------------------------------------------------------------------------
 # Legacy role hierarchy (kept for backwards compat during migration)

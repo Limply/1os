@@ -18,16 +18,17 @@ class UserSerializer(serializers.ModelSerializer):
     tenant_name    = serializers.CharField(source='tenant.name', read_only=True)
     permissions    = serializers.SerializerMethodField()
     position_title = serializers.SerializerMethodField()
+    position_level = serializers.SerializerMethodField()
     department     = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'tenant_id', 'tenant_name', 'email', 'first_name', 'last_name',
-            'role', 'permissions', 'position_title', 'department',
+            'role', 'permissions', 'position_title', 'position_level', 'department',
             'is_active', 'mfa_enabled', 'avatar', 'modules', 'preferences', 'created_at',
         ]
-        read_only_fields = ['id', 'tenant_name', 'permissions', 'position_title', 'department', 'created_at']
+        read_only_fields = ['id', 'tenant_name', 'permissions', 'position_title', 'position_level', 'department', 'created_at']
 
     def get_permissions(self, obj):
         return obj.resolved_permissions
@@ -35,6 +36,12 @@ class UserSerializer(serializers.ModelSerializer):
     def get_position_title(self, obj):
         try:
             return obj.employee_profile.position.title
+        except Exception:
+            return None
+
+    def get_position_level(self, obj):
+        try:
+            return obj.employee_profile.position.level
         except Exception:
             return None
 

@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Navigate, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { isLoggedIn, getUser, logout } from '../api/auth'
 
 const NAV = [
@@ -66,8 +66,18 @@ export default function SupervisorLayout() {
   if (!isLoggedIn()) return <Navigate to="/login" replace />
 
   const navigate = useNavigate()
+  const location = useLocation()
   const user = getUser()
   const displayName = user.first_name || user.email || ''
+  const level = user.position_level ?? null
+
+  // Level 1: clock-in/out only — redirect away from any other supervisor page
+  const CLOCK_IN_PATH = '/supervisor/clock-in'
+  if (level === 1 && !location.pathname.startsWith(CLOCK_IN_PATH)) {
+    return <Navigate to={CLOCK_IN_PATH} replace />
+  }
+
+  const visibleNav = level === 1 ? NAV.filter(n => n.to === CLOCK_IN_PATH) : NAV
 
   function handleLogout() {
     logout()
@@ -121,7 +131,7 @@ export default function SupervisorLayout() {
       {/* Bottom nav */}
       <nav style={{ background: '#212D3E', borderTop: '1px solid #2F4060' }}
         className="flex flex-shrink-0 pb-safe">
-        {NAV.map(({ to, end, label, icon }) => (
+        {visibleNav.map(({ to, end, label, icon }) => (
           <NavLink
             key={to}
             to={to}

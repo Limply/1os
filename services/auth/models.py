@@ -76,12 +76,15 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def resolved_permissions(self):
-        from shared.permissions import ROLE_DEFAULT_PERMISSIONS
+        from shared.permissions import ROLE_DEFAULT_PERMISSIONS, LEVEL_PERMISSIONS
         if self.role == 'superadmin':
             return None
         if self.role == 'admin':
             return ROLE_DEFAULT_PERMISSIONS.get('admin', [])
         try:
+            level = self.employee_profile.position.level
+            if level is not None and level in LEVEL_PERMISSIONS:
+                return LEVEL_PERMISSIONS[level]
             perms = self.employee_profile.position.permissions
             if perms:
                 return perms
