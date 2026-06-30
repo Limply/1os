@@ -10,6 +10,7 @@ import ClockIn from './pages/ClockIn'
 import CameraTest from './pages/CameraTest'
 import Schedules from './pages/Schedules'
 import Dashboard from './pages/Dashboard'
+import Strategy from './pages/Strategy'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
 import Projects from './pages/Projects'
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="/hr"         element={<ModuleGate module="hr" title="HR"><HR /></ModuleGate>} />
           <Route path="/schedules"  element={<ModuleGate module="hr" title="Schedules"><Schedules /></ModuleGate>} />
           <Route path="/orgchart"   element={<OrgChart />} />
+          <Route path="/strategy"   element={<Strategy />} />
           <Route path="/crm"        element={<ModuleGate module="crm" title="CRM"><CRM /></ModuleGate>} />
           <Route path="/operations" element={<ModuleGate module="operations" title="Operations"><Operations /></ModuleGate>} />
           <Route path="/finance"    element={<ModuleGate module="finance" title="Finance"><Finance /></ModuleGate>} />

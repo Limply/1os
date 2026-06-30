@@ -2,17 +2,49 @@
 DOCX generation utility for Finance documents.
 Returns a python-docx Document object — caller streams it as HTTP response.
 """
+import os
+from pathlib import Path
+from decimal import Decimal
 from docx import Document
 from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 import datetime
 
+# Single source of truth: the template lives in the NAS shared folder so it can be
+# edited directly in Word (N: share). Falls back to code-built output if unavailable.
+TEMPLATE_DIR = Path('/mnt/data/1os/shared/doc_templates')
+
 
 def _get_tenant():
     from django.apps import apps
     Tenant = apps.get_model('accounts', 'Tenant')
     return Tenant.objects.first()
+
+
+def _fmt_date(d):
+    return d.strftime('%d %B %Y') if d else ''
+
+
+def _fmt_money(v):
+    return f"{(v or Decimal('0')):,.2f}"
+
+
+def _fmt_qty(v):
+    v = v or Decimal('0')
+    return str(int(v)) if v == v.to_integral_value() else f"{v:,.2f}"
+
+
+def _media_path(field):
+    """Resolve a tenant image field (FileField or plain path string) to an existing abs path."""
+    from django.conf import settings
+    if not field:
+        return None
+    try:
+        p = field.path                       # ImageField / FileField
+    except (ValueError, AttributeError):
+        p = os.path.join(settings.MEDIA_ROOT, str(field))  # CharField path
+    return p if os.path.exists(p) else None
 
 
 def _header(doc, title, doc_no, issue_date, client_name, client_address=None, extra_rows=None, tenant=None):
@@ -101,6 +133,97 @@ def _items_table(doc, headers, rows, totals=None):
 
 
 def generate_quotation(quotation):
+    """Render the quotation from the Word template if present, else fall back to code-built."""
+    template = TEMPLATE_DIR / 'quotation.docx'
+    if not template.exists():
+        return _generate_quotation_codebuilt(quotation)
+    try:
+        from docxtpl import DocxTemplate
+    except ImportError:
+        return _generate_quotation_codebuilt(quotation)
+
+    import copy
+    import jinja2
+    from docx.oxml.ns import qn
+
+    tenant = _get_tenant()
+    tpl = DocxTemplate(str(template))
+    # autoescape so field values containing & < > render correctly (docxtpl drops them otherwise)
+    jenv = jinja2.Environment(autoescape=True)
+
+    # swap embedded images per-tenant: image1 = logo, image2 = signature
+    if tenant:
+        logo = _media_path(getattr(tenant, 'logo', None))
+        if logo:
+            try:
+                tpl.replace_pic('image1.jpeg', logo)
+            except Exception:
+                pass
+        sig = _media_path(getattr(tenant, 'signatory_file', None))
+        if sig:
+            try:
+                tpl.replace_pic('image2.png', sig)
+            except Exception:
+                pass
+
+    signatory = (tenant.signatory_name if tenant and tenant.signatory_name else '') \
+        or (quotation.prepared_by.full_name if quotation.prepared_by else '')
+
+    tpl.render({
+        'title':            quotation.title or '',
+        'quote_no':         quotation.quote_no,
+        'issue_date':       _fmt_date(quotation.issue_date),
+        'valid_until':      _fmt_date(quotation.valid_until),
+        'status':           quotation.get_status_display(),
+        'customer_name':    quotation.client_name or '',
+        'customer_contact': quotation.client_contact or '',
+        'customer_address': quotation.client_address or '',
+        'company_address':  (tenant.address if tenant else '') or '',
+        'company_phone':    (tenant.phone if tenant else '') or '',
+        'company_email':    (tenant.email if tenant else '') or '',
+        'company_website':  (tenant.site_url if tenant else '') or '',
+        'company_uen':      (tenant.uen if tenant else '') or '',
+        'company_gst_no':   (tenant.gst_number if tenant and tenant.gst_registered else '') or '',
+        'subtotal':         _fmt_money(quotation.subtotal),
+        'gst_amount':       _fmt_money(quotation.gst_amount),
+        'total':            _fmt_money(quotation.total),
+        'notes':            quotation.notes or '',
+        'signatory_name':         signatory,
+        'signatory_designation':  (tenant.signatory_designation if tenant else '') or '',
+    }, jinja_env=jenv)
+
+    # fill the repeating items row from sentinel markers (docxtpl {%tr%} is unreliable here)
+    doc = tpl.docx
+    SENT = {'#NO#': 'no', '#DESC#': 'description', '#QTY#': 'qty',
+            '#UNIT#': 'unit', '#PRICE#': 'unit_price', '#AMOUNT#': 'amount'}
+    rows = [{
+        'no': i, 'description': it.description, 'qty': _fmt_qty(it.qty),
+        'unit': it.unit or '', 'unit_price': _fmt_money(it.unit_price),
+        'amount': _fmt_money(it.amount),
+    } for i, it in enumerate(quotation.items.all(), 1)]
+
+    for table in doc.tables:
+        marker = next((r for r in table.rows if any('#NO#' in c.text for c in r.cells)), None)
+        if marker is None:
+            continue
+        tr = marker._tr
+        parent = tr.getparent()
+        idx = list(parent).index(tr)
+        for item in rows:
+            new = copy.deepcopy(tr)
+            for t in new.iter(qn('w:t')):
+                if t.text:
+                    for s, k in SENT.items():
+                        if s in t.text:
+                            t.text = t.text.replace(s, str(item[k]))
+            parent.insert(idx, new)
+            idx += 1
+        parent.remove(tr)
+        break
+    return doc
+
+
+def _generate_quotation_codebuilt(quotation):
     doc = Document()
     tenant = _get_tenant()
     _header(

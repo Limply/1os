@@ -23,6 +23,7 @@ class Quotation(BaseModel):
 
     quote_no   = models.CharField(max_length=20, unique=True, blank=True)
     project_no = models.CharField(max_length=20, blank=True, null=True, help_text='Linked project number e.g. AST-26-0001')
+    title      = models.CharField(max_length=255, blank=True, null=True, help_text='Quotation subject/title shown on the document')
     client_name    = models.CharField(max_length=255)
     client_contact = models.CharField(max_length=255, blank=True, null=True)
     client_email   = models.EmailField(blank=True, null=True)
