@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock, CalendarDays, ClipboardList, X, ArrowRight, Plus, Trash2, Check } from 'lucide-react'
+import { Clock, CalendarDays, ClipboardList, X, ArrowRight, Plus, Trash2, Check, Sunrise, Sun, Moon, Pencil } from 'lucide-react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import CalendarView from '../components/CalendarView'
@@ -22,9 +22,14 @@ const LEAVE_STATUS_STYLE = {
 const TABS = [
   { key: 'overview',  label: 'Overview' },
   { key: 'goals',     label: 'Goals' },
+  { key: 'mindset',   label: 'Mindset' },
   { key: 'claims',    label: 'Claims' },
   { key: 'calendar',  label: 'Calendar' },
 ]
+
+const EMPTY_ANCHOR = { expect_it: '', for_what: '', gratitude: '' }
+
+const localToday = () => new Date().toLocaleDateString('en-CA')  // YYYY-MM-DD in local tz
 
 const GOAL_CATEGORIES = [
   { key: 'all',      label: 'All' },
@@ -64,6 +69,23 @@ export default function Personal() {
   const [goalError, setGoalError]   = useState('')
   const goalTextRef = useRef(null)
 
+  // Mindset — constant Anchor
+  const [anchor, setAnchor]           = useState(EMPTY_ANCHOR)
+  const [anchorEditing, setAnchorEditing] = useState(false)
+  const [anchorForm, setAnchorForm]   = useState(EMPTY_ANCHOR)
+  const [anchorSaving, setAnchorSaving] = useState(false)
+  const [anchorError, setAnchorError] = useState('')
+
+  // Mindset — per-day log (midday key-notes + evening review, each a list of rows)
+  const [mindsetToday, setMindsetToday]     = useState(null)   // today's saved row, or null if none yet
+  const [midday, setMidday]                 = useState([])     // list of strings
+  const [evening, setEvening]               = useState([])     // list of strings
+  const [chapterClosed, setChapterClosed]   = useState(false)
+  const [mindsetHistory, setMindsetHistory] = useState([])
+  const [mindsetSaving, setMindsetSaving]   = useState(false)
+  const [mindsetError, setMindsetError]     = useState('')
+  const [mindsetSaved, setMindsetSaved]     = useState(false)
+
   useEffect(() => {
     Promise.all([
       api.get('/hr/employees/me/'),
@@ -83,6 +105,81 @@ export default function Personal() {
     }).catch(() => {})
     }
   }, [tab])
+
+  useEffect(() => {
+    if (tab !== 'mindset') return
+    setMindsetError(''); setAnchorError('')
+    api.get('/hr/mindset-anchor/').then(r => {
+      const a = { ...EMPTY_ANCHOR, ...r.data }
+      setAnchor(a)
+      setAnchorEditing(!a.expect_it && !a.for_what && !a.gratitude)  // first time → open editor
+    }).catch(err => setAnchorError(err.response?.data?.detail || err.message || 'Failed to load anchor'))
+
+    api.get('/hr/mindset-logs/').then(r => {
+      const d = r.data
+      const list = Array.isArray(d) ? d : (d.results ?? [])
+      const todayStr = localToday()
+      const todayRow = list.find(m => m.date === todayStr) || null
+      setMindsetToday(todayRow)
+      setMindsetHistory(list.filter(m => m.date !== todayStr))
+      setMidday(Array.isArray(todayRow?.midday_notes) ? todayRow.midday_notes : [])
+      setEvening(Array.isArray(todayRow?.evening_notes) ? todayRow.evening_notes : [])
+      setChapterClosed(!!todayRow?.chapter_closed)
+    }).catch(err => {
+      setMindsetError(err.response?.data?.detail || err.message || 'Failed to load mindset log')
+    })
+  }, [tab])
+
+  function editAnchor() {
+    setAnchorForm(anchor)
+    setAnchorEditing(true)
+    setAnchorError('')
+  }
+
+  function saveAnchor() {
+    setAnchorSaving(true); setAnchorError('')
+    api.patch('/hr/mindset-anchor/', anchorForm).then(r => {
+      setAnchor({ ...EMPTY_ANCHOR, ...r.data })
+      setAnchorEditing(false)
+    }).catch(err => {
+      const data = err.response?.data
+      const msg = data?.detail || (data && typeof data === 'object' ? Object.values(data).flat().join(' ') : null) || err.message || 'Failed to save'
+      setAnchorError(msg)
+    }).finally(() => setAnchorSaving(false))
+  }
+
+  function saveMindset() {
+    setMindsetSaving(true)
+    setMindsetError('')
+    const payload = {
+      midday_notes:  midday.map(s => s.trim()).filter(Boolean),
+      evening_notes: evening.map(s => s.trim()).filter(Boolean),
+      chapter_closed: chapterClosed,
+    }
+    const req = mindsetToday
+      ? api.patch(`/hr/mindset-logs/${mindsetToday.id}/`, payload)
+      : api.post('/hr/mindset-logs/', payload)
+    req.then(r => {
+      setMindsetToday(r.data)
+      setMidday(Array.isArray(r.data.midday_notes) ? r.data.midday_notes : [])
+      setEvening(Array.isArray(r.data.evening_notes) ? r.data.evening_notes : [])
+      setMindsetSaved(true)
+      setTimeout(() => setMindsetSaved(false), 2000)
+    }).catch(err => {
+      const data = err.response?.data
+      const msg = data?.detail
+        || (data && typeof data === 'object' ? Object.values(data).flat().join(' ') : null)
+        || err.message || 'Failed to save'
+      setMindsetError(msg)
+    }).finally(() => setMindsetSaving(false))
+  }
+
+  // Row-list helpers for midday / evening
+  const rowOps = (list, setList) => ({
+    add:    ()        => setList([...list, '']),
+    edit:   (i, v)    => setList(list.map((x, idx) => idx === i ? v : x)),
+    remove: (i)       => setList(list.filter((_, idx) => idx !== i)),
+  })
 
   function toggleGoalAchieved(goal) {
     const updated = { is_achieved: !goal.is_achieved }
@@ -484,6 +581,165 @@ export default function Personal() {
               </div>
             )
           })()}
+        </div>
+      )}
+
+      {tab === 'mindset' && (
+        <div className="max-w-lg mx-auto w-full space-y-4">
+
+          {/* Constant Anchor — set once, shown every day */}
+          <div className="bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-200 p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-600">
+                <Sunrise className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wide">My Anchor</span>
+              </div>
+              {!anchorEditing && (
+                <button
+                  onClick={editAnchor}
+                  className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium px-2 py-1 rounded-lg hover:bg-amber-100 transition"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
+            </div>
+
+            {anchorEditing ? (
+              <div className="space-y-2">
+                <input
+                  type="text" maxLength={300} value={anchorForm.expect_it}
+                  onChange={e => setAnchorForm(f => ({ ...f, expect_it: e.target.value }))}
+                  placeholder="Today I will… (expect victory)"
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  type="text" maxLength={300} value={anchorForm.for_what}
+                  onChange={e => setAnchorForm(f => ({ ...f, for_what: e.target.value }))}
+                  placeholder="This is for… (your purpose)"
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  type="text" maxLength={300} value={anchorForm.gratitude}
+                  onChange={e => setAnchorForm(f => ({ ...f, gratitude: e.target.value }))}
+                  placeholder="Grateful for…"
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                {anchorError && <p className="text-sm text-red-500">{anchorError}</p>}
+                <div className="flex gap-2 justify-end pt-1">
+                  {(anchor.expect_it || anchor.for_what || anchor.gratitude) && (
+                    <button onClick={() => { setAnchorEditing(false); setAnchorError('') }}
+                      className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Cancel</button>
+                  )}
+                  <button onClick={saveAnchor} disabled={anchorSaving}
+                    className="text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg transition">
+                    {anchorSaving ? 'Saving…' : 'Save Anchor'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {anchor.expect_it && <p className="text-sm font-semibold text-gray-800">{anchor.expect_it}</p>}
+                {anchor.for_what  && <p className="text-sm text-gray-600">This is for {anchor.for_what}</p>}
+                {anchor.gratitude && <p className="text-sm text-gray-600">Grateful for {anchor.gratitude}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Today's date */}
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Today</span>
+            <span className="text-xs text-gray-400">{localToday()}</span>
+          </div>
+
+          {/* Midday — key notes for today */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 space-y-3">
+            <div className="flex items-center gap-2 text-sky-600">
+              <Sun className="w-4 h-4" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Key Notes for Today</span>
+            </div>
+            {midday.length === 0 && <p className="text-sm text-gray-400">No notes yet.</p>}
+            {midday.map((note, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text" value={note}
+                  onChange={e => rowOps(midday, setMidday).edit(i, e.target.value)}
+                  placeholder="A note…"
+                  className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-300"
+                />
+                <button onClick={() => rowOps(midday, setMidday).remove(i)}
+                  className="shrink-0 text-gray-300 hover:text-red-400 p-1.5 transition">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => rowOps(midday, setMidday).add()}
+              className="flex items-center gap-1.5 text-sm text-sky-600 hover:text-sky-800 font-medium">
+              <Plus className="w-4 h-4" /> Add note
+            </button>
+          </div>
+
+          {/* Evening — night review */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 space-y-3">
+            <div className="flex items-center gap-2 text-indigo-600">
+              <Moon className="w-4 h-4" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Night Review</span>
+            </div>
+            {evening.length === 0 && <p className="text-sm text-gray-400">Nothing logged yet.</p>}
+            {evening.map((note, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text" value={note}
+                  onChange={e => rowOps(evening, setEvening).edit(i, e.target.value)}
+                  placeholder="What did today reveal?"
+                  className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-300"
+                />
+                <button onClick={() => rowOps(evening, setEvening).remove(i)}
+                  className="shrink-0 text-gray-300 hover:text-red-400 p-1.5 transition">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => rowOps(evening, setEvening).add()}
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+              <Plus className="w-4 h-4" /> Add review
+            </button>
+            <label className="flex items-center gap-2 text-sm text-gray-700 pt-1 cursor-pointer">
+              <button type="button" onClick={() => setChapterClosed(v => !v)}
+                className={`w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center transition ${
+                  chapterClosed ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 hover:border-indigo-400'
+                }`}>
+                {chapterClosed && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+              </button>
+              Chapter closed — turn the page
+            </label>
+          </div>
+
+          {mindsetError && <p className="text-sm text-red-500 px-1">{mindsetError}</p>}
+
+          {/* Sticky save bar */}
+          <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent pt-2 pb-1 flex items-center justify-end gap-3">
+            {mindsetSaved && <span className="text-xs text-green-600">Saved ✓</span>}
+            <button onClick={saveMindset} disabled={mindsetSaving}
+              className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded-xl transition shadow-sm">
+              {mindsetSaving ? 'Saving…' : 'Save Today'}
+            </button>
+          </div>
+
+          {/* History */}
+          {mindsetHistory.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Past Days</h2>
+              {mindsetHistory.map(m => (
+                <div key={m.id} className="bg-white border border-gray-100 rounded-xl px-4 py-3">
+                  <p className="text-xs font-medium text-gray-400 mb-2">{m.date}{m.chapter_closed && <span className="text-indigo-400"> · closed ✓</span>}</p>
+                  <div className="space-y-1 text-sm text-gray-700">
+                    {(m.midday_notes || []).map((n, i) => <p key={`d${i}`}><span className="text-sky-500">◐ </span>{n}</p>)}
+                    {(m.evening_notes || []).map((n, i) => <p key={`e${i}`}><span className="text-indigo-500">☾ </span>{n}</p>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

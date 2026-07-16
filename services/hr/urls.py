@@ -4,7 +4,7 @@ from .views import (
     EmployeeViewSet, LeaveTypeViewSet, LeaveBalanceViewSet,
     LeaveApplicationViewSet, AttendanceViewSet, CertificationViewSet, PublicHolidayViewSet,
     WorkScheduleViewSet, ManpowerSettingsViewSet, StaffDeploymentViewSet, employee_me, org_tree,
-    PersonalGoalViewSet, ClaimViewSet, ClaimItemViewSet, ClaimAttachmentViewSet,
+    PersonalGoalViewSet, mindset_anchor, MindsetLogViewSet, ClaimViewSet, ClaimItemViewSet, ClaimAttachmentViewSet,
 )
 
 router = DefaultRouter()
@@ -19,6 +19,7 @@ router.register('work-schedules', WorkScheduleViewSet, basename='work-schedule')
 router.register('manpower-settings', ManpowerSettingsViewSet, basename='manpower-settings')
 router.register('staff-deployments', StaffDeploymentViewSet, basename='staff-deployment')
 router.register('personal-goals',    PersonalGoalViewSet,    basename='personal-goal')
+router.register('mindset-logs',       MindsetLogViewSet,      basename='mindset-log')
 router.register('claims',             ClaimViewSet,           basename='claim')
 router.register('claim-items',        ClaimItemViewSet,       basename='claim-item')
 router.register('claim-attachments',  ClaimAttachmentViewSet, basename='claim-attachment')
@@ -26,5 +27,6 @@ router.register('claim-attachments',  ClaimAttachmentViewSet, basename='claim-at
 urlpatterns = [
     path('employees/me/', employee_me, name='employee-me'),
     path('org-tree/', org_tree, name='org-tree'),
+    path('mindset-anchor/', mindset_anchor, name='mindset-anchor'),
     path('', include(router.urls)),
 ]

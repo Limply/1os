@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, Claim, ClaimItem, ClaimAttachment
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, MindsetAnchor, MindsetLog, Claim, ClaimItem, ClaimAttachment
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -180,6 +180,23 @@ class PersonalGoalSerializer(serializers.ModelSerializer):
     class Meta:
         model = PersonalGoal
         fields = ['id', 'text', 'category', 'goal_type', 'is_achieved', 'target_date', 'order']
+        read_only_fields = ['id']
+
+
+class MindsetAnchorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MindsetAnchor
+        fields = ['id', 'expect_it', 'for_what', 'gratitude']
+        read_only_fields = ['id']
+
+
+class MindsetLogSerializer(serializers.ModelSerializer):
+    midday_notes  = serializers.ListField(child=serializers.CharField(allow_blank=True), required=False)
+    evening_notes = serializers.ListField(child=serializers.CharField(allow_blank=True), required=False)
+
+    class Meta:
+        model = MindsetLog
+        fields = ['id', 'date', 'midday_notes', 'evening_notes', 'chapter_closed']
         read_only_fields = ['id']
 
 
