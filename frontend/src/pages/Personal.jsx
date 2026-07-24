@@ -253,20 +253,36 @@ export default function Personal() {
   const leaves     = me?.leave_applications ?? []
   const attendance = me?.today_attendance
 
-  // Calendar events — only this user's tasks with a due date
+  // Calendar events — this user's tasks anchored by any date they have.
+  // start/end fall back to due_date so tasks without a due date still show;
+  // when start < end the task renders as a multi-day span. Truly dateless
+  // tasks (no start/due/end) have nothing to anchor to and are skipped.
   const calendarEvents = tasks
-    .filter(t => t.due_date)
     .map(t => {
+      const start = t.start_date || t.due_date || t.end_date
+      const end   = t.end_date   || t.due_date || t.start_date
+      if (!start) return null
       const s = TASK_STATUS_STYLE[t.status] ?? TASK_STATUS_STYLE.todo
-      return {
+      const ev = {
         id: `task-${t.id}`,
         title: t.title,
-        date: t.due_date,
+        allDay: true,
         backgroundColor: s.color,
         borderColor: 'transparent',
         extendedProps: { kind: 'task', data: t },
       }
+      if (end && end > start) {
+        // FullCalendar's all-day `end` is exclusive → +1 day to include `end`.
+        const d = new Date(`${end}T00:00:00`)
+        d.setDate(d.getDate() + 1)
+        ev.start = start
+        ev.end = d.toISOString().slice(0, 10)
+      } else {
+        ev.date = start
+      }
+      return ev
     })
+    .filter(Boolean)
 
   // Personal schedule events → FullCalendar objects (timed or all-day)
   const personalCalItems = calEvents.map(ev => ({
