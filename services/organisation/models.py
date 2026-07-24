@@ -14,6 +14,10 @@ class Company(BaseModel):
     logo = models.CharField(max_length=500, blank=True, null=True)
     gst_registered = models.BooleanField(default=False)
     gst_number = models.CharField(max_length=20, blank=True, null=True)
+    nas_folder = models.CharField(
+        max_length=120, blank=True,
+        help_text='Tenant base folder name under NAS_PROJECTS_ROOT. Blank falls back to a sanitized company name.',
+    )
 
     class Meta:
         verbose_name_plural = 'companies'
@@ -105,6 +109,11 @@ class Client(BaseModel):
     contact_email   = models.EmailField(blank=True, null=True)
     contact_phone   = models.CharField(max_length=20, blank=True, null=True)
     notes           = models.TextField(blank=True, null=True)
+    nas_folder      = models.CharField(
+        max_length=160, blank=True,
+        help_text='Customer folder name (YYYY-MM_Customer-Name) under the tenant base. '
+                  'Blank falls back to created-month + sanitized name. Overridable.',
+    )
 
     class Meta:
         ordering = ['name']

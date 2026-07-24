@@ -4,7 +4,7 @@ from .views import (
     EmployeeViewSet, LeaveTypeViewSet, LeaveBalanceViewSet,
     LeaveApplicationViewSet, AttendanceViewSet, CertificationViewSet, PublicHolidayViewSet,
     WorkScheduleViewSet, ManpowerSettingsViewSet, StaffDeploymentViewSet, employee_me, org_tree,
-    PersonalGoalViewSet, mindset_anchor, MindsetLogViewSet, ClaimViewSet, ClaimItemViewSet, ClaimAttachmentViewSet,
+    PersonalGoalViewSet, mindset_anchor, MindsetLogViewSet, CalendarEventViewSet, ClaimViewSet, ClaimItemViewSet, ClaimAttachmentViewSet,
 )
 
 router = DefaultRouter()
@@ -20,6 +20,7 @@ router.register('manpower-settings', ManpowerSettingsViewSet, basename='manpower
 router.register('staff-deployments', StaffDeploymentViewSet, basename='staff-deployment')
 router.register('personal-goals',    PersonalGoalViewSet,    basename='personal-goal')
 router.register('mindset-logs',       MindsetLogViewSet,      basename='mindset-log')
+router.register('calendar-events',    CalendarEventViewSet,   basename='calendar-event')
 router.register('claims',             ClaimViewSet,           basename='claim')
 router.register('claim-items',        ClaimItemViewSet,       basename='claim-item')
 router.register('claim-attachments',  ClaimAttachmentViewSet, basename='claim-attachment')

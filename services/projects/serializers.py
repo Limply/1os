@@ -165,6 +165,8 @@ class ProjectSerializer(serializers.ModelSerializer):
     quoted_amount = serializers.SerializerMethodField()
     payment_received = serializers.SerializerMethodField()
     expenses = serializers.SerializerMethodField()
+    nas_folder_url = serializers.SerializerMethodField()
+    nas_smb_path = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -178,6 +180,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             'members', 'progress',
             'partner', 'quoted_amount', 'payment_received', 'expenses', 'payment_record', 'external_link',
             'ref_type', 'ref_id',
+            'nas_folder_url', 'nas_smb_path',
             'task_count', 'task_groups', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'project_no', 'progress', 'created_at', 'updated_at']
@@ -211,6 +214,22 @@ class ProjectSerializer(serializers.ModelSerializer):
             project_no=obj.project_no
         ).aggregate(Sum('amount'))['amount__sum']
         return result or 0
+
+    def get_nas_folder_url(self, obj):
+        from shared import nas
+        from services.projects.signals import project_folder_path
+        try:
+            return nas.folder_url(project_folder_path(obj))
+        except Exception:
+            return None
+
+    def get_nas_smb_path(self, obj):
+        from shared import nas
+        from services.projects.signals import project_folder_path
+        try:
+            return nas.smb_path(project_folder_path(obj))
+        except Exception:
+            return None
 
     def get_task_count(self, obj):
         return obj.tasks.count()

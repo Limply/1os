@@ -300,6 +300,34 @@ class MindsetLog(BaseModel):
         return f"MindsetLog {self.user_id} {self.date}"
 
 
+class CalendarEvent(BaseModel):
+    """Personal calendar event shown on the user's /my Calendar tab — a
+    Google-Calendar-style timed block (or all-day entry) the user creates for
+    their own daily work schedule. Private to the owning user."""
+    COLORS = [
+        ('blue',   'Blue'),
+        ('green',  'Green'),
+        ('amber',  'Amber'),
+        ('red',    'Red'),
+        ('purple', 'Purple'),
+        ('gray',   'Gray'),
+    ]
+    user       = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='calendar_events')
+    title      = models.CharField(max_length=200)
+    date       = models.DateField(default=datetime.date.today)
+    all_day    = models.BooleanField(default=False)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time   = models.TimeField(null=True, blank=True)
+    notes      = models.TextField(blank=True)
+    color      = models.CharField(max_length=10, choices=COLORS, default='blue')
+
+    class Meta:
+        ordering = ['date', 'start_time']
+
+    def __str__(self):
+        return f"{self.title} ({self.date})"
+
+
 class Claim(BaseModel):
     """Monthly expense claim submitted by an employee for reimbursement."""
     STATUS_CHOICES = [

@@ -31,6 +31,20 @@ const EMPTY_ANCHOR = { expect_it: '', for_what: '', gratitude: '' }
 
 const localToday = () => new Date().toLocaleDateString('en-CA')  // YYYY-MM-DD in local tz
 
+// Personal calendar-event colours (choice value → hex for FullCalendar + swatch)
+const EVENT_COLOR_HEX = {
+  blue:   '#3b82f6',
+  green:  '#10b981',
+  amber:  '#f59e0b',
+  red:    '#ef4444',
+  purple: '#8b5cf6',
+  gray:   '#6b7280',
+}
+const addOneHour = (hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 const GOAL_CATEGORIES = [
   { key: 'all',      label: 'All' },
   { key: 'health',   label: 'Health' },
@@ -59,6 +73,12 @@ export default function Personal() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab]     = useState('overview')
   const [selectedEvent, setSelectedEvent] = useState(null)
+
+  // Personal calendar events (Google-Calendar-style schedule blocks)
+  const [calEvents, setCalEvents]     = useState([])
+  const [eventForm, setEventForm]     = useState(null)   // null = modal closed
+  const [eventSaving, setEventSaving] = useState(false)
+  const [eventError, setEventError]   = useState('')
 
   // Goals state
   const [goals, setGoals]           = useState([])
@@ -96,6 +116,17 @@ export default function Personal() {
       setTasks(Array.isArray(taskData) ? taskData : (taskData.results ?? []))
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
+
+  function loadCalEvents() {
+    return api.get('/hr/calendar-events/').then(r => {
+      const d = r.data
+      setCalEvents(Array.isArray(d) ? d : (d.results ?? []))
+    }).catch(() => setCalEvents([]))
+  }
+
+  useEffect(() => {
+    if (tab === 'calendar') loadCalEvents()
+  }, [tab])
 
   useEffect(() => {
     if (tab === 'goals') {
@@ -233,16 +264,97 @@ export default function Personal() {
         date: t.due_date,
         backgroundColor: s.color,
         borderColor: 'transparent',
-        extendedProps: { data: t },
+        extendedProps: { kind: 'task', data: t },
       }
     })
 
+  // Personal schedule events → FullCalendar objects (timed or all-day)
+  const personalCalItems = calEvents.map(ev => ({
+    id: `cal-${ev.id}`,
+    title: ev.title,
+    start: ev.all_day ? ev.date : `${ev.date}T${ev.start_time}`,
+    end: (!ev.all_day && ev.end_time) ? `${ev.date}T${ev.end_time}` : undefined,
+    allDay: ev.all_day,
+    backgroundColor: EVENT_COLOR_HEX[ev.color] ?? EVENT_COLOR_HEX.blue,
+    borderColor: 'transparent',
+    extendedProps: { kind: 'personal', data: ev },
+  }))
+
+  const allCalEvents = [...calendarEvents, ...personalCalItems]
+
   function handleEventClick(info) {
-    setSelectedEvent(info.event.extendedProps.data)
+    const { kind, data } = info.event.extendedProps
+    if (kind === 'personal') openEditEvent(data)
+    else setSelectedEvent(data)
+  }
+
+  // ── Personal event create / edit / delete ────────────────────────────────
+  function openAddEvent(dateStr, timeStr) {
+    setEventError('')
+    setEventForm({
+      id: null,
+      title: '',
+      date: dateStr || localToday(),
+      all_day: false,
+      start_time: timeStr || '09:00',
+      end_time: timeStr ? addOneHour(timeStr) : '10:00',
+      notes: '',
+      color: 'blue',
+    })
+  }
+
+  function openEditEvent(ev) {
+    setEventError('')
+    setEventForm({
+      id: ev.id,
+      title: ev.title,
+      date: ev.date,
+      all_day: ev.all_day,
+      start_time: ev.start_time ? ev.start_time.slice(0, 5) : '09:00',
+      end_time: ev.end_time ? ev.end_time.slice(0, 5) : '10:00',
+      notes: ev.notes || '',
+      color: ev.color || 'blue',
+    })
+  }
+
+  function saveEvent(e) {
+    e.preventDefault()
+    setEventSaving(true); setEventError('')
+    const payload = {
+      title: eventForm.title,
+      date: eventForm.date,
+      all_day: eventForm.all_day,
+      start_time: eventForm.all_day ? null : eventForm.start_time,
+      end_time: eventForm.all_day ? null : (eventForm.end_time || null),
+      notes: eventForm.notes,
+      color: eventForm.color,
+    }
+    const req = eventForm.id
+      ? api.patch(`/hr/calendar-events/${eventForm.id}/`, payload)
+      : api.post('/hr/calendar-events/', payload)
+    req.then(() => { setEventForm(null); return loadCalEvents() })
+      .catch(err => {
+        const d = err.response?.data
+        setEventError(
+          d && typeof d === 'object'
+            ? Object.values(d).flat().join(' ')
+            : (err.message || 'Could not save event.')
+        )
+      })
+      .finally(() => setEventSaving(false))
+  }
+
+  function deleteEvent() {
+    if (!eventForm?.id) return
+    setEventSaving(true); setEventError('')
+    api.delete(`/hr/calendar-events/${eventForm.id}/`)
+      .then(() => { setEventForm(null); return loadCalEvents() })
+      .catch(() => setEventError('Could not delete event.'))
+      .finally(() => setEventSaving(false))
   }
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className={`${tab === 'calendar' ? 'max-w-none' : 'max-w-3xl'} space-y-4`}>
 
       {/* Welcome header */}
       <div className="flex items-end justify-between">
@@ -747,21 +859,148 @@ export default function Personal() {
 
       {tab === 'calendar' && (
         <div className="space-y-4">
-          {/* Legend */}
-          <div className="flex flex-wrap gap-3">
-            {Object.entries(TASK_STATUS_STYLE).map(([key, s]) => (
-              <span key={key} className="flex items-center gap-1.5 text-xs text-gray-600">
-                <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
-                {s.label}
+          {/* Legend + add */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-3">
+              {Object.entries(TASK_STATUS_STYLE).map(([key, s]) => (
+                <span key={key} className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
+                  {s.label}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: EVENT_COLOR_HEX.blue }} />
+                My schedule
               </span>
-            ))}
+            </div>
+            <button
+              onClick={() => openAddEvent()}
+              className="flex items-center gap-1.5 bg-primary-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-primary-700 transition"
+            >
+              <Plus className="w-4 h-4" /> Add event
+            </button>
           </div>
 
-          <CalendarView events={calendarEvents} onEventClick={handleEventClick} />
+          <p className="text-xs text-gray-400">Tip: drag across a day or time slot to add a schedule block.</p>
 
-          {calendarEvents.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4">No tasks with due dates assigned to you.</p>
-          )}
+          <CalendarView
+            events={allCalEvents}
+            onEventClick={handleEventClick}
+            selectable
+            onSelect={(info) => {
+              const date = info.startStr.slice(0, 10)
+              const time = info.startStr.length > 10 ? info.startStr.slice(11, 16) : null
+              openAddEvent(date, time)
+            }}
+            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
+          />
+        </div>
+      )}
+
+      {/* Personal event add / edit modal */}
+      {eventForm && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center"
+          onClick={() => setEventForm(null)}
+        >
+          <form
+            onSubmit={saveEvent}
+            className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <h2 className="text-base font-bold text-gray-800">{eventForm.id ? 'Edit event' : 'New event'}</h2>
+              <button type="button" onClick={() => setEventForm(null)} className="text-gray-400 text-xl leading-none ml-2">×</button>
+            </div>
+
+            <input
+              autoFocus
+              value={eventForm.title}
+              onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
+              placeholder="Title (e.g. Site visit — Astronic)"
+              required
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200"
+            />
+
+            <div className="flex items-center gap-3">
+              <input
+                type="date"
+                value={eventForm.date}
+                onChange={e => setEventForm({ ...eventForm, date: e.target.value })}
+                required
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={eventForm.all_day}
+                  onChange={e => setEventForm({ ...eventForm, all_day: e.target.checked })}
+                />
+                All day
+              </label>
+            </div>
+
+            {!eventForm.all_day && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={eventForm.start_time}
+                  onChange={e => setEventForm({ ...eventForm, start_time: e.target.value })}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+                <span className="text-gray-400 text-sm">to</span>
+                <input
+                  type="time"
+                  value={eventForm.end_time}
+                  onChange={e => setEventForm({ ...eventForm, end_time: e.target.value })}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              {Object.entries(EVENT_COLOR_HEX).map(([name, hex]) => (
+                <button
+                  type="button"
+                  key={name}
+                  onClick={() => setEventForm({ ...eventForm, color: name })}
+                  className={`w-6 h-6 rounded-full transition ${eventForm.color === name ? 'ring-2 ring-offset-2 ring-gray-400' : ''}`}
+                  style={{ background: hex }}
+                  aria-label={name}
+                />
+              ))}
+            </div>
+
+            <textarea
+              value={eventForm.notes}
+              onChange={e => setEventForm({ ...eventForm, notes: e.target.value })}
+              placeholder="Notes (optional)"
+              rows={2}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+            />
+
+            {eventError && <p className="text-sm text-red-600">{eventError}</p>}
+
+            <div className="flex items-center gap-2 pt-1">
+              {eventForm.id && (
+                <button
+                  type="button"
+                  onClick={deleteEvent}
+                  disabled={eventSaving}
+                  className="text-red-600 text-sm font-medium px-3 py-2 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4 inline" /> Delete
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={eventSaving}
+                className="ml-auto bg-primary-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+              >
+                {eventSaving ? 'Saving…' : (eventForm.id ? 'Save' : 'Add')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import TaskPhotoModal from '../components/TaskPhotoModal'
 import TaskDocumentModal from '../components/TaskDocumentModal'
+import ProjectFiles from '../components/ProjectFiles'
 import { Circle, Clock, Eye, CheckCircle2, AlertCircle } from 'lucide-react'
 
 const STATUS_CONFIG = {

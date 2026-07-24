@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, MindsetAnchor, MindsetLog, Claim, ClaimItem, ClaimAttachment
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, MindsetAnchor, MindsetLog, CalendarEvent, Claim, ClaimItem, ClaimAttachment
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -198,6 +198,23 @@ class MindsetLogSerializer(serializers.ModelSerializer):
         model = MindsetLog
         fields = ['id', 'date', 'midday_notes', 'evening_notes', 'chapter_closed']
         read_only_fields = ['id']
+
+
+class CalendarEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarEvent
+        fields = ['id', 'title', 'date', 'all_day', 'start_time', 'end_time', 'notes', 'color']
+        read_only_fields = ['id']
+
+    def validate(self, data):
+        all_day = data.get('all_day', getattr(self.instance, 'all_day', False))
+        start   = data.get('start_time', getattr(self.instance, 'start_time', None))
+        end     = data.get('end_time',   getattr(self.instance, 'end_time', None))
+        if not all_day and not start:
+            raise serializers.ValidationError({'start_time': 'Start time is required for a timed event.'})
+        if start and end and end <= start:
+            raise serializers.ValidationError({'end_time': 'End time must be after the start time.'})
+        return data
 
 
 class ClaimAttachmentSerializer(serializers.ModelSerializer):
