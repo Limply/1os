@@ -361,7 +361,7 @@ function ItemsTable({ items, setItems, showAmount = true, suggestions = [] }) {
                 </td>
               )}
               <td className="px-3 py-2">
-                <button onClick={() => setItems(prev => prev.filter((_, j) => j !== i))}
+                <button type="button" onClick={() => setItems(prev => prev.filter((_, j) => j !== i))}
                   className="text-red-400 hover:text-red-600 text-xs">✕</button>
               </td>
             </tr>
@@ -369,7 +369,7 @@ function ItemsTable({ items, setItems, showAmount = true, suggestions = [] }) {
         </tbody>
       </table>
       <div className="mt-2 ml-3 flex items-center gap-2">
-        <button onClick={() => {
+        <button type="button" onClick={() => {
           const blank = { description: '', unit: '', qty: 1, unit_price: '', amount: '', remarks: '' }
           setItems(prev => [...prev, ...Array(addCount).fill(null).map(() => ({ ...blank }))])
         }} className="text-sm text-primary-600 hover:underline">+ Add lines</button>
@@ -426,8 +426,9 @@ export default function Finance() {
 
   // Quotation form
   const today = new Date().toISOString().slice(0, 10)
-  const [qForm, setQForm] = useState({ project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: today, valid_until: '', notes: '' })
+  const [qForm, setQForm] = useState({ title: '', project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: today, valid_until: '', notes: '' })
   const [qItems, setQItems] = useState([{ description: '', unit: '', qty: 1, unit_price: '', amount: '' }])
+  const [qEditingId, setQEditingId] = useState(null)
 
   // Invoice form
   const [iForm, setIForm] = useState({ client_name: '', client_email: '', issue_date: '', due_date: '', notes: '' })
@@ -539,18 +540,50 @@ export default function Finance() {
     return out
   }
 
+  function resetQuotationForm() {
+    setQEditingId(null)
+    setQForm({ title: '', project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' })
+    setQItems([{ description: '', unit: '', qty: 1, unit_price: '', amount: '' }])
+  }
+
+  function startEditQuotation(q) {
+    setQEditingId(q.id)
+    setQForm({
+      title: q.title || '', project_no: q.project_no || '', client_name: q.client_name || '', client_contact: q.client_contact || '',
+      client_email: q.client_email || '', client_phone: q.client_phone || '', client_address: q.client_address || '',
+      issue_date: q.issue_date || today, valid_until: q.valid_until || '', notes: q.notes || '',
+    })
+    setQItems((q.items || []).map(it => ({
+      description: it.description || '', unit: it.unit || '', qty: it.qty ?? 1,
+      unit_price: it.unit_price ?? '', amount: it.amount ?? '',
+    })))
+    setExpanded(null)
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleCreateQuotation(e) {
     e.preventDefault(); setSaving(true)
     try {
-      const q = await api.post('/finance/quotations/', { ...cleanDates(qForm), ...calcTotals(qItems) })
-      await Promise.all(qItems.filter(i => i.description).map((item, idx) =>
-        api.post('/finance/quotation-items/', { ...item, quotation: q.data.id, sort_order: idx })
-      ))
-      setSavedMsg(`Quotation ${q.data.quote_no} saved`)
+      if (qEditingId) {
+        const q = await api.patch(`/finance/quotations/${qEditingId}/`, { ...cleanDates(qForm), ...calcTotals(qItems) })
+        // reconcile line items: drop the old set, recreate from the form
+        const existing = quotations.find(x => x.id === qEditingId)?.items || []
+        await Promise.all(existing.map(it => api.delete(`/finance/quotation-items/${it.id}/`)))
+        await Promise.all(qItems.filter(i => i.description).map((item, idx) =>
+          api.post('/finance/quotation-items/', { ...item, quotation: qEditingId, sort_order: idx })
+        ))
+        setSavedMsg(`Quotation ${q.data.quote_no} updated`)
+      } else {
+        const q = await api.post('/finance/quotations/', { ...cleanDates(qForm), ...calcTotals(qItems) })
+        await Promise.all(qItems.filter(i => i.description).map((item, idx) =>
+          api.post('/finance/quotation-items/', { ...item, quotation: q.data.id, sort_order: idx })
+        ))
+        setSavedMsg(`Quotation ${q.data.quote_no} saved`)
+      }
       setTimeout(() => setSavedMsg(''), 4000)
       setShowForm(false)
-      setQForm({ project_no: '', client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '', issue_date: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' })
-      setQItems([{ description: '', unit: '', qty: 1, unit_price: '', amount: '' }])
+      resetQuotationForm()
       fetchAll()
     } finally { setSaving(false) }
   }
@@ -583,8 +616,18 @@ export default function Finance() {
     } finally { setSaving(false) }
   }
 
-  function downloadDocx(type, id, no) {
-    window.open(`/api/finance/${type}/${id}/docx/`, '_blank')
+  async function downloadDocx(type, id, no) {
+    try {
+      const res = await api.get(`/finance/${type}/${id}/docx/`, { responseType: 'blob' })
+      const href = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = href; a.download = `${no}.docx`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(href)
+    } catch {
+      setSavedMsg('Could not download DOCX')
+      setTimeout(() => setSavedMsg(''), 4000)
+    }
   }
 
   function inp(label, key, form, setForm, props = {}) {
@@ -608,6 +651,7 @@ export default function Finance() {
           <button onClick={async () => {
             setShowForm(true); setExpanded(null)
             if (tab === 'Quotations') {
+              resetQuotationForm()
               try {
                 const res = await api.get('/projects/projects/next_no/')
                 setQForm(f => ({ ...f, project_no: res.data.project_no || '' }))
@@ -635,9 +679,18 @@ export default function Finance() {
         <>
           {showForm && (
             <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-              <h2 className="font-semibold text-gray-700 mb-4">New Quotation <span className="text-xs text-gray-400 font-normal">(project number auto-filled, editable)</span></h2>
+              <h2 className="font-semibold text-gray-700 mb-4">{qEditingId ? 'Edit Quotation' : 'New Quotation'} <span className="text-xs text-gray-400 font-normal">{qEditingId ? '(changes overwrite the existing quotation)' : '(project number auto-filled, editable)'}</span></h2>
               <form onSubmit={handleCreateQuotation}>
                 <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Subject / Title</label>
+                    <input
+                      value={qForm.title || ''}
+                      onChange={e => setQForm(f => ({ ...f, title: e.target.value }))}
+                      placeholder="e.g. CCTV Supply & Installation – The Cascadia"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+                    />
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Project No.</label>
                     <input
@@ -674,9 +727,9 @@ export default function Finance() {
                 </div>
                 <div className="flex items-center justify-end gap-2">
                   {savedMsg && <span className="text-sm text-green-600 mr-auto">{savedMsg}</span>}
-                  <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
+                  <button type="button" onClick={() => { setShowForm(false); resetQuotationForm() }} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
                   <button type="submit" disabled={saving} className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
-                    {saving ? 'Saving…' : 'Create Quotation'}
+                    {saving ? 'Saving…' : qEditingId ? 'Save Changes' : 'Create Quotation'}
                   </button>
                 </div>
               </form>
@@ -706,6 +759,8 @@ export default function Finance() {
                       <td className="px-4 py-3"><Badge label={q.status} map={Q_STATUS} /></td>
                       <td className="px-4 py-3 text-right font-medium">${parseFloat(q.total).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
+                        <button onClick={e => { e.stopPropagation(); startEditQuotation(q) }}
+                          className="text-xs text-gray-600 hover:underline mr-2">Edit</button>
                         <button onClick={e => { e.stopPropagation(); generateQuotationPDF(q) }}
                           className="text-xs text-green-600 hover:underline mr-2">PDF</button>
                         <button onClick={e => { e.stopPropagation(); downloadDocx('quotations', q.id, q.quote_no) }}

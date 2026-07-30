@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock, CalendarDays, ClipboardList, X, ArrowRight, Plus, Trash2, Check } from 'lucide-react'
+import { Clock, CalendarDays, ClipboardList, X, ArrowRight, Plus, Trash2, Check, Sunrise, Sun, Moon, Pencil } from 'lucide-react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import CalendarView from '../components/CalendarView'
@@ -22,9 +22,28 @@ const LEAVE_STATUS_STYLE = {
 const TABS = [
   { key: 'overview',  label: 'Overview' },
   { key: 'goals',     label: 'Goals' },
+  { key: 'mindset',   label: 'Mindset' },
   { key: 'claims',    label: 'Claims' },
   { key: 'calendar',  label: 'Calendar' },
 ]
+
+const EMPTY_ANCHOR = { expect_it: '', for_what: '', gratitude: '' }
+
+const localToday = () => new Date().toLocaleDateString('en-CA')  // YYYY-MM-DD in local tz
+
+// Personal calendar-event colours (choice value → hex for FullCalendar + swatch)
+const EVENT_COLOR_HEX = {
+  blue:   '#3b82f6',
+  green:  '#10b981',
+  amber:  '#f59e0b',
+  red:    '#ef4444',
+  purple: '#8b5cf6',
+  gray:   '#6b7280',
+}
+const addOneHour = (hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
 
 const GOAL_CATEGORIES = [
   { key: 'all',      label: 'All' },
@@ -55,6 +74,12 @@ export default function Personal() {
   const [tab, setTab]     = useState('overview')
   const [selectedEvent, setSelectedEvent] = useState(null)
 
+  // Personal calendar events (Google-Calendar-style schedule blocks)
+  const [calEvents, setCalEvents]     = useState([])
+  const [eventForm, setEventForm]     = useState(null)   // null = modal closed
+  const [eventSaving, setEventSaving] = useState(false)
+  const [eventError, setEventError]   = useState('')
+
   // Goals state
   const [goals, setGoals]           = useState([])
   const [goalCat, setGoalCat]       = useState('all')
@@ -63,6 +88,23 @@ export default function Personal() {
   const [goalSaving, setGoalSaving] = useState(false)
   const [goalError, setGoalError]   = useState('')
   const goalTextRef = useRef(null)
+
+  // Mindset — constant Anchor
+  const [anchor, setAnchor]           = useState(EMPTY_ANCHOR)
+  const [anchorEditing, setAnchorEditing] = useState(false)
+  const [anchorForm, setAnchorForm]   = useState(EMPTY_ANCHOR)
+  const [anchorSaving, setAnchorSaving] = useState(false)
+  const [anchorError, setAnchorError] = useState('')
+
+  // Mindset — per-day log (midday key-notes + evening review, each a list of rows)
+  const [mindsetToday, setMindsetToday]     = useState(null)   // today's saved row, or null if none yet
+  const [midday, setMidday]                 = useState([])     // list of strings
+  const [evening, setEvening]               = useState([])     // list of strings
+  const [chapterClosed, setChapterClosed]   = useState(false)
+  const [mindsetHistory, setMindsetHistory] = useState([])
+  const [mindsetSaving, setMindsetSaving]   = useState(false)
+  const [mindsetError, setMindsetError]     = useState('')
+  const [mindsetSaved, setMindsetSaved]     = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -75,6 +117,17 @@ export default function Personal() {
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
+  function loadCalEvents() {
+    return api.get('/hr/calendar-events/').then(r => {
+      const d = r.data
+      setCalEvents(Array.isArray(d) ? d : (d.results ?? []))
+    }).catch(() => setCalEvents([]))
+  }
+
+  useEffect(() => {
+    if (tab === 'calendar') loadCalEvents()
+  }, [tab])
+
   useEffect(() => {
     if (tab === 'goals') {
       api.get('/hr/personal-goals/').then(r => {
@@ -83,6 +136,81 @@ export default function Personal() {
     }).catch(() => {})
     }
   }, [tab])
+
+  useEffect(() => {
+    if (tab !== 'mindset') return
+    setMindsetError(''); setAnchorError('')
+    api.get('/hr/mindset-anchor/').then(r => {
+      const a = { ...EMPTY_ANCHOR, ...r.data }
+      setAnchor(a)
+      setAnchorEditing(!a.expect_it && !a.for_what && !a.gratitude)  // first time → open editor
+    }).catch(err => setAnchorError(err.response?.data?.detail || err.message || 'Failed to load anchor'))
+
+    api.get('/hr/mindset-logs/').then(r => {
+      const d = r.data
+      const list = Array.isArray(d) ? d : (d.results ?? [])
+      const todayStr = localToday()
+      const todayRow = list.find(m => m.date === todayStr) || null
+      setMindsetToday(todayRow)
+      setMindsetHistory(list.filter(m => m.date !== todayStr))
+      setMidday(Array.isArray(todayRow?.midday_notes) ? todayRow.midday_notes : [])
+      setEvening(Array.isArray(todayRow?.evening_notes) ? todayRow.evening_notes : [])
+      setChapterClosed(!!todayRow?.chapter_closed)
+    }).catch(err => {
+      setMindsetError(err.response?.data?.detail || err.message || 'Failed to load mindset log')
+    })
+  }, [tab])
+
+  function editAnchor() {
+    setAnchorForm(anchor)
+    setAnchorEditing(true)
+    setAnchorError('')
+  }
+
+  function saveAnchor() {
+    setAnchorSaving(true); setAnchorError('')
+    api.patch('/hr/mindset-anchor/', anchorForm).then(r => {
+      setAnchor({ ...EMPTY_ANCHOR, ...r.data })
+      setAnchorEditing(false)
+    }).catch(err => {
+      const data = err.response?.data
+      const msg = data?.detail || (data && typeof data === 'object' ? Object.values(data).flat().join(' ') : null) || err.message || 'Failed to save'
+      setAnchorError(msg)
+    }).finally(() => setAnchorSaving(false))
+  }
+
+  function saveMindset() {
+    setMindsetSaving(true)
+    setMindsetError('')
+    const payload = {
+      midday_notes:  midday.map(s => s.trim()).filter(Boolean),
+      evening_notes: evening.map(s => s.trim()).filter(Boolean),
+      chapter_closed: chapterClosed,
+    }
+    const req = mindsetToday
+      ? api.patch(`/hr/mindset-logs/${mindsetToday.id}/`, payload)
+      : api.post('/hr/mindset-logs/', payload)
+    req.then(r => {
+      setMindsetToday(r.data)
+      setMidday(Array.isArray(r.data.midday_notes) ? r.data.midday_notes : [])
+      setEvening(Array.isArray(r.data.evening_notes) ? r.data.evening_notes : [])
+      setMindsetSaved(true)
+      setTimeout(() => setMindsetSaved(false), 2000)
+    }).catch(err => {
+      const data = err.response?.data
+      const msg = data?.detail
+        || (data && typeof data === 'object' ? Object.values(data).flat().join(' ') : null)
+        || err.message || 'Failed to save'
+      setMindsetError(msg)
+    }).finally(() => setMindsetSaving(false))
+  }
+
+  // Row-list helpers for midday / evening
+  const rowOps = (list, setList) => ({
+    add:    ()        => setList([...list, '']),
+    edit:   (i, v)    => setList(list.map((x, idx) => idx === i ? v : x)),
+    remove: (i)       => setList(list.filter((_, idx) => idx !== i)),
+  })
 
   function toggleGoalAchieved(goal) {
     const updated = { is_achieved: !goal.is_achieved }
@@ -125,27 +253,124 @@ export default function Personal() {
   const leaves     = me?.leave_applications ?? []
   const attendance = me?.today_attendance
 
-  // Calendar events — only this user's tasks with a due date
+  // Calendar events — this user's tasks anchored by any date they have.
+  // start/end fall back to due_date so tasks without a due date still show;
+  // when start < end the task renders as a multi-day span. Truly dateless
+  // tasks (no start/due/end) have nothing to anchor to and are skipped.
   const calendarEvents = tasks
-    .filter(t => t.due_date)
     .map(t => {
+      const start = t.start_date || t.due_date || t.end_date
+      const end   = t.end_date   || t.due_date || t.start_date
+      if (!start) return null
       const s = TASK_STATUS_STYLE[t.status] ?? TASK_STATUS_STYLE.todo
-      return {
+      const ev = {
         id: `task-${t.id}`,
         title: t.title,
-        date: t.due_date,
+        allDay: true,
         backgroundColor: s.color,
         borderColor: 'transparent',
-        extendedProps: { data: t },
+        extendedProps: { kind: 'task', data: t },
       }
+      if (end && end > start) {
+        // FullCalendar's all-day `end` is exclusive → +1 day to include `end`.
+        const d = new Date(`${end}T00:00:00`)
+        d.setDate(d.getDate() + 1)
+        ev.start = start
+        ev.end = d.toISOString().slice(0, 10)
+      } else {
+        ev.date = start
+      }
+      return ev
     })
+    .filter(Boolean)
+
+  // Personal schedule events → FullCalendar objects (timed or all-day)
+  const personalCalItems = calEvents.map(ev => ({
+    id: `cal-${ev.id}`,
+    title: ev.title,
+    start: ev.all_day ? ev.date : `${ev.date}T${ev.start_time}`,
+    end: (!ev.all_day && ev.end_time) ? `${ev.date}T${ev.end_time}` : undefined,
+    allDay: ev.all_day,
+    backgroundColor: EVENT_COLOR_HEX[ev.color] ?? EVENT_COLOR_HEX.blue,
+    borderColor: 'transparent',
+    extendedProps: { kind: 'personal', data: ev },
+  }))
+
+  const allCalEvents = [...calendarEvents, ...personalCalItems]
 
   function handleEventClick(info) {
-    setSelectedEvent(info.event.extendedProps.data)
+    const { kind, data } = info.event.extendedProps
+    if (kind === 'personal') openEditEvent(data)
+    else setSelectedEvent(data)
+  }
+
+  // ── Personal event create / edit / delete ────────────────────────────────
+  function openAddEvent(dateStr, timeStr) {
+    setEventError('')
+    setEventForm({
+      id: null,
+      title: '',
+      date: dateStr || localToday(),
+      all_day: false,
+      start_time: timeStr || '09:00',
+      end_time: timeStr ? addOneHour(timeStr) : '10:00',
+      notes: '',
+      color: 'blue',
+    })
+  }
+
+  function openEditEvent(ev) {
+    setEventError('')
+    setEventForm({
+      id: ev.id,
+      title: ev.title,
+      date: ev.date,
+      all_day: ev.all_day,
+      start_time: ev.start_time ? ev.start_time.slice(0, 5) : '09:00',
+      end_time: ev.end_time ? ev.end_time.slice(0, 5) : '10:00',
+      notes: ev.notes || '',
+      color: ev.color || 'blue',
+    })
+  }
+
+  function saveEvent(e) {
+    e.preventDefault()
+    setEventSaving(true); setEventError('')
+    const payload = {
+      title: eventForm.title,
+      date: eventForm.date,
+      all_day: eventForm.all_day,
+      start_time: eventForm.all_day ? null : eventForm.start_time,
+      end_time: eventForm.all_day ? null : (eventForm.end_time || null),
+      notes: eventForm.notes,
+      color: eventForm.color,
+    }
+    const req = eventForm.id
+      ? api.patch(`/hr/calendar-events/${eventForm.id}/`, payload)
+      : api.post('/hr/calendar-events/', payload)
+    req.then(() => { setEventForm(null); return loadCalEvents() })
+      .catch(err => {
+        const d = err.response?.data
+        setEventError(
+          d && typeof d === 'object'
+            ? Object.values(d).flat().join(' ')
+            : (err.message || 'Could not save event.')
+        )
+      })
+      .finally(() => setEventSaving(false))
+  }
+
+  function deleteEvent() {
+    if (!eventForm?.id) return
+    setEventSaving(true); setEventError('')
+    api.delete(`/hr/calendar-events/${eventForm.id}/`)
+      .then(() => { setEventForm(null); return loadCalEvents() })
+      .catch(() => setEventError('Could not delete event.'))
+      .finally(() => setEventSaving(false))
   }
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className={`${tab === 'calendar' ? 'max-w-none' : 'max-w-3xl'} space-y-4`}>
 
       {/* Welcome header */}
       <div className="flex items-end justify-between">
@@ -487,25 +712,311 @@ export default function Personal() {
         </div>
       )}
 
+      {tab === 'mindset' && (
+        <div className="max-w-lg mx-auto w-full space-y-4">
+
+          {/* Constant Anchor — set once, shown every day */}
+          <div className="bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-200 p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-600">
+                <Sunrise className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wide">My Anchor</span>
+              </div>
+              {!anchorEditing && (
+                <button
+                  onClick={editAnchor}
+                  className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium px-2 py-1 rounded-lg hover:bg-amber-100 transition"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
+            </div>
+
+            {anchorEditing ? (
+              <div className="space-y-2">
+                <input
+                  type="text" maxLength={300} value={anchorForm.expect_it}
+                  onChange={e => setAnchorForm(f => ({ ...f, expect_it: e.target.value }))}
+                  placeholder="Today I will… (expect victory)"
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  type="text" maxLength={300} value={anchorForm.for_what}
+                  onChange={e => setAnchorForm(f => ({ ...f, for_what: e.target.value }))}
+                  placeholder="This is for… (your purpose)"
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  type="text" maxLength={300} value={anchorForm.gratitude}
+                  onChange={e => setAnchorForm(f => ({ ...f, gratitude: e.target.value }))}
+                  placeholder="Grateful for…"
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                {anchorError && <p className="text-sm text-red-500">{anchorError}</p>}
+                <div className="flex gap-2 justify-end pt-1">
+                  {(anchor.expect_it || anchor.for_what || anchor.gratitude) && (
+                    <button onClick={() => { setAnchorEditing(false); setAnchorError('') }}
+                      className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Cancel</button>
+                  )}
+                  <button onClick={saveAnchor} disabled={anchorSaving}
+                    className="text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg transition">
+                    {anchorSaving ? 'Saving…' : 'Save Anchor'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {anchor.expect_it && <p className="text-sm font-semibold text-gray-800">{anchor.expect_it}</p>}
+                {anchor.for_what  && <p className="text-sm text-gray-600">This is for {anchor.for_what}</p>}
+                {anchor.gratitude && <p className="text-sm text-gray-600">Grateful for {anchor.gratitude}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Today's date */}
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Today</span>
+            <span className="text-xs text-gray-400">{localToday()}</span>
+          </div>
+
+          {/* Midday — key notes for today */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 space-y-3">
+            <div className="flex items-center gap-2 text-sky-600">
+              <Sun className="w-4 h-4" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Key Notes for Today</span>
+            </div>
+            {midday.length === 0 && <p className="text-sm text-gray-400">No notes yet.</p>}
+            {midday.map((note, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text" value={note}
+                  onChange={e => rowOps(midday, setMidday).edit(i, e.target.value)}
+                  placeholder="A note…"
+                  className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-300"
+                />
+                <button onClick={() => rowOps(midday, setMidday).remove(i)}
+                  className="shrink-0 text-gray-300 hover:text-red-400 p-1.5 transition">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => rowOps(midday, setMidday).add()}
+              className="flex items-center gap-1.5 text-sm text-sky-600 hover:text-sky-800 font-medium">
+              <Plus className="w-4 h-4" /> Add note
+            </button>
+          </div>
+
+          {/* Evening — night review */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 space-y-3">
+            <div className="flex items-center gap-2 text-indigo-600">
+              <Moon className="w-4 h-4" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Night Review</span>
+            </div>
+            {evening.length === 0 && <p className="text-sm text-gray-400">Nothing logged yet.</p>}
+            {evening.map((note, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text" value={note}
+                  onChange={e => rowOps(evening, setEvening).edit(i, e.target.value)}
+                  placeholder="What did today reveal?"
+                  className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-300"
+                />
+                <button onClick={() => rowOps(evening, setEvening).remove(i)}
+                  className="shrink-0 text-gray-300 hover:text-red-400 p-1.5 transition">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => rowOps(evening, setEvening).add()}
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+              <Plus className="w-4 h-4" /> Add review
+            </button>
+            <label className="flex items-center gap-2 text-sm text-gray-700 pt-1 cursor-pointer">
+              <button type="button" onClick={() => setChapterClosed(v => !v)}
+                className={`w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center transition ${
+                  chapterClosed ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 hover:border-indigo-400'
+                }`}>
+                {chapterClosed && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+              </button>
+              Chapter closed — turn the page
+            </label>
+          </div>
+
+          {mindsetError && <p className="text-sm text-red-500 px-1">{mindsetError}</p>}
+
+          {/* Sticky save bar */}
+          <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent pt-2 pb-1 flex items-center justify-end gap-3">
+            {mindsetSaved && <span className="text-xs text-green-600">Saved ✓</span>}
+            <button onClick={saveMindset} disabled={mindsetSaving}
+              className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded-xl transition shadow-sm">
+              {mindsetSaving ? 'Saving…' : 'Save Today'}
+            </button>
+          </div>
+
+          {/* History */}
+          {mindsetHistory.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Past Days</h2>
+              {mindsetHistory.map(m => (
+                <div key={m.id} className="bg-white border border-gray-100 rounded-xl px-4 py-3">
+                  <p className="text-xs font-medium text-gray-400 mb-2">{m.date}{m.chapter_closed && <span className="text-indigo-400"> · closed ✓</span>}</p>
+                  <div className="space-y-1 text-sm text-gray-700">
+                    {(m.midday_notes || []).map((n, i) => <p key={`d${i}`}><span className="text-sky-500">◐ </span>{n}</p>)}
+                    {(m.evening_notes || []).map((n, i) => <p key={`e${i}`}><span className="text-indigo-500">☾ </span>{n}</p>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === 'claims' && <ClaimsTab />}
 
       {tab === 'calendar' && (
         <div className="space-y-4">
-          {/* Legend */}
-          <div className="flex flex-wrap gap-3">
-            {Object.entries(TASK_STATUS_STYLE).map(([key, s]) => (
-              <span key={key} className="flex items-center gap-1.5 text-xs text-gray-600">
-                <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
-                {s.label}
+          {/* Legend + add */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-3">
+              {Object.entries(TASK_STATUS_STYLE).map(([key, s]) => (
+                <span key={key} className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
+                  {s.label}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: EVENT_COLOR_HEX.blue }} />
+                My schedule
               </span>
-            ))}
+            </div>
+            <button
+              onClick={() => openAddEvent()}
+              className="flex items-center gap-1.5 bg-primary-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-primary-700 transition"
+            >
+              <Plus className="w-4 h-4" /> Add event
+            </button>
           </div>
 
-          <CalendarView events={calendarEvents} onEventClick={handleEventClick} />
+          <p className="text-xs text-gray-400">Tip: drag across a day or time slot to add a schedule block.</p>
 
-          {calendarEvents.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4">No tasks with due dates assigned to you.</p>
-          )}
+          <CalendarView
+            events={allCalEvents}
+            onEventClick={handleEventClick}
+            selectable
+            onSelect={(info) => {
+              const date = info.startStr.slice(0, 10)
+              const time = info.startStr.length > 10 ? info.startStr.slice(11, 16) : null
+              openAddEvent(date, time)
+            }}
+            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
+          />
+        </div>
+      )}
+
+      {/* Personal event add / edit modal */}
+      {eventForm && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center"
+          onClick={() => setEventForm(null)}
+        >
+          <form
+            onSubmit={saveEvent}
+            className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <h2 className="text-base font-bold text-gray-800">{eventForm.id ? 'Edit event' : 'New event'}</h2>
+              <button type="button" onClick={() => setEventForm(null)} className="text-gray-400 text-xl leading-none ml-2">×</button>
+            </div>
+
+            <input
+              autoFocus
+              value={eventForm.title}
+              onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
+              placeholder="Title (e.g. Site visit — Astronic)"
+              required
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200"
+            />
+
+            <div className="flex items-center gap-3">
+              <input
+                type="date"
+                value={eventForm.date}
+                onChange={e => setEventForm({ ...eventForm, date: e.target.value })}
+                required
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={eventForm.all_day}
+                  onChange={e => setEventForm({ ...eventForm, all_day: e.target.checked })}
+                />
+                All day
+              </label>
+            </div>
+
+            {!eventForm.all_day && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={eventForm.start_time}
+                  onChange={e => setEventForm({ ...eventForm, start_time: e.target.value })}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+                <span className="text-gray-400 text-sm">to</span>
+                <input
+                  type="time"
+                  value={eventForm.end_time}
+                  onChange={e => setEventForm({ ...eventForm, end_time: e.target.value })}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              {Object.entries(EVENT_COLOR_HEX).map(([name, hex]) => (
+                <button
+                  type="button"
+                  key={name}
+                  onClick={() => setEventForm({ ...eventForm, color: name })}
+                  className={`w-6 h-6 rounded-full transition ${eventForm.color === name ? 'ring-2 ring-offset-2 ring-gray-400' : ''}`}
+                  style={{ background: hex }}
+                  aria-label={name}
+                />
+              ))}
+            </div>
+
+            <textarea
+              value={eventForm.notes}
+              onChange={e => setEventForm({ ...eventForm, notes: e.target.value })}
+              placeholder="Notes (optional)"
+              rows={2}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+            />
+
+            {eventError && <p className="text-sm text-red-600">{eventError}</p>}
+
+            <div className="flex items-center gap-2 pt-1">
+              {eventForm.id && (
+                <button
+                  type="button"
+                  onClick={deleteEvent}
+                  disabled={eventSaving}
+                  className="text-red-600 text-sm font-medium px-3 py-2 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4 inline" /> Delete
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={eventSaving}
+                className="ml-auto bg-primary-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+              >
+                {eventSaving ? 'Saving…' : (eventForm.id ? 'Save' : 'Add')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

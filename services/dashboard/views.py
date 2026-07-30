@@ -1,11 +1,108 @@
 import datetime
+import os
+import re
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q, Count, Sum, Avg, F
 from shared.permissions import user_can, P, _rank
+
+STRATEGY_FIELDS = ['direction', 'objectives', 'strategy', 'tactics', 'monitoring']
+
+# Source markdown on the NAS that the strategy page can refresh from.
+STRATEGY_MD_PATH = getattr(
+    settings, 'STRATEGY_MD_PATH',
+    '/mnt/data/1os/SE-Bizz/1OS_5Core_Elements.md',
+)
+
+# Map the "## N." section number in the markdown to a model field.
+_STRATEGY_SECTIONS = {1: 'direction', 2: 'objectives', 3: 'strategy', 4: 'tactics', 5: 'monitoring'}
+
+
+def _parse_strategy_md(text):
+    """Split the 5-core-elements markdown into {field: body} by its '## N. …' headings."""
+    heads = [(m.start(), m.group(0).strip(), m.end()) for m in re.finditer(r'^## .*$', text, re.M)]
+    fields = {}
+    for i, (start, head, body_start) in enumerate(heads):
+        m = re.match(r'## (\d+)\.', head)
+        if not m:
+            continue
+        n = int(m.group(1))
+        if n not in _STRATEGY_SECTIONS:
+            continue
+        end = heads[i + 1][0] if i + 1 < len(heads) else len(text)
+        body = text[body_start:end].strip()
+        body = re.sub(r'\n-{3,}\s*$', '', body).strip()  # drop trailing horizontal rule
+        fields[_STRATEGY_SECTIONS[n]] = body
+    return fields
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def strategy(request):
+    """Read / update the company business strategy (singleton)."""
+    if not user_can(request.user, P.DASHBOARD_VIEW):
+        return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    from .models import CompanyStrategy
+    obj = CompanyStrategy.objects.first() or CompanyStrategy.objects.create()
+    can_edit = _rank(request.user.role) >= _rank('manager')
+
+    if request.method == 'PUT':
+        if not can_edit:
+            return Response(
+                {'detail': 'Only managers and above can edit the business strategy.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        for f in STRATEGY_FIELDS:
+            if f in request.data:
+                setattr(obj, f, (request.data.get(f) or '').strip())
+        obj.save()
+
+    data = {f: getattr(obj, f) for f in STRATEGY_FIELDS}
+    data['can_edit'] = can_edit
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def strategy_sync(request):
+    """Refresh the company strategy from the source markdown on the NAS (overwrites)."""
+    if _rank(request.user.role) < _rank('manager'):
+        return Response(
+            {'detail': 'Only managers and above can refresh the business strategy.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if not os.path.exists(STRATEGY_MD_PATH):
+        return Response({'detail': f'Source file not found: {STRATEGY_MD_PATH}'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        with open(STRATEGY_MD_PATH, encoding='utf-8') as fh:
+            text = fh.read()
+    except OSError as e:
+        return Response({'detail': f'Could not read source file: {e}'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    fields = _parse_strategy_md(text)
+    if not fields:
+        return Response({'detail': 'No recognizable "## N. …" sections found in the source file.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    from .models import CompanyStrategy
+    obj = CompanyStrategy.objects.first() or CompanyStrategy.objects.create()
+    for f in STRATEGY_FIELDS:
+        if f in fields:
+            setattr(obj, f, fields[f])
+    obj.save()
+
+    data = {f: getattr(obj, f) for f in STRATEGY_FIELDS}
+    data['can_edit'] = True
+    data['synced_from'] = STRATEGY_MD_PATH
+    return Response(data)
 
 
 @api_view(['GET'])

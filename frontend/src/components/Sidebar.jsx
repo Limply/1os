@@ -8,6 +8,7 @@ const ALL_LINKS = [
     module: 'dashboard', to: '/', label: 'Dashboard',
     children: [
       { module: 'orgchart', to: '/orgchart', label: 'Org Chart' },
+      { module: 'dashboard', to: '/strategy', label: 'Business Strategy' },
     ],
   },
   {

@@ -17,12 +17,12 @@ HRPermission = make_module_permission(P.HR_VIEW, P.HR_MANAGE)
 # Claims are self-service: any employee with HR access manages their own claims
 # (querysets scoped to the owner); approve/reject is gated to the supervisor.
 ClaimPermission = make_module_permission(P.HR_VIEW)
-from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, Claim, ClaimItem, ClaimAttachment
+from .models import Employee, LeaveType, LeaveBalance, LeaveApplication, Attendance, Certification, PublicHoliday, WorkSchedule, ManpowerSettings, StaffDeployment, PersonalGoal, MindsetAnchor, MindsetLog, CalendarEvent, Claim, ClaimItem, ClaimAttachment
 from .serializers import (
     EmployeeSerializer, EmployeeTreeSerializer, LeaveTypeSerializer, LeaveBalanceSerializer,
     LeaveApplicationSerializer, AttendanceSerializer, CertificationSerializer, PublicHolidaySerializer,
     ClockInResponseSerializer, WorkScheduleSerializer, ManpowerSettingsSerializer, StaffDeploymentSerializer,
-    PersonalGoalSerializer, ClaimSerializer, ClaimItemSerializer, ClaimAttachmentSerializer,
+    PersonalGoalSerializer, MindsetAnchorSerializer, MindsetLogSerializer, CalendarEventSerializer, ClaimSerializer, ClaimItemSerializer, ClaimAttachmentSerializer,
 )
 from .permissions import IsClockInAllowed
 from shared.utils import haversine_distance
@@ -798,6 +798,55 @@ class PersonalGoalViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return PersonalGoal.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([HRPermission])
+def mindset_anchor(request):
+    """The logged-in user's constant Morning Anchor. GET returns it (creating
+    an empty one on first access); PUT/PATCH updates it."""
+    anchor, _ = MindsetAnchor.objects.get_or_create(user=request.user)
+    if request.method == 'GET':
+        return Response(MindsetAnchorSerializer(anchor).data)
+    serializer = MindsetAnchorSerializer(anchor, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
+
+
+class MindsetLogViewSet(viewsets.ModelViewSet):
+    permission_classes = [HRPermission]
+    serializer_class = MindsetLogSerializer
+
+    def get_queryset(self):
+        qs = MindsetLog.objects.filter(user=self.request.user)
+        date = self.request.query_params.get('date')
+        if date:
+            qs = qs.filter(date=date)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class CalendarEventViewSet(viewsets.ModelViewSet):
+    """The logged-in user's personal calendar events (private to them). Supports
+    optional ?start=YYYY-MM-DD&end=YYYY-MM-DD range filtering for the calendar view."""
+    permission_classes = [HRPermission]
+    serializer_class = CalendarEventSerializer
+
+    def get_queryset(self):
+        qs = CalendarEvent.objects.filter(user=self.request.user)
+        start = self.request.query_params.get('start')
+        end   = self.request.query_params.get('end')
+        if start:
+            qs = qs.filter(date__gte=start)
+        if end:
+            qs = qs.filter(date__lte=end)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

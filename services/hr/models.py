@@ -1,3 +1,4 @@
+import datetime
 from django.db import models
 from shared.models import BaseModel
 from shared.storage import FileBrowserStorage
@@ -268,6 +269,64 @@ class PersonalGoal(BaseModel):
 
     def __str__(self):
         return f"{self.get_goal_type_display()}: {self.text[:60]}"
+
+
+class MindsetAnchor(BaseModel):
+    """The user's constant Morning Anchor — set once, shown every day as a
+    reminder. One per user; edited via the Anchor 'Edit' button."""
+    user = models.OneToOneField('accounts.User', on_delete=models.CASCADE, related_name='mindset_anchor')
+    expect_it = models.CharField(max_length=300, blank=True)   # "Today I will ___"
+    for_what  = models.CharField(max_length=300, blank=True)   # "This is for ___"
+    gratitude = models.CharField(max_length=300, blank=True)
+
+    def __str__(self):
+        return f"MindsetAnchor {self.user_id}"
+
+
+class MindsetLog(BaseModel):
+    """Per-user, per-day log: midday key-notes and the evening night-review,
+    each a growable list of text rows."""
+    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='mindset_logs')
+    date = models.DateField(default=datetime.date.today)
+
+    midday_notes   = models.JSONField(default=list, blank=True)   # list[str] — key notes for today
+    evening_notes  = models.JSONField(default=list, blank=True)   # list[str] — night review
+    chapter_closed = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('user', 'date')
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"MindsetLog {self.user_id} {self.date}"
+
+
+class CalendarEvent(BaseModel):
+    """Personal calendar event shown on the user's /my Calendar tab — a
+    Google-Calendar-style timed block (or all-day entry) the user creates for
+    their own daily work schedule. Private to the owning user."""
+    COLORS = [
+        ('blue',   'Blue'),
+        ('green',  'Green'),
+        ('amber',  'Amber'),
+        ('red',    'Red'),
+        ('purple', 'Purple'),
+        ('gray',   'Gray'),
+    ]
+    user       = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='calendar_events')
+    title      = models.CharField(max_length=200)
+    date       = models.DateField(default=datetime.date.today)
+    all_day    = models.BooleanField(default=False)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time   = models.TimeField(null=True, blank=True)
+    notes      = models.TextField(blank=True)
+    color      = models.CharField(max_length=10, choices=COLORS, default='blue')
+
+    class Meta:
+        ordering = ['date', 'start_time']
+
+    def __str__(self):
+        return f"{self.title} ({self.date})"
 
 
 class Claim(BaseModel):

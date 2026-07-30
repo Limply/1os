@@ -97,6 +97,22 @@ MEDIA_ROOT = '/mnt/data/1os/media'
 
 FRONTEND_DIR = BASE_DIR / 'frontend' / 'dist'
 
+# --- NAS project-file tree (see PROGRESS/NAS_INTEGRATION_PLAN.md) ---
+# Absolute base of the Projects tree, per-server via env (dev and prod share 1os_db,
+# so this MUST NOT live in the DB). Defaults to the dev sandbox so a misconfigured
+# server can never write into the live prod tree.
+NAS_PROJECTS_ROOT = config(
+    'NAS_PROJECTS_ROOT', default='/mnt/data/1os/SE-Bizz/_DEV/Projects'
+)
+# Public FileBrowser base used to build in-app deep-links to folders.
+NAS_FILEBROWSER_PUBLIC_URL = config(
+    'NAS_FILEBROWSER_PUBLIC_URL', default='https://files.sim-eng.com'
+)
+# For the copyable SMB/Windows path shown in-app: map the POSIX business root to the
+# mapped-drive base (N:\1os\SE-Bizz == /mnt/data/1os/SE-Bizz over the [projects] share).
+NAS_SMB_POSIX_PREFIX = config('NAS_SMB_POSIX_PREFIX', default='/mnt/data/1os/SE-Bizz')
+NAS_SMB_WIN_BASE = config('NAS_SMB_WIN_BASE', default=r'N:\1os\SE-Bizz')
+
 DEFAULT_FILE_STORAGE = 'shared.storage.FileBrowserStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

@@ -213,6 +213,16 @@
   box-shadow: 0 0 0 3px rgba(37,99,235,0.2) !important;
 }
 
+/* FullCalendar — day-of-week header text (Mon–Sat).
+   Headers render as <a> links, so without this they inherit the global link
+   colour (white → invisible until hovered). */
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number {
+  color: #374151 !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+}
+
 /* FullCalendar — Sunday column styling */
 .fc-day-sunday {
   background-color: #f9fafb !important;

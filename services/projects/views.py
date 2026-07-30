@@ -1,14 +1,30 @@
 import os
 import re
+from django.http import FileResponse, Http404
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
+from shared import nas
 from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto, _generate_project_no
 from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer, DailyReportSerializer, WSHPhotoSerializer
 
 TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
 from shared.permissions import user_can, P
+
+
+def _file_entry(path, folder):
+    """Serialise one entry in a project's NAS folder for the Files panel."""
+    import datetime
+    st = path.stat()
+    is_dir = path.is_dir()
+    return {
+        'name': path.name,
+        'is_dir': is_dir,
+        'size': 0 if is_dir else st.st_size,
+        'modified': datetime.datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds'),
+    }
 
 
 def _parse_template(filepath):
@@ -74,6 +90,43 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def next_no(self, request):
         return Response({'project_no': _generate_project_no()})
+
+    @action(detail=True, methods=['get', 'post'], parser_classes=[MultiPartParser, FormParser])
+    def files(self, request, pk=None):
+        """GET: list files in the project's NAS folder. POST: upload a file into it."""
+        from .signals import project_folder_path, ensure_project_folder
+
+        if request.method == 'POST':
+            upload = request.FILES.get('file')
+            if not upload:
+                return Response({'detail': 'No file provided.'}, status=400)
+            try:
+                folder = ensure_project_folder(self.get_object())
+                saved = nas.save_into(folder, upload.name, upload)
+            except Exception as exc:
+                return Response({'detail': f'Upload failed: {exc}'}, status=500)
+            return Response(_file_entry(saved, folder), status=201)
+
+        folder = project_folder_path(self.get_object())
+        if not folder.exists():
+            return Response([])
+        entries = [_file_entry(p, folder) for p in sorted(folder.iterdir(), key=lambda x: x.name.lower())]
+        return Response(entries)
+
+    @action(detail=True, methods=['get'], url_path='files/download')
+    def file_download(self, request, pk=None):
+        """Stream one file from the project's NAS folder (top-level only)."""
+        from .signals import project_folder_path
+        name = request.query_params.get('name', '')
+        try:
+            safe = nas.sanitize_segment(name)
+        except ValueError:
+            raise Http404
+        folder = project_folder_path(self.get_object())
+        target = folder / safe
+        if not target.is_file() or folder not in target.resolve().parents:
+            raise Http404
+        return FileResponse(open(target, 'rb'), as_attachment=True, filename=safe)
 
     def get_serializer_class(self):
         if self.action == 'list':
