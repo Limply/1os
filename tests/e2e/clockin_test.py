@@ -27,9 +27,10 @@ PASSWORD = config("TEST_PASSWORD")
 if not PASSWORD:
     sys.exit(f"TEST_PASSWORD is empty in {ENV_PATH} — fill it in first.")
 
-# Somewhere in Singapore (Astronic office area) — doesn't need to be a real geofence
-# since the whole point of this session's fix is that clock-in works without one.
-FAKE_LAT, FAKE_LNG = 1.3521, 103.8198
+# Real Astronic office coordinates — inside the office geofence, so this exercises the
+# happy path (schedule-less clock-in matched to "Astronic Office" rather than the
+# remote/select-a-project fallback).
+FAKE_LAT, FAKE_LNG = 1.3772153, 103.8707002
 
 results = []
 
@@ -87,6 +88,15 @@ def main():
             record("GPS capture", gps_ok)
         except Exception as e:
             record("GPS capture", False, str(e))
+
+        # --- Health declaration (required before camera unlocks, clock-in only) ---
+        try:
+            if page.locator('text=I am feeling healthy today.').count() > 0:
+                page.click('text=I am feeling healthy today.')
+                page.wait_for_timeout(300)
+                record("Health declaration", True)
+        except Exception as e:
+            record("Health declaration", False, str(e))
 
         # --- Camera + photo ---
         try:
