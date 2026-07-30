@@ -83,6 +83,10 @@ class Site(BaseModel):
     contact_name = models.CharField(max_length=100, blank=True, null=True)
     contact_phone = models.CharField(max_length=20, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    project = models.ForeignKey(
+        'projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='sites',
+        help_text='Optional — project this site was populated from / is linked to'
+    )
 
     def __str__(self):
         return self.name

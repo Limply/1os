@@ -105,7 +105,7 @@ export default function HR() {
   const SITE_TYPES = [
     ['office', 'Office'], ['branch', 'Branch'], ['client_site', 'Client Site'], ['warehouse', 'Warehouse'],
   ]
-  const emptySiteForm = { name: '', type: 'office', address: '', postal_code: '', lat: '', lng: '', contact_name: '', contact_phone: '', notes: '' }
+  const emptySiteForm = { name: '', type: 'office', address: '', postal_code: '', lat: '', lng: '', contact_name: '', contact_phone: '', notes: '', project: '' }
   const [sites, setSites] = useState([])
   const [sitesLoading, setSitesLoading] = useState(false)
   const [showSiteForm, setShowSiteForm] = useState(false)
@@ -113,6 +113,8 @@ export default function HR() {
   const [siteForm, setSiteForm] = useState(emptySiteForm)
   const [siteSaving, setSiteSaving] = useState(false)
   const [siteMsg, setSiteMsg] = useState('')
+  const [siteProjects, setSiteProjects] = useState([])
+  const [importingSites, setImportingSites] = useState(false)
 
   // Team attendance (manager)
   const [teamView, setTeamView] = useState('daily') // 'daily' | 'monthly'
@@ -137,6 +139,7 @@ export default function HR() {
   useEffect(() => {
     if (tab !== 'Locations' || !isManager) return
     fetchSites()
+    api.get('/projects/projects/?limit=999').then(res => setSiteProjects(res.data.results || res.data)).catch(() => {})
   }, [tab, isManager])
 
   function fetchSites() {
@@ -159,9 +162,39 @@ export default function HR() {
       name: site.name ?? '', type: site.type ?? 'office', address: site.address ?? '',
       postal_code: site.postal_code ?? '', lat: site.lat ?? '', lng: site.lng ?? '',
       contact_name: site.contact_name ?? '', contact_phone: site.contact_phone ?? '', notes: site.notes ?? '',
+      project: site.project ?? '',
     })
     setSiteMsg('')
     setShowSiteForm(true)
+  }
+
+  function pickSiteProject(projectId) {
+    const proj = siteProjects.find(p => String(p.id) === String(projectId))
+    setSiteForm(p => ({
+      ...p,
+      project: projectId,
+      name: proj ? proj.name : p.name,
+      type: proj ? 'client_site' : p.type,
+      address: proj?.site_address || p.address,
+      lat: proj?.site_lat ?? p.lat,
+      lng: proj?.site_lng ?? p.lng,
+      contact_name: proj?.client_contact || p.contact_name,
+      contact_phone: proj?.client_phone || p.contact_phone,
+    }))
+  }
+
+  async function importSitesFromProjects() {
+    setImportingSites(true)
+    setSiteMsg('')
+    try {
+      const res = await api.post('/org/sites/import_from_projects/')
+      setSiteMsg(`Imported: ${res.data.created} new, ${res.data.updated} refreshed, ${res.data.skipped} skipped (no site info).`)
+      fetchSites()
+    } catch (err) {
+      setSiteMsg(err.response?.data?.detail || 'Could not import locations from projects.')
+    } finally {
+      setImportingSites(false)
+    }
   }
 
   async function saveSite(e) {
@@ -169,7 +202,7 @@ export default function HR() {
     setSiteSaving(true)
     setSiteMsg('')
     try {
-      const payload = { ...siteForm, lat: siteForm.lat || null, lng: siteForm.lng || null }
+      const payload = { ...siteForm, lat: siteForm.lat || null, lng: siteForm.lng || null, project: siteForm.project || null }
       if (editingSiteId) await api.patch(`/org/sites/${editingSiteId}/`, payload)
       else await api.post('/org/sites/', payload)
       setShowSiteForm(false)
@@ -751,17 +784,36 @@ export default function HR() {
       {tab === 'Locations' && (
         <div className="space-y-3">
           {siteMsg && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-700">{siteMsg}</div>
+            <div className={`rounded-xl px-4 py-2 text-sm border ${
+              siteMsg.startsWith('Imported:') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
+            }`}>{siteMsg}</div>
           )}
 
           {!showSiteForm ? (
-            <button onClick={openNewSite}
-              className="w-full bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition">
-              + Add Location
-            </button>
+            <div className="flex gap-2">
+              <button onClick={openNewSite}
+                className="flex-1 bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition">
+                + Add Location
+              </button>
+              <button onClick={importSitesFromProjects} disabled={importingSites}
+                className="flex-1 bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition">
+                {importingSites ? 'Importing…' : 'Import from Projects'}
+              </button>
+            </div>
           ) : (
             <form onSubmit={saveSite} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
               <p className="font-semibold text-gray-700 text-sm">{editingSiteId ? 'Edit Location' : 'New Location'}</p>
+              <div>
+                <label className="text-xs text-gray-400">Project (optional — auto-fills fields below)</label>
+                <select value={siteForm.project}
+                  onChange={e => pickSiteProject(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
+                  <option value="">— No project —</option>
+                  {siteProjects.map(p => (
+                    <option key={p.id} value={p.id}>{p.project_no ? `${p.project_no} — ` : ''}{p.name}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-xs text-gray-400">Name</label>
                 <input required value={siteForm.name}
@@ -845,6 +897,9 @@ export default function HR() {
                   <p className="text-xs text-gray-400">
                     {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(7)}, ${parseFloat(s.lng).toFixed(7)}` : 'No GPS set'}
                   </p>
+                  {s.project_name && (
+                    <p className="text-xs text-primary-500 mt-0.5">↳ from project: {s.project_name}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
