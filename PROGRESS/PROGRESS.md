@@ -1,7 +1,7 @@
 # 1OS — Project Progress Log
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-06-27
+**Last Updated:** 2026-07-30
 
 ---
 
@@ -223,6 +223,94 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
   Level 3+ → full nav (Home/Projects/Team/Clock In/Reports).
 - Documented in `DEVELOPMENT.md` next to the Roles table — closes the doc gap
   `DOC_COMPLIANCE_REVIEW.md` flagged (`position_level` tiering was undocumented).
+
+---
+
+## What Was Built (Session 9, 2026-07-30)
+
+> Edited on `/opt/1os` (prod checkout), merged with 5 unrelated commits that had
+> landed on `origin/main` from elsewhere (NAS integration, calendar, Mindset Log,
+> Business Strategy dashboard) — see "Merge with concurrent work" below. Each change
+> verified via Playwright against dev, then rebuilt/migrated/restarted on prod.
+
+### Clock-in: health declaration + office geofence
+- New "I am feeling healthy today" checkbox — required before the camera unlocks for
+  clock-in; watermarked onto the clock photo. New `Attendance.health_declared` field.
+- Clock-in photo watermark's site line now shows the matched site name (schedule,
+  office, or GPS address) instead of just the raw address.
+- Schedule-less clock-in now checks GPS against **office locations** (see Locations,
+  below) instead of skipping the geofence check entirely — if within radius, treated
+  as a normal on-site clock-in; if not, falls back to the existing "select a project
+  to clock in remotely" flow.
+
+### New: HR > Team Attendance (manager tab)
+- Daily view: summary tiles (Present/Late/Absent/On Leave) + full roster with
+  clock in/out times, hours, and a clock-photo lightbox.
+- Monthly view: per-employee attendance rate, late incidents, absences, total hours.
+- Roster is filtered to positions that actually clock in via the supervisor app
+  (`_requires_clock_in()`, based on `Position.level` → `LEVEL_PERMISSIONS` →
+  `supervisor.app`) — office/desktop roles (Directors, Managers, Advisors, Business
+  Development) are excluded rather than showing as permanently "pending"/"absent".
+- No-show rule: after 9am (Singapore time) with no clock-in record, status shows
+  "absent" instead of "pending" (`AttendanceViewSet.team`, `services/hr/views.py`).
+
+### New: HR > Locations (manager tab) + Site model changes
+- Full CRUD over the existing `organisation.Site` model (previously only reachable
+  via Django admin, or buried as a picker in the Operations WSH report form): name,
+  type, address, postal code, GPS lat/lng, geofence radius, contact info.
+- `Site` gained `radius` (geofence radius in metres, new) and `project` (optional FK
+  to `projects.Project`, new) fields.
+- Add/Edit form has an optional "Project" picker that auto-fills name/address/GPS/
+  contact from the selected project's `site_address`/`site_lat`/`site_lng`/
+  `client_contact`/`client_phone` — still freely editable, and a location doesn't
+  require a project.
+- **"Import from Projects"** button: `POST /org/sites/import_from_projects/` creates/
+  refreshes a Location for every active project that has an address or GPS set,
+  skipping ones with neither. Idempotent (re-running updates, doesn't duplicate).
+  Ran once on prod: **2 created** (real projects with site data), several dozen
+  skipped (no site info on the project record).
+- New self-service `GET /org/sites/office/` (`IsAuthenticated`, no HR/org module
+  permission) returns active `type=office` sites — this is what the clock-in
+  geofence check above actually reads, so the office address/radius is editable
+  from this tab with no code deploy.
+- Created a real **"Astronic Office"** Site record on both dev and prod
+  (1.3772153, 103.8707002, 300m radius) — previously this only existed as a
+  hardcoded constant in `ClockInWidget.jsx`, now it's real, editable data.
+
+### Merge with concurrent work
+- `origin/main` had moved 5 commits ahead (NAS project-folder integration, project
+  task calendar, Mindset Log feature, Business Strategy/Quotation dashboard) from
+  work done elsewhere, with a real edit conflict in `services/hr/views.py` against
+  this session's clock-in changes. Merged cleanly (git auto-resolved, no overlapping
+  lines) but surfaced a **migration graph conflict**: two `hr` app migrations
+  (`0016_attendance_health_declared` vs `0016_mindsetanchor_mindsetlog`) both forked
+  off `0015`. Resolved with `0018_merge_20260730_1224.py` — this file was initially
+  missed in the commit (applied to both DBs but not committed) and had to be pushed
+  in a follow-up fix.
+- `/home/lucus/1os-dev` (the actual dev checkout) turned out to be **behind** the
+  commits that landed on `origin/main` — whoever pushed them did so from elsewhere,
+  not that checkout. It still has its own separate uncommitted work (`REFERENCE/`,
+  `ProjectFilesModal.jsx`, `services/calendar/`, `migrate_test_batch.py`) that
+  doesn't match what's now on `origin/dev`/prod. **Not reconciled — needs a
+  conversation with whoever owns that work before it's touched further.**
+
+### Doc corrections
+- Dev and prod use **separate databases** (`astronic_dev` vs `astronic`), not one
+  shared `1os_db` as this doc previously claimed — see the Dev/Prod Quick Reference
+  section above. Caught because a migration had been applied to dev but not prod.
+- Ports/services/domains in the Quick Reference table were also stale (old
+  `sim-eng.com` naming, wrong ports) — corrected to match the actual running
+  systemd units (`1os-django`, `1os-vite`, `gunicorn-1os`) and nginx config.
+
+### Known test-data cleanup needed (before showing this to non-technical stakeholders)
+- Repeated E2E test runs against **prod** today, logged in as `lucus@astronic.com.sg`,
+  left a real `Attendance` row for 2026-07-30 with `clock_in` *after* `clock_out`
+  (artifact of running Clock In then Clock Out tests multiple times back-to-back).
+  Team Attendance's daily view for today will show this — worth deleting/fixing
+  that row, or clocking in/out cleanly once, before demoing.
+- "Import from Projects" pulled in a project literally named **"Testing Project"**
+  as a real Location (it had `site_address`/GPS set). Worth deleting or renaming
+  before the Locations list is shown around.
 
 ---
 
