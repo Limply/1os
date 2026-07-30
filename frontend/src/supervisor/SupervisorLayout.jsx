@@ -71,13 +71,20 @@ export default function SupervisorLayout() {
   const displayName = user.first_name || user.email || ''
   const level = user.position_level ?? null
 
-  // Level 1: clock-in/out only — redirect away from any other supervisor page
+  // Tiered access: Level 1 (Worker) = clock-in only; Level 2 (Foreman) = Home/Projects/Clock In;
+  // Level 3+ (Senior Supervisor and up) = full supervisor app.
   const CLOCK_IN_PATH = '/supervisor/clock-in'
-  if (level === 1 && !location.pathname.startsWith(CLOCK_IN_PATH)) {
+  const TABS_BY_LEVEL = {
+    1: ['/supervisor/clock-in'],
+    2: ['/supervisor', '/supervisor/tasks', '/supervisor/clock-in'],
+  }
+  const allowedPaths = level != null && TABS_BY_LEVEL[level] ? TABS_BY_LEVEL[level] : null
+
+  if (allowedPaths && !allowedPaths.some(p => location.pathname === p || location.pathname.startsWith(p + '/'))) {
     return <Navigate to={CLOCK_IN_PATH} replace />
   }
 
-  const visibleNav = level === 1 ? NAV.filter(n => n.to === CLOCK_IN_PATH) : NAV
+  const visibleNav = allowedPaths ? NAV.filter(n => allowedPaths.includes(n.to)) : NAV
 
   function handleLogout() {
     logout()

@@ -58,22 +58,22 @@ in-app and over SMB, with the app as the source of truth.
 
 ## Config split (shared-DB safe)
 Dev and prod share `1os_db`, so the absolute root must **not** live in the DB:
-- **`NAS_PROJECTS_ROOT` (env, per-server):** prod `/mnt/data/1os/SE-Bizz/Projects`, dev `/mnt/data/1os/SE-Bizz/_DEV/Projects`.
+- **`NAS_PROJECTS_ROOT` (env, per-server):** prod `/mnt/data/1os/Astronic/Projects`, dev `/mnt/data/1os/Astronic/_DEV/Projects`.
 - **Folder *names* (DB):** `Company.nas_folder` + `Client.nas_folder`, joined under the env root.
 - **Sanitize** every DB-sourced name (strip `/`, `..`, leading dots) before it hits the filesystem — path-traversal guard.
 
 ## Decisions
-- **Business root:** `/mnt/data/1os/SE-Bizz` (decided 2026-06-27). The `SimplyEngineering` folder was
-  renamed to `SE-Bizz` and the whole 446M / 43-folder tree was **moved out of `Backup/`** to
-  `/mnt/data/1os/SE-Bizz` (done 2026-06-27 — same-disk `mv`, so the planned migration step is complete).
-  Over SMB this is now `N:\1os\SE-Bizz` (was `N:\Backup\SE-Bizz`).
-- **Prod tree:** `/mnt/data/1os/SE-Bizz/Projects`.
-- **Dev sandbox:** `/mnt/data/1os/SE-Bizz/_DEV/Projects`, selected via env `NAS_PROJECTS_ROOT`
+- **Business root:** `/mnt/data/1os/Astronic` (decided 2026-06-27). The `SimplyEngineering` folder was
+  renamed to `Astronic` and the whole 446M / 43-folder tree was **moved out of `Backup/`** to
+  `/mnt/data/1os/Astronic` (done 2026-06-27 — same-disk `mv`, so the planned migration step is complete).
+  Over SMB this is now `N:\1os\Astronic` (was `N:\Backup\Astronic`).
+- **Prod tree:** `/mnt/data/1os/Astronic/Projects`.
+- **Dev sandbox:** `/mnt/data/1os/Astronic/_DEV/Projects`, selected via env `NAS_PROJECTS_ROOT`
   (dev shares `1os_db` **and** `/mnt/data`, so it must never touch live folders).
-- **New Samba `[projects]` share** → `/mnt/data/1os/SE-Bizz/Projects` (staff map a clean drive).
+- **New Samba `[projects]` share** → `/mnt/data/1os/Astronic/Projects` (staff map a clean drive).
 - **Client rename** in-app → **auto-rename** the NAS folder (admin-safeguarded).
 - **Backup gap (open):** the tree no longer lives under a folder named `Backup` and **has no real
-  backup job** — set up an actual backup (rsync to another disk/cloud) for `/mnt/data/1os/SE-Bizz`.
+  backup job** — set up an actual backup (rsync to another disk/cloud) for `/mnt/data/1os/Astronic`.
 
 ## Build phases
 1. **Config** — `NAS_PROJECTS_ROOT` in `.env`/`base.py`; create `[projects]` Samba share.
@@ -90,10 +90,10 @@ Dev and prod share `1os_db`, so the absolute root must **not** live in the DB:
    "file missing on NAS" gracefully (users can still move files over SMB).
 
 ## Migration
-- ✅ **Done 2026-06-27:** `SimplyEngineering` → `SE-Bizz` rename + same-disk `mv` of the tree to
-  `/mnt/data/1os/SE-Bizz/Projects` (out of `Backup/`).
-- ⬜ Remaining: add the `[projects]` Samba share → `/mnt/data/1os/SE-Bizz/Projects`; re-map staff
-  drive (path changed to `N:\1os\SE-Bizz`); point a real backup at the new tree.
+- ✅ **Done 2026-06-27:** `SimplyEngineering` → `Astronic` rename + same-disk `mv` of the tree to
+  `/mnt/data/1os/Astronic/Projects` (out of `Backup/`).
+- ⬜ Remaining: add the `[projects]` Samba share → `/mnt/data/1os/Astronic/Projects`; re-map staff
+  drive (path changed to `N:\1os\Astronic`); point a real backup at the new tree.
 
 ## Prep already done
 - 19 customer folders renamed to `YYYY-MM_Customer-Name`; loose files grouped into
@@ -101,5 +101,18 @@ Dev and prod share `1os_db`, so the absolute root must **not** live in the DB:
 - `_README_DO-NOT-MOVE-OR-DELETE.txt` notice placed at the Projects root.
 
 ## Open items
-- Set up a real backup job for `/mnt/data/1os/SE-Bizz` (no longer under a `Backup/` folder).
-- Create the `[projects]` Samba share and re-map staff drive to `N:\1os\SE-Bizz`.
+- Set up a real backup job for `/mnt/data/1os/Astronic` (no longer under a `Backup/` folder).
+- Create the `[projects]` Samba share and re-map staff drive to `N:\1os\Astronic`.
+
+## Status log
+- **2026-07-24 — `/mnt/data` reliability issue found (relevant to the backup-gap item above):**
+  the HDD backing `/mnt/data` (whole `Astronic` tree lives here) got silently renamed
+  `/dev/sda` → `/dev/sdb` by the kernel at some point after the 2026-07-18 outage (see
+  `project_astserver_storage.md`). A stale mount of the old, now-nonexistent `/dev/sda`
+  was left stacked under the live `/dev/sdb` at `/mnt/data`, and the `~/.npm` bind mount
+  specifically never got re-pointed to the live disk — it's been throwing
+  `EXT4-fs error ... reading directory block` since 2026-07-21, most recently today,
+  breaking `npm install`/`npm run build` on `astserver`. Fix (unmount + rebind `~/.npm`
+  from the live `/mnt/data/system/home-lucus-npm`) proposed, not yet applied pending
+  confirmation. Underscores the backup-gap item: this tree has no real backup and the
+  underlying disk has now silently re-enumerated at least twice.

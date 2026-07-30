@@ -5,6 +5,7 @@ import { can, P } from '../utils/permissions'
 import ManpowerCalendar from '../components/ManpowerCalendar'
 import ManpowerSettings from '../components/ManpowerSettings'
 import { useManpowerSettings } from '../hooks/useManpowerSettings'
+import AuthImage from '../components/AuthImage'
 
 
 
@@ -21,6 +22,23 @@ const ATTENDANCE_COLORS = {
   late:     'bg-yellow-100 text-yellow-700',
   half_day: 'bg-primary-100 text-primary-700',
   leave:    'bg-purple-100 text-purple-700',
+  pending:  'bg-gray-100 text-gray-400',
+}
+
+const HEAT_COLORS = {
+  present:  'bg-green-500',
+  late:     'bg-yellow-500',
+  absent:   'bg-red-500',
+  half_day: 'bg-primary-500',
+  leave:    'bg-purple-500',
+}
+
+function todayStr() {
+  return new Date().toLocaleDateString('en-CA') // YYYY-MM-DD, local time
+}
+function monthStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 // ─── Sub-tab pill bar ──────────────────────────────────────
@@ -53,7 +71,7 @@ export default function HR() {
     'Attendance',
     'My Profile',
     'Courses',
-    ...(isManager ? ['Manpower', 'Employees', 'Approvals'] : []),
+    ...(isManager ? ['Manpower', 'Team Attendance', 'Employees', 'Approvals'] : []),
   ]
   const [tab, setTab] = useState('My Leave')
 
@@ -83,7 +101,36 @@ export default function HR() {
   // Employee search
   const [empSearch, setEmpSearch] = useState('')
 
+  // Team attendance (manager)
+  const [teamView, setTeamView] = useState('daily') // 'daily' | 'monthly'
+  const [teamDate, setTeamDate] = useState(todayStr())
+  const [teamMonth, setTeamMonth] = useState(monthStr())
+  const [teamDaily, setTeamDaily] = useState(null)
+  const [teamMonthly, setTeamMonthly] = useState(null)
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamPhotos, setTeamPhotos] = useState(null) // row currently shown in the photo lightbox
+
   useEffect(() => { fetchAll() }, [])
+
+  useEffect(() => {
+    if (tab !== 'Team Attendance' || !isManager) return
+    setTeamLoading(true)
+    const params = teamView === 'daily' ? `date=${teamDate}` : `month=${teamMonth}`
+    api.get(`/hr/attendance/team/?${params}`)
+      .then(res => { teamView === 'daily' ? setTeamDaily(res.data) : setTeamMonthly(res.data) })
+      .finally(() => setTeamLoading(false))
+  }, [tab, teamView, teamDate, teamMonth, isManager])
+
+  function shiftTeamDate(days) {
+    const d = new Date(teamDate + 'T00:00:00')
+    d.setDate(d.getDate() + days)
+    setTeamDate(d.toLocaleDateString('en-CA'))
+  }
+  function shiftTeamMonth(delta) {
+    const [y, m] = teamMonth.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setTeamMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
 
   async function fetchAll() {
     try {
@@ -442,6 +489,156 @@ export default function HR() {
         </div>
       )}
 
+      {/* ── TEAM ATTENDANCE (manager+) ─────────────── */}
+      {tab === 'Team Attendance' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            {teamView === 'daily' ? (
+              <div className="flex items-center gap-2">
+                <button onClick={() => shiftTeamDate(-1)}
+                  className="w-7 h-7 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">‹</button>
+                <span className="text-sm font-semibold text-gray-800">
+                  {new Date(teamDate + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+                <button onClick={() => shiftTeamDate(1)}
+                  className="w-7 h-7 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">›</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button onClick={() => shiftTeamMonth(-1)}
+                  className="w-7 h-7 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">‹</button>
+                <span className="text-sm font-semibold text-gray-800">
+                  {new Date(teamMonth + '-01T00:00:00').toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })}
+                </span>
+                <button onClick={() => shiftTeamMonth(1)}
+                  className="w-7 h-7 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">›</button>
+              </div>
+            )}
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+              {['daily', 'monthly'].map(v => (
+                <button key={v} onClick={() => setTeamView(v)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md capitalize transition ${
+                    teamView === v ? 'bg-primary-600 text-white' : 'text-gray-500'
+                  }`}>{v}</button>
+              ))}
+            </div>
+          </div>
+
+          {teamLoading ? (
+            <div className="text-center text-sm text-gray-400 py-8">Loading…</div>
+          ) : teamView === 'daily' ? (
+            <>
+              {teamDaily && (
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    ['present', 'Present'], ['late', 'Late'], ['absent', 'Absent'], ['leave', 'On Leave'],
+                  ].map(([key, label]) => (
+                    <div key={key} className="bg-white rounded-xl border border-gray-200 p-3">
+                      <p className="text-xl font-bold text-gray-800">{teamDaily.summary[key] || 0}</p>
+                      <p className="text-xs text-gray-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                {!teamDaily || teamDaily.results.length === 0 ? (
+                  <p className="text-sm text-gray-400 p-4 text-center">No employees found</p>
+                ) : teamDaily.results.map(r => (
+                  <div key={r.employee_id}
+                    className={`px-4 py-3 flex items-center justify-between gap-2 border-l-2 ${
+                      r.status === 'late' ? 'border-l-yellow-400' : r.status === 'absent' ? 'border-l-red-400 bg-red-50/40' : 'border-l-transparent'
+                    }`}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{r.employee_name}</p>
+                      <p className="text-xs text-gray-400 truncate">{r.department_name || '—'}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-gray-400">
+                        {r.clock_in ? r.clock_in.slice(11, 16) : '—'} – {r.clock_out ? r.clock_out.slice(11, 16) : '—'}
+                      </span>
+                      {r.hours && <span className="text-xs text-gray-400">{r.hours}h</span>}
+                      {(r.clock_in_photo || r.clock_out_photo) && (
+                        <button onClick={() => setTeamPhotos(r)} className="shrink-0">
+                          <AuthImage src={r.clock_in_photo || r.clock_out_photo} alt=""
+                            className="w-8 h-8 rounded-md object-cover border border-gray-200 hover:opacity-80 transition" />
+                        </button>
+                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ATTENDANCE_COLORS[r.status]}`}>
+                        {r.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {teamMonthly && teamMonthly.results.length > 0 && (() => {
+                const totals = teamMonthly.results.reduce((acc, r) => ({
+                  present: acc.present + r.present, late: acc.late + r.late,
+                  absent: acc.absent + r.absent, hours: acc.hours + r.total_hours,
+                }), { present: 0, late: 0, absent: 0, hours: 0 })
+                const marked = totals.present + totals.late + totals.absent
+                const rate = marked > 0 ? Math.round(((totals.present + totals.late) / marked) * 100) : 0
+                return (
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="bg-white rounded-xl border border-gray-200 p-3">
+                      <p className="text-xl font-bold text-gray-800">{rate}%</p>
+                      <p className="text-xs text-gray-400">Attendance rate</p>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-3">
+                      <p className="text-xl font-bold text-gray-800">{totals.late}</p>
+                      <p className="text-xs text-gray-400">Late incidents</p>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-3">
+                      <p className="text-xl font-bold text-gray-800">{totals.absent}</p>
+                      <p className="text-xs text-gray-400">Absences</p>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-3">
+                      <p className="text-xl font-bold text-gray-800">{totals.hours.toFixed(1)}</p>
+                      <p className="text-xs text-gray-400">Total hours</p>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                {!teamMonthly || teamMonthly.results.length === 0 ? (
+                  <p className="text-sm text-gray-400 p-4 text-center">No employees found</p>
+                ) : teamMonthly.results.map(r => {
+                  const [y, m] = teamMonth.split('-').map(Number)
+                  const daysInMonth = new Date(y, m, 0).getDate()
+                  const byDate = Object.fromEntries(r.days.map(d => [d.date, d.status]))
+                  return (
+                    <div key={r.employee_id} className="px-4 py-3 flex items-center gap-3">
+                      <div className="min-w-0 w-32 shrink-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{r.employee_name}</p>
+                        <p className="text-xs text-gray-400 truncate">{r.department_name || '—'}</p>
+                      </div>
+                      <div className="flex gap-[2px] flex-1 min-w-0 overflow-hidden">
+                        {Array.from({ length: daysInMonth }, (_, i) => {
+                          const dateStr = `${teamMonth}-${String(i + 1).padStart(2, '0')}`
+                          const st = byDate[dateStr]
+                          return (
+                            <span key={i} title={`${dateStr}${st ? ': ' + st.replace('_', ' ') : ''}`}
+                              className={`h-4 w-[3px] rounded-sm ${st ? HEAT_COLORS[st] || 'bg-gray-200' : 'bg-gray-100'}`} />
+                          )
+                        })}
+                      </div>
+                      <div className="flex gap-2 text-xs text-gray-400 shrink-0 w-28 justify-end">
+                        <span><b className="text-gray-700">{r.present}</b>P</span>
+                        <span><b className="text-gray-700">{r.late}</b>L</span>
+                        <span><b className="text-gray-700">{r.absent}</b>A</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── EMPLOYEES (manager+) ──────────────────── */}
       {tab === 'Employees' && (
         <div className="space-y-3">
@@ -518,6 +715,43 @@ export default function HR() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── CLOCK PHOTO LIGHTBOX (Team Attendance) ─── */}
+      {teamPhotos && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+          onClick={() => setTeamPhotos(null)}>
+          <div className="bg-white rounded-xl p-4 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-semibold text-gray-800 text-sm">{teamPhotos.employee_name}</p>
+              <button onClick={() => setTeamPhotos(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-gray-400 mb-1">
+                  Clock in{teamPhotos.clock_in ? ` · ${teamPhotos.clock_in.slice(11, 16)}` : ''}
+                </p>
+                {teamPhotos.clock_in_photo ? (
+                  <AuthImage src={teamPhotos.clock_in_photo} alt="Clock in"
+                    className="w-full aspect-square object-cover rounded-lg" />
+                ) : (
+                  <div className="w-full aspect-square bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400">No photo</div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">
+                  Clock out{teamPhotos.clock_out ? ` · ${teamPhotos.clock_out.slice(11, 16)}` : ''}
+                </p>
+                {teamPhotos.clock_out_photo ? (
+                  <AuthImage src={teamPhotos.clock_out_photo} alt="Clock out"
+                    className="w-full aspect-square object-cover rounded-lg" />
+                ) : (
+                  <div className="w-full aspect-square bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400">No photo</div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

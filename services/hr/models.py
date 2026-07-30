@@ -143,6 +143,7 @@ class Attendance(BaseModel):
     clock_in_address = models.CharField(max_length=500, blank=True, null=True)
     clock_out_address = models.CharField(max_length=500, blank=True, null=True)
     project = models.ForeignKey('projects.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='attendance_records')
+    health_declared = models.BooleanField(default=False, help_text='Employee declared themselves healthy at clock-in')
 
     class Meta:
         unique_together = ('employee', 'date')

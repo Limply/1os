@@ -1,16 +1,17 @@
+import calendar
 import csv
 import io
 import openpyxl
 from django.utils import timezone
 from django.http import HttpResponse
-from datetime import datetime
+from datetime import datetime, time as time_type
 from django.db.models import Q
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from shared.permissions import make_module_permission, user_can, P
+from shared.permissions import make_module_permission, user_can, P, LEVEL_PERMISSIONS
 
 HRPermission = make_module_permission(P.HR_VIEW, P.HR_MANAGE)
 # Claims are self-service: any employee with HR access manages their own claims
@@ -140,6 +141,17 @@ class LeaveApplicationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         return Response(LeaveApplicationSerializer(leave).data)
 
 
+def _requires_clock_in(employee):
+    """Whether an employee's position is one that clocks in via the supervisor app
+    (field/site staff), as opposed to office roles on fixed/flexible hours."""
+    position = employee.position
+    if not position:
+        return False
+    if position.level is not None and position.level in LEVEL_PERMISSIONS:
+        return P.SUPERVISOR_APP in LEVEL_PERMISSIONS[position.level]
+    return P.SUPERVISOR_APP in (position.permissions or [])
+
+
 class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Attendance.objects.select_related('employee')
     serializer_class = AttendanceSerializer
@@ -151,6 +163,17 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             qs = qs.filter(employee_id=employee_id)
         return qs.order_by('-date')
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def mine(self, request):
+        """Self-service — the logged-in user's own attendance record for today."""
+        try:
+            employee = request.user.employee_profile
+        except Exception:
+            return Response({'results': []})
+        today = timezone.now().date()
+        qs = Attendance.objects.filter(employee=employee, date=today)
+        return Response({'results': AttendanceSerializer(qs, many=True).data})
+
     @action(detail=False, methods=['post'], permission_classes=[IsClockInAllowed])
     def clock_in(self, request):
         try:
@@ -158,36 +181,33 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             today = timezone.now().date()
             today_str = today.strftime('%d-%m-%Y')
 
-            # Check schedule exists in CSV
+            # Schedule is optional — staff without one can still clock in (no geofence/late check to run)
             rows = fb_read_csv(CSV_PATH)
             schedule = next((r for r in rows if r.get('emp_no') == employee.emp_no and r.get('date') == today_str), None)
-            if not schedule:
-                return Response(
-                    {'success': False, 'message': 'No schedule assigned for today. Contact your supervisor.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
 
-            # Check GPS within allowed radius
+            # Check GPS within allowed radius (only when a schedule gives us a site to check against)
             gps_lat = request.data.get('gps_lat')
             gps_lng = request.data.get('gps_lng')
             project_id = request.data.get('project_id')
             outside_geofence = False
-            if gps_lat and gps_lng:
-                distance = haversine_distance(gps_lat, gps_lng, schedule['location_lat'], schedule['location_lng'])
-                radius = int(schedule.get('radius', 200))
-                if distance > radius:
-                    if not project_id:
-                        return Response({
-                            'success': False,
-                            'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Select a project to clock in remotely.'
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                    outside_geofence = True
-
-            # Flag late if past shift_start
+            attendance_status = 'present'
             now = timezone.now()
-            from datetime import time as time_type
-            shift_start = datetime.strptime(schedule.get('shift_start', '00:00'), '%H:%M').time()
-            attendance_status = 'late' if timezone.localtime(now).time() > shift_start else 'present'
+
+            if schedule:
+                if gps_lat and gps_lng:
+                    distance = haversine_distance(gps_lat, gps_lng, schedule['location_lat'], schedule['location_lng'])
+                    radius = int(schedule.get('radius', 200))
+                    if distance > radius:
+                        if not project_id:
+                            return Response({
+                                'success': False,
+                                'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Select a project to clock in remotely.'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                        outside_geofence = True
+
+                # Flag late if past shift_start
+                shift_start = datetime.strptime(schedule.get('shift_start', '00:00'), '%H:%M').time()
+                attendance_status = 'late' if timezone.localtime(now).time() > shift_start else 'present'
 
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
@@ -197,6 +217,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             record.clock_in = now
             record.clock_in_photo = request.FILES.get('photo')
             record.status = attendance_status
+            record.health_declared = str(request.data.get('health_declared', '')).lower() in ('true', '1')
 
             if gps_lat and gps_lng:
                 record.clock_in_gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
@@ -205,7 +226,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             if address:
                 record.clock_in_address = address
 
-            if project_id and outside_geofence:
+            if project_id and (outside_geofence or not schedule):
                 from services.projects.models import Project
                 try:
                     record.project = Project.objects.get(id=project_id)
@@ -223,11 +244,11 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 'status': attendance_status,
                 'photo_url': photo_url,
                 'gps_location': record.clock_in_gps,
-                'schedule': {
+                'schedule': ({
                     'location': schedule['location_name'],
                     'shift_start': schedule['shift_start'],
                     'shift_end': schedule['shift_end'],
-                },
+                } if schedule else None),
             }
             return Response(response, status=status.HTTP_200_OK)
         except Exception as e:
@@ -284,6 +305,77 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 {'success': False, 'message': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def team(self, request):
+        """Manager rollup — one day's roster, or a month's per-employee summary."""
+        if not user_can(request.user, P.HR_MANAGE):
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+        employees = Employee.objects.filter(is_active=True).select_related('department', 'position').order_by('first_name', 'last_name')
+        employees = [e for e in employees if _requires_clock_in(e)]
+
+        month = request.query_params.get('month')
+        if month:
+            try:
+                year, mon = (int(p) for p in month.split('-'))
+                start = datetime(year, mon, 1).date()
+                end = datetime(year, mon, calendar.monthrange(year, mon)[1]).date()
+            except (ValueError, TypeError):
+                return Response({'detail': 'Invalid month, expected YYYY-MM.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            by_emp = {}
+            for r in Attendance.objects.filter(date__gte=start, date__lte=end):
+                by_emp.setdefault(r.employee_id, []).append(r)
+
+            results = []
+            for emp in employees:
+                recs = by_emp.get(emp.id, [])
+                counts = {s: 0 for s in ('present', 'late', 'absent', 'half_day', 'leave')}
+                for r in recs:
+                    if r.status in counts:
+                        counts[r.status] += 1
+                results.append({
+                    'employee_id': emp.id,
+                    'employee_name': emp.full_name,
+                    'department_name': emp.department.name if emp.department else None,
+                    **counts,
+                    'total_hours': round(sum(float(r.hours or 0) for r in recs), 2),
+                    'days': [{'date': r.date.isoformat(), 'status': r.status} for r in recs],
+                })
+            return Response({'month': month, 'results': results})
+
+        date_str = request.query_params.get('date')
+        now = timezone.localtime(timezone.now())
+        date_obj = _parse_date(date_str) if date_str else now.date()
+        records = {r.employee_id: r for r in Attendance.objects.filter(date=date_obj)}
+        # No-show cutoff — after 9am with no clock-in, today counts as absent rather than pending.
+        ABSENT_CUTOFF = time_type(9, 0)
+        today_past_cutoff = date_obj == now.date() and now.time() >= ABSENT_CUTOFF
+
+        results = []
+        summary = {'present': 0, 'late': 0, 'absent': 0, 'half_day': 0, 'leave': 0, 'pending': 0}
+        for emp in employees:
+            r = records.get(emp.id)
+            if r:
+                row_status = r.status
+            elif date_obj < now.date() or today_past_cutoff:
+                row_status = 'absent'
+            else:
+                row_status = 'pending'
+            summary[row_status] = summary.get(row_status, 0) + 1
+            results.append({
+                'employee_id': emp.id,
+                'employee_name': emp.full_name,
+                'department_name': emp.department.name if emp.department else None,
+                'status': row_status,
+                'clock_in': timezone.localtime(r.clock_in) if r and r.clock_in else None,
+                'clock_out': timezone.localtime(r.clock_out) if r and r.clock_out else None,
+                'hours': r.hours if r else None,
+                'clock_in_photo': r.clock_in_photo.url if r and r.clock_in_photo else None,
+                'clock_out_photo': r.clock_out_photo.url if r and r.clock_out_photo else None,
+            })
+        return Response({'date': date_obj.isoformat(), 'summary': summary, 'results': results})
 
 
 CSV_PATH = '/mnt/data/1os/database/Work_schedule.csv'
@@ -389,6 +481,28 @@ class WorkScheduleViewSet(viewsets.ViewSet):
                 rows = [r for r in rows if r.get('emp_no') == emp.emp_no]
 
         rows = sorted(rows, key=lambda r: (r.get('date', ''), r.get('shift_start', '')))
+        rows = [_enrich(r) for r in rows]
+        return Response({'results': rows, 'count': len(rows)})
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def mine(self, request):
+        """Self-service — the logged-in user's own schedule for a given date (default today).
+        Scoped to request.user, so it's safe under a lighter permission than the full HR gate."""
+        try:
+            employee = request.user.employee_profile
+        except Exception:
+            return Response({'results': [], 'count': 0})
+
+        date_param = request.query_params.get('date')
+        if date_param:
+            try:
+                date_str = _parse_date(date_param).strftime('%d-%m-%Y')
+            except ValueError:
+                date_str = date_param
+        else:
+            date_str = timezone.now().date().strftime('%d-%m-%Y')
+
+        rows = [r for r in fb_read_csv(CSV_PATH) if r.get('emp_no') == employee.emp_no and r.get('date') == date_str]
         rows = [_enrich(r) for r in rows]
         return Response({'results': rows, 'count': len(rows)})
 
@@ -587,9 +701,10 @@ def org_tree(request):
 
 
 @api_view(['GET'])
-@permission_classes([HRPermission])
+@permission_classes([permissions.IsAuthenticated])
 def employee_me(request):
-    """Return the employee profile for the logged-in user."""
+    """Return the employee profile for the logged-in user. Self-service — scoped to
+    request.user, so it's safe under a lighter permission than the full HR module gate."""
     try:
         employee = Employee.objects.select_related('department', 'position').get(
             user=request.user

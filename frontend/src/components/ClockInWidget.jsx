@@ -3,6 +3,16 @@ import { ClipboardList, AlertTriangle, Loader2, Check, X } from 'lucide-react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 
+const OFFICE = { name: 'Astronic Office', lat: 1.3772153, lng: 103.8707002, radius: 300 }
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const toRad = d => d * Math.PI / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2
+  return Math.round(2 * Math.asin(Math.sqrt(a)) * 6371000)
+}
+
 export default function ClockInWidget({ employee: empProp = null, compact = false }) {
   const user = getUser()
   const [employee, setEmployee] = useState(empProp)
@@ -17,10 +27,12 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
   const [photoPreview, setPhotoPreview] = useState(null)
   const [gpsCoords, setGpsCoords] = useState(null)
   const [gpsError, setGpsError] = useState('')
+  const [healthDeclared, setHealthDeclared] = useState(false)
   const [clockedIn, setClockedIn] = useState(false)
   const [todayRecord, setTodayRecord] = useState(null)
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState('')
+  const [matchedSite, setMatchedSite] = useState(null)
 
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
@@ -37,27 +49,25 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     return () => stopCamera()
   }, [])
 
-  // Fetch employee if not passed as prop
+  // Fetch employee if not passed as prop (self-service — works regardless of HR module access)
   useEffect(() => {
     if (empProp) { setEmployee(empProp); return }
     if (!user?.id) return
-    api.get('/hr/employees/?limit=999').then(res => {
-      const results = res.data.results || res.data || []
-      let emp = results.find(e => e.user === user.id)
-      if (!emp && user.first_name)
-        emp = results.find(e => e.first_name?.toLowerCase() === user.first_name?.toLowerCase())
-      setEmployee(emp || results[0])
-    }).catch(console.error)
+    api.get('/hr/employees/me/').then(res => {
+      setEmployee(res.data)
+    }).catch(err => {
+      setMessage(`Couldn't load your employee profile: ${err.response?.data?.detail || err.message}`)
+    })
   }, [empProp, user?.id])
 
-  // Fetch today's schedule
+  // Fetch today's schedule (self-service)
   useEffect(() => {
     if (!employee?.id) return
     const d = new Date()
     const dd = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`
-    api.get(`/hr/work-schedules/?date=${dd}&employee=${employee.id}`)
+    api.get(`/hr/work-schedules/mine/?date=${dd}`)
       .then(res => setSchedule(res.data.results?.[0] || null))
-      .catch(console.error)
+      .catch(err => setMessage(`Couldn't load today's schedule: ${err.response?.data?.detail || err.message}`))
   }, [employee?.id])
 
   // Fetch projects for remote clock-in
@@ -67,14 +77,13 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     }).catch(() => {})
   }, [])
 
-  // Fetch today's attendance
+  // Fetch today's attendance (self-service)
   useEffect(() => {
     if (!employee?.id) return
-    const today = new Date().toISOString().split('T')[0]
-    api.get(`/hr/attendance/?employee=${employee.id}`).then(res => {
-      const rec = (res.data.results || res.data).find(r => r.date === today)
+    api.get('/hr/attendance/mine/').then(res => {
+      const rec = (res.data.results || [])[0]
       if (rec) { setTodayRecord(rec); setClockedIn(!!rec.clock_in && !rec.clock_out) }
-    }).catch(console.error)
+    }).catch(err => setMessage(`Couldn't load today's attendance: ${err.response?.data?.detail || err.message}`))
   }, [employee?.id])
 
   const startCamera = async () => {
@@ -106,10 +115,13 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     ctx.drawImage(video, 0, 0)
 
     const now = new Date()
+    const project = projects.find(p => String(p.id) === String(selectedProject))
+    const siteName = matchedSite || project?.name || gpsCoords?.address || ''
     const lines = [
       now.toLocaleString(),
-      gpsCoords?.address || '',
+      siteName,
       gpsCoords ? `${gpsCoords.lat.toFixed(5)}, ${gpsCoords.lng.toFixed(5)}` : '',
+      !clockedIn ? 'I am healthy ✓' : '',
     ].filter(Boolean)
     const barH = 30 + lines.length * 28
     ctx.fillStyle = 'rgba(0,0,0,0.55)'
@@ -136,19 +148,18 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
         setGpsCoords({ lat: latitude, lng: longitude, accuracy })
         setGpsError('')
 
-        if (schedule) {
-          const toRad = d => d * Math.PI / 180
-          const dLat = toRad(parseFloat(schedule.location_lat) - latitude)
-          const dLng = toRad(parseFloat(schedule.location_lng) - longitude)
-          const a = Math.sin(dLat/2)**2 + Math.cos(toRad(latitude)) * Math.cos(toRad(parseFloat(schedule.location_lat))) * Math.sin(dLng/2)**2
-          const dist = Math.round(2 * Math.asin(Math.sqrt(a)) * 6371000)
-          if (dist <= schedule.radius) {
-            setGeofenceStatus('ok')
-            setGeofenceMsg(`Within ${dist}m of ${schedule.location_name}`)
-          } else {
-            setGeofenceStatus('fail')
-            setGeofenceMsg(`${dist}m away — must be within ${schedule.radius}m`)
-          }
+        const site = schedule
+          ? { name: schedule.location_name, lat: parseFloat(schedule.location_lat), lng: parseFloat(schedule.location_lng), radius: schedule.radius }
+          : OFFICE
+        const dist = distanceMeters(latitude, longitude, site.lat, site.lng)
+        if (dist <= site.radius) {
+          setGeofenceStatus('ok')
+          setGeofenceMsg(`Within ${dist}m of ${site.name}`)
+          setMatchedSite(site.name)
+        } else {
+          setGeofenceStatus('fail')
+          setGeofenceMsg(`${dist}m away — must be within ${site.radius}m of ${site.name}`)
+          setMatchedSite(null)
         }
 
         try {
@@ -175,6 +186,8 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     }
     if (action === 'clock_in' && geofenceStatus === 'fail' && selectedProject)
       formData.append('project_id', selectedProject)
+    if (action === 'clock_in')
+      formData.append('health_declared', healthDeclared)
     try {
       const res = await api.post(`/hr/attendance/${action}/`, formData)
       if (res.data.success) {
@@ -183,12 +196,11 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
           ? `Clock In accepted at ${new Date().toLocaleTimeString()}\nRemember to clock out later!`
           : `Clock Out accepted at ${new Date().toLocaleTimeString()}\nTotal: ${res.data.hours_worked}h\nHave a great day!`
         setMessage(msg)
-        setPhotoBlob(null); setPhotoPreview(null); setGpsCoords(null)
+        setPhotoBlob(null); setPhotoPreview(null); setGpsCoords(null); setHealthDeclared(false)
         setTimeout(() => setMessage(''), 5000)
         // Refresh today's record
-        const today = new Date().toISOString().split('T')[0]
-        api.get(`/hr/attendance/?employee=${employee.id}`).then(r => {
-          const rec = (r.data.results || r.data).find(x => x.date === today)
+        api.get('/hr/attendance/mine/').then(r => {
+          const rec = (r.data.results || [])[0]
           if (rec) setTodayRecord(rec)
         })
       } else {
@@ -212,8 +224,8 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
           <ClipboardList className="w-4 h-4 inline mr-1.5 text-primary-600" /><strong>{schedule.location_name}</strong> &nbsp;·&nbsp; {schedule.shift_start} – {schedule.shift_end}
         </div>
       ) : (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-700">
-          <AlertTriangle className="w-4 h-4 inline mr-1.5" />No schedule assigned for today
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-sm text-amber-700">
+          <AlertTriangle className="w-4 h-4 inline mr-1.5" />No schedule assigned for today — you can still clock in
         </div>
       )}
 
@@ -263,6 +275,16 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
         {gpsError && <p className="text-red-500 text-xs mt-2">{gpsError}</p>}
       </div>
 
+      {/* Health declaration (clock-in only) */}
+      {!clockedIn && (
+        <label className="flex items-center gap-3 bg-primary-50 border-2 border-primary-200 rounded-xl p-4 text-lg font-semibold text-gray-800 cursor-pointer">
+          <input type="checkbox" checked={healthDeclared}
+            onChange={e => setHealthDeclared(e.target.checked)}
+            className="w-7 h-7 shrink-0 accent-primary-600" />
+          <span>I am feeling healthy today.</span>
+        </label>
+      )}
+
       {/* Camera */}
       <div className="bg-black rounded-xl overflow-hidden">
         {photoPreview ? (
@@ -277,9 +299,9 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       {/* Camera controls */}
       <div className="flex gap-2">
         {!cameraActive && !photoPreview && (
-          <button onClick={startCamera}
-            className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">
-            📷 Open Camera
+          <button onClick={startCamera} disabled={!clockedIn ? !healthDeclared : false}
+            className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white font-semibold py-2.5 rounded-xl text-sm transition">
+            📷 {!clockedIn && !healthDeclared ? 'Declare health status above first' : 'Open Camera'}
           </button>
         )}
         {cameraActive && (
@@ -315,7 +337,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       <div className="flex gap-3">
         {!clockedIn ? (
           <button onClick={() => postClockAction('clock_in')}
-            disabled={!photoBlob || loading || !schedule || (geofenceStatus === 'fail' && !selectedProject)}
+            disabled={!photoBlob || loading || !healthDeclared || (geofenceStatus === 'fail' && !selectedProject)}
             className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl text-base transition">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1" />Clocking In…</> : <><Check className="w-4 h-4 inline mr-1" />Clock In</>}
           </button>

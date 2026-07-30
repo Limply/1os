@@ -10,14 +10,14 @@
 | | Dev | Prod |
 |---|---|---|
 | **Code here** | `/home/lucus/1os-dev/` (`dev` branch) | `/opt/1os/` (`main` branch) |
-| **Frontend** | Vite `:6100` → `dev.sim-eng.com` | Nginx → `1os.sim-eng.com` |
-| **Backend** | Django `:6001` (`--noreload`) | Gunicorn `:6000` (`1os.service`, 3 workers) |
-| **DB** | PostgreSQL `1os_db` (shared) | ← same `1os_db` (dev edits live prod data) |
-| **Restart** | `sudo systemctl restart 1os-dev-django.service` | `sudo systemctl restart 1os.service` |
+| **Frontend** | Vite `:5173` (`1os-vite.service`) | Nginx (`1os-prod` site, `:8000` → `1os.astronic.com.sg`) → `/opt/1os/frontend/dist` |
+| **Backend** | Django `:8001` (`--noreload`, `1os-django.service`) | Gunicorn `127.0.0.1:8002` (`gunicorn-1os.service`, 3 workers) |
+| **DB** | PostgreSQL `astronic_dev` | PostgreSQL `astronic` — **separate DB, not shared** |
+| **Restart** | `sudo systemctl restart 1os-django.service` | `sudo systemctl restart gunicorn-1os.service` |
 
-> ⚠️ Dev and prod **share the same `1os_db`** — editing on `dev.sim-eng.com` mutates live data.
-> Dev Django runs `--noreload`; **restart `1os-dev-django.service` after any backend edit** or it serves stale code.
-> Per-server ports/hosts (Vite + `dev.py`/prod `ALLOWED_HOSTS`/CSRF) are now **env-driven via `.env`** (committed, pull-safe).
+> ✅ **Corrected 2026-07-30**: dev and prod use **separate databases** (`astronic_dev` vs `astronic`), not one shared `1os_db` as previously documented here — verified by comparing `DB_NAME` in each checkout's `.env`. Practical effect: a migration applied on one DB does **not** automatically apply to the other. This was caught because `0016_attendance_health_declared` was applied to `astronic_dev` but not to `astronic` — prod's `hr_attendance` table is missing that column, which would break every Attendance-touching endpoint (`clock_in`, `mine`, `team`, ...) the moment prod's Gunicorn is restarted/redeployed while running current `models.py`. **Any prod deploy must run `python manage.py migrate` against the prod DB before restarting `gunicorn-1os.service`.**
+> Dev Django runs `--noreload`; it's systemd-managed (`1os-django.service`), so `kill`ing the process directly still works (systemd auto-restarts it) but `sudo systemctl restart 1os-django.service` is the correct way to reload after a backend edit.
+> Per-server ports/hosts (Vite + `dev.py`/prod `ALLOWED_HOSTS`/CSRF) are env-driven via `.env` (per-checkout, gitignored — not committed/pull-safe, contrary to what this doc used to say).
 
 **Deploy:** `scripts/backup_db.sh` → `git pull` in `/opt/1os` → `pip install` → `migrate` → `npm run build` → `collectstatic` → `sudo systemctl restart 1os.service`.
 Always back up the DB before `migrate`. See `DEVELOPMENT.md` / `BACKUP.md` for full steps.
@@ -132,10 +132,10 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 |---|---|---|
 | Path | `/home/lucus/1os-dev/` | `/opt/1os/` |
 | Branch | `dev` | `main` |
-| Frontend | Vite `:6100` → `dev.sim-eng.com` | Nginx → `1os.sim-eng.com` |
-| Backend | Django `:6001` (`--noreload`) | Gunicorn `:6000` (`1os.service`) |
-| DB | PostgreSQL `1os_db` (shared) | ← same `1os_db` |
-| Admin | `https://dev.sim-eng.com/admin/` | `https://1os.sim-eng.com/admin/` |
+| Frontend | Vite `:5173` (no dedicated domain found — accessed directly by host:5173) | Nginx `1os-prod` site → `1os.astronic.com.sg` (`:8000`, proxied) |
+| Backend | Django `:8001` (`--noreload`) | Gunicorn `127.0.0.1:8002` (`gunicorn-1os.service`) |
+| DB | PostgreSQL `astronic_dev` | PostgreSQL `astronic` — **separate DB** (corrected 2026-07-30; see note above) |
+| Admin | `http://<host>:8001/admin/` (proxied via `:5173/admin`) | `https://1os.astronic.com.sg/admin/` |
 | GitHub | `github.com/Limply/1os` (private) | ← same |
 
 ---
@@ -187,6 +187,45 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 
 ---
 
+## What Was Built (Session 8, 2026-07-24)
+
+> Edited directly on `main`/prod (`/opt/1os`) — frontend rebuilt and `gunicorn-1os.service`
+> restarted after each backend/frontend change.
+
+### Clock-In — schedule now optional
+- Staff can clock in with no `WorkSchedule` row for the day — backend no longer 400s;
+  geofence/late checks are simply skipped when there's no schedule to check against
+  (`AttendanceViewSet.clock_in`, `services/hr/views.py`)
+- Frontend Clock In button no longer disabled by `!schedule`; banner reworded to say
+  clock-in still works (`ClockInWidget.jsx`)
+- New standalone link **`/staff/clock-in`** for sharing directly with workers — same
+  component as `/clock-in`, no sidebar/layout (`App.jsx`)
+
+### Supervisor Clock-In bug — actually fixed
+- `SUPERVISOR_CLOCKIN_BUG.md` (open since 2026-07-16) resolved: added self-service
+  `/hr/employees/me/` (loosened `HRPermission` → `IsAuthenticated`), new
+  `/hr/work-schedules/mine/`, new `/hr/attendance/mine/` — all scoped to the
+  requesting user. `ClockInWidget.jsx` now calls these instead of the
+  `HRPermission`-gated list endpoints, and surfaces fetch errors instead of the
+  previous silent `.catch(() => {})`.
+- This was verified against prod with a real Playwright run, logged in as a real
+  account — GPS, photo, and Clock In/Out all completed end-to-end
+  (`tests/e2e/clockin_test.py`, new — unlike `smoke_test.py` this one actually submits).
+
+### Position-level tiering (new)
+- `Position.level` set for the first time on real positions: Construction Worker=1,
+  Foreman=2, Senior Supervisor=3, Manager=6 (was 3), Advisor=7 (was 6, moved to avoid
+  colliding with Manager's new level 6 — Advisor and Business Development now share
+  tier 7, which they already matched on permissions).
+- `LEVEL_PERMISSIONS` (`shared/permissions.py`) redefined for levels 1/2/3/6/7/10.
+- `SupervisorLayout.jsx` now gates supervisor-app tabs per tier instead of a binary
+  level-1 check: Level 1 → Clock In only; Level 2 → Home/Projects/Clock In;
+  Level 3+ → full nav (Home/Projects/Team/Clock In/Reports).
+- Documented in `DEVELOPMENT.md` next to the Roles table — closes the doc gap
+  `DOC_COMPLIANCE_REVIEW.md` flagged (`position_level` tiering was undocumented).
+
+---
+
 ## What's Next (Priority Order)
 
 ### Frontend
@@ -225,12 +264,14 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 | Issue | Status |
 |---|---|
 | **[FIXED 2026-06-16] Photo upload fails on mobile browser** | nginx default `client_max_body_size` is 1MB; mobile camera photos are 3–8MB. Fix: added `client_max_body_size 20M;` to `/etc/nginx/sites-available/1os-prod` on the server. Desktop worked because gallery picks are smaller. |
-| Dev/prod share one `1os_db` | By design, but dev edits hit live data — be careful on `dev.sim-eng.com` |
+| **[CORRECTED 2026-07-30] Dev/prod DB separation** | Previously documented as sharing one `1os_db` — **not true**. Dev uses `astronic_dev`, prod uses `astronic`, confirmed via each checkout's `.env`. Consequence: migrations don't propagate between them automatically. Discovered because `0016_attendance_health_declared` was applied to dev but not prod — prod's `hr_attendance` table is missing the column, a live landmine for the next prod deploy/restart until `migrate` is run there. |
 | `services/core/` exists but has no purpose | Unused — can be deleted |
 | Django Admin has no models registered | Needs `admin.py` wiring |
 | Compliance module has no assigned dev | Needs owner assignment |
 | Dashboard reads across services — architecture not decided | Pending |
 | No Payroll, Recruitment, or Performance models yet | Not in schema v1, deferred to v0.3+ |
+| **[FIXED 2026-07-24] Supervisor Clock-In broken for Level-1 workers** (found 2026-07-16, role-play QA) | `Employee`/`WorkSchedule` reads needed by the clock-in flow were gated by `HRPermission` instead of the lighter `IsClockInAllowed` used on the actual clock-in/out actions. Fix: self-service `employees/me/`, `work-schedules/mine/`, `attendance/mine/` endpoints under `IsAuthenticated`. See `SUPERVISOR_CLOCKIN_BUG.md`. Also newly relevant: `Position.level` is now actually set on real positions (1/2/3/6/7/10) — this bug was previously dormant since no real position used level 1. |
+| Doc-vs-code compliance review (2026-07-16) found `crm.Client` doesn't exist (contradicts this doc's own data-model note) and the Error Display Rule is violated in 11 frontend files | See `DOC_COMPLIANCE_REVIEW.md` for full findings + priority order |
 
 ---
 
