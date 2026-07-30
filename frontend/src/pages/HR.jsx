@@ -71,7 +71,7 @@ export default function HR() {
     'Attendance',
     'My Profile',
     'Courses',
-    ...(isManager ? ['Manpower', 'Team Attendance', 'Employees', 'Approvals'] : []),
+    ...(isManager ? ['Manpower', 'Team Attendance', 'Employees', 'Locations', 'Approvals'] : []),
   ]
   const [tab, setTab] = useState('My Leave')
 
@@ -101,6 +101,19 @@ export default function HR() {
   // Employee search
   const [empSearch, setEmpSearch] = useState('')
 
+  // Locations (manager)
+  const SITE_TYPES = [
+    ['office', 'Office'], ['branch', 'Branch'], ['client_site', 'Client Site'], ['warehouse', 'Warehouse'],
+  ]
+  const emptySiteForm = { name: '', type: 'office', address: '', postal_code: '', lat: '', lng: '', contact_name: '', contact_phone: '', notes: '' }
+  const [sites, setSites] = useState([])
+  const [sitesLoading, setSitesLoading] = useState(false)
+  const [showSiteForm, setShowSiteForm] = useState(false)
+  const [editingSiteId, setEditingSiteId] = useState(null)
+  const [siteForm, setSiteForm] = useState(emptySiteForm)
+  const [siteSaving, setSiteSaving] = useState(false)
+  const [siteMsg, setSiteMsg] = useState('')
+
   // Team attendance (manager)
   const [teamView, setTeamView] = useState('daily') // 'daily' | 'monthly'
   const [teamDate, setTeamDate] = useState(todayStr())
@@ -120,6 +133,63 @@ export default function HR() {
       .then(res => { teamView === 'daily' ? setTeamDaily(res.data) : setTeamMonthly(res.data) })
       .finally(() => setTeamLoading(false))
   }, [tab, teamView, teamDate, teamMonth, isManager])
+
+  useEffect(() => {
+    if (tab !== 'Locations' || !isManager) return
+    fetchSites()
+  }, [tab, isManager])
+
+  function fetchSites() {
+    setSitesLoading(true)
+    api.get('/org/sites/')
+      .then(res => setSites(Array.isArray(res.data) ? res.data : res.data.results ?? []))
+      .finally(() => setSitesLoading(false))
+  }
+
+  function openNewSite() {
+    setEditingSiteId(null)
+    setSiteForm(emptySiteForm)
+    setSiteMsg('')
+    setShowSiteForm(true)
+  }
+
+  function openEditSite(site) {
+    setEditingSiteId(site.id)
+    setSiteForm({
+      name: site.name ?? '', type: site.type ?? 'office', address: site.address ?? '',
+      postal_code: site.postal_code ?? '', lat: site.lat ?? '', lng: site.lng ?? '',
+      contact_name: site.contact_name ?? '', contact_phone: site.contact_phone ?? '', notes: site.notes ?? '',
+    })
+    setSiteMsg('')
+    setShowSiteForm(true)
+  }
+
+  async function saveSite(e) {
+    e.preventDefault()
+    setSiteSaving(true)
+    setSiteMsg('')
+    try {
+      const payload = { ...siteForm, lat: siteForm.lat || null, lng: siteForm.lng || null }
+      if (editingSiteId) await api.patch(`/org/sites/${editingSiteId}/`, payload)
+      else await api.post('/org/sites/', payload)
+      setShowSiteForm(false)
+      fetchSites()
+    } catch (err) {
+      setSiteMsg(err.response?.data?.detail || 'Could not save location. Check the fields and try again.')
+    } finally {
+      setSiteSaving(false)
+    }
+  }
+
+  async function deleteSite(site) {
+    if (!confirm(`Remove "${site.name}"?`)) return
+    try {
+      await api.delete(`/org/sites/${site.id}/`)
+      fetchSites()
+    } catch {
+      setSiteMsg('Could not remove this location.')
+    }
+  }
 
   function shiftTeamDate(days) {
     const d = new Date(teamDate + 'T00:00:00')
@@ -670,6 +740,118 @@ export default function HR() {
                   }`}>
                     {e.employment_type}
                   </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── LOCATIONS (manager+) ──────────────────── */}
+      {tab === 'Locations' && (
+        <div className="space-y-3">
+          {siteMsg && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-700">{siteMsg}</div>
+          )}
+
+          {!showSiteForm ? (
+            <button onClick={openNewSite}
+              className="w-full bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition">
+              + Add Location
+            </button>
+          ) : (
+            <form onSubmit={saveSite} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <p className="font-semibold text-gray-700 text-sm">{editingSiteId ? 'Edit Location' : 'New Location'}</p>
+              <div>
+                <label className="text-xs text-gray-400">Name</label>
+                <input required value={siteForm.name}
+                  onChange={e => setSiteForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Type</label>
+                <select value={siteForm.type}
+                  onChange={e => setSiteForm(p => ({ ...p, type: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
+                  {SITE_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Address</label>
+                <input value={siteForm.address}
+                  onChange={e => setSiteForm(p => ({ ...p, address: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-gray-400">Postal Code</label>
+                  <input value={siteForm.postal_code}
+                    onChange={e => setSiteForm(p => ({ ...p, postal_code: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400">GPS Latitude</label>
+                  <input type="number" step="any" value={siteForm.lat}
+                    onChange={e => setSiteForm(p => ({ ...p, lat: e.target.value }))}
+                    placeholder="1.3772153"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400">GPS Longitude</label>
+                  <input type="number" step="any" value={siteForm.lng}
+                    onChange={e => setSiteForm(p => ({ ...p, lng: e.target.value }))}
+                    placeholder="103.8707002"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-400">Contact Name</label>
+                  <input value={siteForm.contact_name}
+                    onChange={e => setSiteForm(p => ({ ...p, contact_name: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400">Contact Phone</label>
+                  <input value={siteForm.contact_phone}
+                    onChange={e => setSiteForm(p => ({ ...p, contact_phone: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+                </div>
+              </div>
+              <textarea placeholder="Notes (optional)" value={siteForm.notes}
+                onChange={e => setSiteForm(p => ({ ...p, notes: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500 resize-none" rows={2} />
+              <div className="flex gap-2">
+                <button type="submit" disabled={siteSaving}
+                  className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
+                  {siteSaving ? 'Saving…' : 'Save'}
+                </button>
+                <button type="button" onClick={() => setShowSiteForm(false)}
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+              </div>
+            </form>
+          )}
+
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {sitesLoading ? (
+              <p className="text-sm text-gray-400 p-4 text-center">Loading…</p>
+            ) : sites.length === 0 ? (
+              <p className="text-sm text-gray-400 p-4 text-center">No locations yet</p>
+            ) : sites.map(s => (
+              <div key={s.id} className="px-4 py-3 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{s.name}</p>
+                  <p className="text-xs text-gray-400">{s.address || '—'}</p>
+                  <p className="text-xs text-gray-400">
+                    {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(7)}, ${parseFloat(s.lng).toFixed(7)}` : 'No GPS set'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
+                    {s.type?.replace('_', ' ')}
+                  </span>
+                  <button onClick={() => openEditSite(s)} className="text-xs text-primary-600 hover:underline">Edit</button>
+                  <button onClick={() => deleteSite(s)} className="text-xs text-red-500 hover:underline">Remove</button>
                 </div>
               </div>
             ))}
