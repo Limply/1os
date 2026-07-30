@@ -105,7 +105,7 @@ export default function HR() {
   const SITE_TYPES = [
     ['office', 'Office'], ['branch', 'Branch'], ['client_site', 'Client Site'], ['warehouse', 'Warehouse'],
   ]
-  const emptySiteForm = { name: '', type: 'office', address: '', postal_code: '', lat: '', lng: '', contact_name: '', contact_phone: '', notes: '', project: '' }
+  const emptySiteForm = { name: '', type: 'office', address: '', postal_code: '', lat: '', lng: '', radius: 200, contact_name: '', contact_phone: '', notes: '', project: '' }
   const [sites, setSites] = useState([])
   const [sitesLoading, setSitesLoading] = useState(false)
   const [showSiteForm, setShowSiteForm] = useState(false)
@@ -160,7 +160,7 @@ export default function HR() {
     setEditingSiteId(site.id)
     setSiteForm({
       name: site.name ?? '', type: site.type ?? 'office', address: site.address ?? '',
-      postal_code: site.postal_code ?? '', lat: site.lat ?? '', lng: site.lng ?? '',
+      postal_code: site.postal_code ?? '', lat: site.lat ?? '', lng: site.lng ?? '', radius: site.radius ?? 200,
       contact_name: site.contact_name ?? '', contact_phone: site.contact_phone ?? '', notes: site.notes ?? '',
       project: site.project ?? '',
     })
@@ -855,6 +855,12 @@ export default function HR() {
                     placeholder="103.8707002"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Geofence Radius (metres) — used for clock-in site matching</label>
+                <input type="number" min="10" step="10" value={siteForm.radius}
+                  onChange={e => setSiteForm(p => ({ ...p, radius: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>

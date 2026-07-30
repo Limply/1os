@@ -3,14 +3,22 @@ import { ClipboardList, AlertTriangle, Loader2, Check, X } from 'lucide-react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 
-const OFFICE = { name: 'Astronic Office', lat: 1.3772153, lng: 103.8707002, radius: 300 }
-
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const toRad = d => d * Math.PI / 180
   const dLat = toRad(lat2 - lat1)
   const dLng = toRad(lng2 - lng1)
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2
   return Math.round(2 * Math.asin(Math.sqrt(a)) * 6371000)
+}
+
+function nearestSite(sites, lat, lng) {
+  let best = null, bestDist = Infinity
+  for (const s of sites) {
+    if (s.lat == null || s.lng == null) continue
+    const d = distanceMeters(lat, lng, parseFloat(s.lat), parseFloat(s.lng))
+    if (d < bestDist) { bestDist = d; best = { name: s.name, lat: parseFloat(s.lat), lng: parseFloat(s.lng), radius: s.radius || 200 } }
+  }
+  return best
 }
 
 export default function ClockInWidget({ employee: empProp = null, compact = false }) {
@@ -33,6 +41,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState('')
   const [matchedSite, setMatchedSite] = useState(null)
+  const [officeSites, setOfficeSites] = useState([])
 
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
@@ -75,6 +84,11 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     api.get('/projects/projects/?limit=999').then(res => {
       setProjects(res.data.results || res.data)
     }).catch(() => {})
+  }, [])
+
+  // Fetch office sites for the schedule-less geofence fallback (self-service — no HR module access needed)
+  useEffect(() => {
+    api.get('/org/sites/office/').then(res => setOfficeSites(res.data)).catch(() => {})
   }, [])
 
   // Fetch today's attendance (self-service)
@@ -150,16 +164,22 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
 
         const site = schedule
           ? { name: schedule.location_name, lat: parseFloat(schedule.location_lat), lng: parseFloat(schedule.location_lng), radius: schedule.radius }
-          : OFFICE
-        const dist = distanceMeters(latitude, longitude, site.lat, site.lng)
-        if (dist <= site.radius) {
-          setGeofenceStatus('ok')
-          setGeofenceMsg(`Within ${dist}m of ${site.name}`)
-          setMatchedSite(site.name)
-        } else {
-          setGeofenceStatus('fail')
-          setGeofenceMsg(`${dist}m away — must be within ${site.radius}m of ${site.name}`)
+          : nearestSite(officeSites, latitude, longitude)
+        if (!site) {
+          // No schedule and no office sites configured — nothing to check against, so don't block clock-in.
+          setGeofenceStatus(null)
           setMatchedSite(null)
+        } else {
+          const dist = distanceMeters(latitude, longitude, site.lat, site.lng)
+          if (dist <= site.radius) {
+            setGeofenceStatus('ok')
+            setGeofenceMsg(`Within ${dist}m of ${site.name}`)
+            setMatchedSite(site.name)
+          } else {
+            setGeofenceStatus('fail')
+            setGeofenceMsg(`${dist}m away — must be within ${site.radius}m of ${site.name}`)
+            setMatchedSite(null)
+          }
         }
 
         try {

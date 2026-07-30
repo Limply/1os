@@ -44,6 +44,14 @@ class SiteViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     queryset = Site.objects.all()
     serializer_class = SiteSerializer
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def office(self, request):
+        """Self-service — active office-type sites, for the clock-in geofence check.
+        No HR/org module permission required: every authenticated user (including
+        Level-1 supervisor-app-only accounts) needs this to clock in."""
+        qs = Site.objects.filter(is_active=True, type='office')
+        return Response(SiteSerializer(qs, many=True).data)
+
     @action(detail=False, methods=['post'])
     def import_from_projects(self, request):
         """Create/refresh a Location for every project that has site info,
