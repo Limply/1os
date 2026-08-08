@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { Fragment, useEffect, useState, useRef } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import { can, P } from '../utils/permissions'
@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx'
 import TaskPhotoModal from '../components/TaskPhotoModal'
 import TaskDocumentModal from '../components/TaskDocumentModal'
 import ProjectFiles from '../components/ProjectFiles'
+import TaskGantt from '../components/TaskGantt'
 import { Circle, Clock, Eye, CheckCircle2, AlertCircle } from 'lucide-react'
 
 const STATUS_CONFIG = {
@@ -18,29 +19,45 @@ const STATUS_CONFIG = {
   issue:       { Icon: AlertCircle,  color: '#a855f7', label: 'Issue' },
 }
 
+// Menu is positioned `fixed` so it escapes the sheet's overflow-auto clipping.
 function StatusDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
   const ref = useRef(null)
   const current = STATUS_CONFIG[value] || STATUS_CONFIG.todo
 
   useEffect(() => {
     if (!open) return
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const close = () => setOpen(false)
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      window.removeEventListener('scroll', close, true)
+    }
   }, [open])
+
+  function toggle() {
+    if (!open && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 2, left: r.left })
+    }
+    setOpen(o => !o)
+  }
 
   return (
     <div ref={ref} className="relative shrink-0">
-      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 transition" title={current.label}>
-        <current.Icon size={15} color={current.color} strokeWidth={2.2} />
+      <button onClick={toggle} className="flex items-center justify-center w-5 h-5 rounded hover:bg-gray-200 transition mx-auto" title={current.label}>
+        <current.Icon size={13} color={current.color} strokeWidth={2.4} />
       </button>
-      {open && (
-        <div className="absolute left-0 top-7 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+      {open && pos && (
+        <div style={{ position: 'fixed', top: pos.top, left: pos.left }}
+          className="z-50 bg-white border border-gray-300 shadow-lg py-0.5 min-w-[124px]">
           {Object.entries(STATUS_CONFIG).map(([val, { Icon, color, label }]) => (
             <button key={val} onClick={() => { onChange(val); setOpen(false) }}
-              className={`flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-gray-50 transition ${val === value ? 'font-semibold' : 'text-gray-700'}`}>
-              <Icon size={14} color={color} strokeWidth={2.2} />
+              className={`flex items-center gap-1.5 w-full px-2 py-1 text-xs hover:bg-gray-50 transition ${val === value ? 'font-semibold' : 'text-gray-700'}`}>
+              <Icon size={12} color={color} strokeWidth={2.4} />
               <span style={{ color: val === value ? color : undefined }}>{label}</span>
             </button>
           ))}
@@ -74,6 +91,70 @@ const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', review: 'Revi
 const STATUS_ROW_BG = { done: 'bg-green-50', in_progress: 'bg-orange-50', issue: 'bg-purple-50' }
 const PRIORITY_COLORS = { low: 'text-gray-400', medium: 'text-primary-500', high: 'text-orange-500', urgent: 'text-red-500' }
 
+// --- Spreadsheet grid styling -------------------------------------------------
+// Table uses border-separate so the sticky header keeps its borders; each cell
+// draws only its right + bottom edge, which collapses visually into one grid.
+const COL_ORDER   = ['sn', 'st', 'task', 'who', 'start', 'end', 'wt', 'pri', 'act']
+const COL_DEFAULT = { sn: 44, st: 28, task: 420, who: 110, start: 92, end: 92, wt: 32, pri: 62, act: 100 }
+// Date cells hold native date inputs, which stop being usable much below ~78px.
+const COL_MIN     = { sn: 32, st: 24, task: 120, who: 56, start: 78, end: 78, wt: 26, pri: 44, act: 96 }
+const COL_W_KEY   = 'farm.projectDetail.colWidths'
+const VIEW_KEY    = 'farm.projectDetail.view'
+
+const HEAD      = 'px-1.5 py-1 bg-gray-100 border-b border-r border-gray-300 text-[11px] font-semibold text-gray-500 uppercase tracking-wide text-left relative'
+const HEAD_LAST = 'px-1.5 py-1 bg-gray-100 border-b border-gray-300 text-[11px] font-semibold text-gray-500 uppercase tracking-wide text-left relative'
+const CELL = 'px-1.5 py-0.5 border-b border-r border-gray-200 truncate'
+const LAST = 'px-1.5 py-0.5 border-b border-gray-200'
+const INPUT = 'w-full bg-white border border-primary-400 px-1 py-0 text-[11px] leading-[16px] focus:outline-none focus:border-primary-600'
+
+function loadColWidths() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COL_W_KEY) || 'null')
+    if (saved && typeof saved === 'object') return { ...COL_DEFAULT, ...saved }
+  } catch { /* corrupt or unavailable — fall back to defaults */ }
+  return COL_DEFAULT
+}
+
+// Drag handle on a header's right edge. Double-click resets that column.
+function ColResizer({ colKey, widths, setWidths }) {
+  function onMouseDown(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = widths[colKey]
+    const min = COL_MIN[colKey] ?? 40
+    const onMove = ev => setWidths(w => ({ ...w, [colKey]: Math.max(min, startW + ev.clientX - startX) }))
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      onDoubleClick={() => setWidths(w => ({ ...w, [colKey]: COL_DEFAULT[colKey] }))}
+      title="Drag to resize · double-click to reset"
+      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary-400 transition-colors"
+    />
+  )
+}
+
+function Th({ colKey, widths, setWidths, last = false, className = '', children }) {
+  return (
+    <th className={`${last ? HEAD_LAST : HEAD} ${className}`}>
+      {children}
+      <ColResizer colKey={colKey} widths={widths} setWidths={setWidths} />
+    </th>
+  )
+}
+
 
 
 export default function ProjectDetail({ projectId, onBack }) {
@@ -91,7 +172,6 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [addingTaskTo, setAddingTaskTo] = useState(null)
   const [photoModalTask, setPhotoModalTask] = useState(null)
   const [docModalTask, setDocModalTask] = useState(null)
-  const [attachMenuTask, setAttachMenuTask] = useState(null)
   const [editingTask, setEditingTask] = useState(null) // taskId
   const [editValues, setEditValues] = useState({}) // { title, assigned_to }
   const [openComments, setOpenComments] = useState(new Set()) // task IDs with comments panel open
@@ -104,11 +184,36 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [showEditProject, setShowEditProject] = useState(false)
   const [editProject, setEditProject] = useState({})
   const [savingProject, setSavingProject] = useState(false)
+  const [widths, setWidths] = useState(loadColWidths)
+  const [view, setView] = useState(() => localStorage.getItem(VIEW_KEY) || 'sheet')
+
+  useEffect(() => { localStorage.setItem(VIEW_KEY, view) }, [view])
+
   useEffect(() => {
     fetchProject()
     fetchUsers()
     fetchTemplates()
   }, [projectId])
+
+  useEffect(() => {
+    try { localStorage.setItem(COL_W_KEY, JSON.stringify(widths)) } catch { /* private mode / quota */ }
+  }, [widths])
+
+  // Esc backs out of whatever is currently open, innermost first. Discards the
+  // edit without saving — same as the Cancel button.
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key !== 'Escape') return
+      if (showTemplatePicker)       { setShowTemplatePicker(false); return }
+      if (showEditProject)          { if (!savingProject) setShowEditProject(false); return }
+      if (editingTask !== null)     { cancelEditing(); return }
+      if (addingTaskTo !== null)    { setAddingTaskTo(null); return }
+      if (addingGroup)              { setAddingGroup(false); return }
+      if (openComments.size > 0)    { setOpenComments(new Set()) }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showTemplatePicker, showEditProject, savingProject, editingTask, addingTaskTo, addingGroup, openComments])
 
   async function fetchProject() {
     const res = await api.get(`/projects/projects/${projectId}/`)
@@ -203,7 +308,7 @@ export default function ProjectDetail({ projectId, onBack }) {
   }
 
   async function handleAddTask(e, group) {
-    e.preventDefault()
+    e?.preventDefault()
     const t = newTask[group]
     if (!t?.title?.trim()) return
     await api.post('/projects/tasks/', {
@@ -212,7 +317,12 @@ export default function ProjectDetail({ projectId, onBack }) {
       title: t.title,
       assigned_to: t.assigned_to || null,
       priority: t.priority || 'medium',
-      due_date: t.due_date || null,
+      start_date: t.start_date || null,
+      end_date: t.end_date || null,
+      // due_date mirrors end_date on purpose — Calendar, the dashboard's
+      // overdue/due-this-week widgets and due-soon notifications all key off
+      // due_date. Don't drop it or tasks vanish from those views.
+      due_date: t.end_date || null,
       status: 'todo',
     })
     setNewTask({ ...newTask, [group]: {} })
@@ -258,6 +368,7 @@ export default function ProjectDetail({ projectId, onBack }) {
       assigned_to: editValues.assigned_to || null,
       start_date: editValues.start_date || null,
       end_date: editValues.end_date || null,
+      due_date: editValues.end_date || null,   // keep in step — see handleAddTask
       weightage: Math.min(10, Math.max(1, parseInt(editValues.weightage) || 1)),
     })
     setEditingTask(null)
@@ -387,306 +498,417 @@ export default function ProjectDetail({ projectId, onBack }) {
     XLSX.writeFile(wb, `${project.name.replace(/\s+/g, '_')}_tasks.xlsx`)
   }
 
+  const sheetWidth   = COL_ORDER.reduce((sum, k) => sum + widths[k], 0)
+  const widthsCustom = COL_ORDER.some(k => widths[k] !== COL_DEFAULT[k])
+
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-wrap items-start gap-2 mb-3">
-        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm pt-1">← Back</button>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-xs">← Back</button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-800 truncate">{project.name}</h1>
-          <p className="text-sm text-gray-500">
-            {project.client_name && <span className="mr-2">{project.client_name} ·</span>}
+          <h1 className="text-base font-bold text-gray-800 truncate leading-tight">{project.name}</h1>
+          <p className="text-[11px] text-gray-500 leading-tight truncate">
+            {project.client_name && <span className="mr-1">{project.client_name} ·</span>}
             <span>{project.status.replace('_', ' ')}</span>
-            <span className="ml-2 font-semibold text-primary-600">{project.progress}% complete</span>
-            {project.supervisor_name && <span className="ml-2">· Foreman: {project.supervisor_name}</span>}
+            <span className="ml-1.5 font-semibold text-primary-600">{project.progress}% complete</span>
+            {project.supervisor_name && <span className="ml-1.5">· Foreman: {project.supervisor_name}</span>}
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* View switch */}
+          <div className="flex mr-1">
+            {[['sheet', '≡ Sheet'], ['gantt', '▤ Gantt']].map(([k, label]) => (
+              <button key={k} onClick={() => setView(k)}
+                className={`text-xs px-2 py-1 border -ml-px first:ml-0 transition ${view === k
+                  ? 'bg-primary-600 border-primary-600 text-white font-semibold'
+                  : 'bg-white border-gray-300 text-gray-500 hover:text-gray-700'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {view === 'sheet' && widthsCustom && (
+            <button onClick={() => setWidths(COL_DEFAULT)}
+              className="text-[11px] text-gray-400 hover:text-gray-600 border border-gray-200 px-1.5 py-1 rounded transition"
+              title="Reset all column widths">
+              ⇔ Reset cols
+            </button>
+          )}
           {isManager && (
             <button onClick={openEditProject}
-              className="text-sm bg-gray-700 hover:bg-gray-900 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+              className="text-xs bg-gray-700 hover:bg-gray-900 text-white font-semibold px-2 py-1 rounded transition">
               ✎ Edit
             </button>
           )}
           <button onClick={exportExcel}
-            className="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+            className="text-xs bg-green-600 hover:bg-green-700 text-white font-semibold px-2 py-1 rounded transition">
             ↓ Excel
           </button>
           <button onClick={exportPDF}
-            className="text-sm bg-red-600 hover:bg-red-700 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+            className="text-xs bg-red-600 hover:bg-red-700 text-white font-semibold px-2 py-1 rounded transition">
             ↓ PDF
           </button>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-        <div className="bg-primary-500 h-2 rounded-full transition-all" style={{ width: `${project.progress}%` }} />
+      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+        <div className="bg-primary-500 h-1.5 rounded-full transition-all" style={{ width: `${project.progress}%` }} />
       </div>
 
-      {/* Task Groups */}
-      <div className="space-y-3">
-        {project.task_groups.map((grp, gi) => (
-          <div key={grp.group} className="bg-white rounded-xl border border-gray-200">
-            {/* Group header */}
-            <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-gray-400 w-5">{gi + 1}</span>
-                <span className="font-semibold text-gray-700">{grp.group || 'General'}</span>
-                <span className="text-xs text-gray-400">{grp.done_count}/{grp.task_count} done</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                  <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${grp.completion}%` }} />
-                </div>
-                <span className="text-xs text-gray-400">{grp.completion}%</span>
-              </div>
-            </div>
-
-            {/* Tasks */}
-            <div className="divide-y divide-gray-100">
-              {grp.tasks.map((task, ti) => (
-                <div key={task.id} id={`task-${task.id}`} className={`px-3 py-1 transition ${STATUS_ROW_BG[task.status] || 'hover:bg-gray-50'}`}>
-
-                  {/* Row 1: SN + status + title + action icons */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-300 w-6 shrink-0 text-right">{gi + 1}.{ti + 1}</span>
-                    <StatusDropdown value={task.status} onChange={val => handleStatusChange(task.id, val)} />
-
-                    {editingTask === task.id ? (
-                      <input
-                        autoFocus
-                        value={editValues.title}
-                        onChange={e => setEditValues(p => ({ ...p, title: e.target.value }))}
-                        className="flex-1 text-sm border-b border-primary-400 focus:outline-none bg-transparent"
-                        onKeyDown={e => { if (e.key === 'Enter') saveEditing(); if (e.key === 'Escape') cancelEditing() }}
-                      />
-                    ) : (
-                      <span
-                        onClick={() => startEditing(task)}
-                        className={`flex-1 text-sm cursor-pointer truncate ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700 hover:text-primary-600'}`}
-                      >
-                        {task.title}
-                      </span>
-                    )}
-
-                    {/* Icons always on the right */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <a href={buildWhatsAppLink(project, task)} target="_blank" rel="noopener noreferrer"
-                        className="text-gray-300 hover:text-green-500 transition"
-                        title={`Send WhatsApp reminder${task.assigned_to_name ? ' to ' + task.assigned_to_name : ''}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.564 4.14 1.547 5.874L0 24l6.302-1.519A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 0 1-5.001-1.374l-.36-.214-3.733.9.942-3.64-.235-.374A9.787 9.787 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
-                        </svg>
-                      </a>
-                      <div className="relative">
-                        <button onClick={() => setAttachMenuTask(attachMenuTask === task.id ? null : task.id)}
-                          className="relative text-gray-300 hover:text-primary-500 transition"
-                          title="Photos & Files">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                          </svg>
-                          {(task.photo_count > 0 || task.doc_count > 0) && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />}
-                        </button>
-                        {attachMenuTask === task.id && (
-                          <div className="absolute right-0 top-6 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[130px]">
-                            <button onClick={() => { setPhotoModalTask(task); setAttachMenuTask(null) }}
-                              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                              </svg>
-                              Photos {task.photo_count > 0 ? `(${task.photo_count})` : ''}
-                            </button>
-                            <button onClick={() => { setDocModalTask(task); setAttachMenuTask(null) }}
-                              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                              </svg>
-                              Files {task.doc_count > 0 ? `(${task.doc_count})` : ''}
-                            </button>
+      {view === 'sheet' ? (
+        <>
+        {/* Task sheet — every group shares one grid */}
+        {/* w-fit + max-w-full: the bordered box hugs the table, so resizing stays
+            pixel-exact and no blank gutter opens up inside the border. */}
+        <div className="bg-white border border-gray-300 overflow-auto w-fit max-w-full" style={{ maxHeight: 'calc(100vh - 190px)' }}>
+          <table className="border-separate border-spacing-0 text-xs" style={{ tableLayout: 'fixed', width: sheetWidth }}>
+            <colgroup>
+              {COL_ORDER.map(k => <col key={k} style={{ width: widths[k] }} />)}
+            </colgroup>
+            <thead className="sticky top-0 z-20">
+              <tr>
+                <Th colKey="sn"    widths={widths} setWidths={setWidths} className="text-right">#</Th>
+                <Th colKey="st"    widths={widths} setWidths={setWidths} />
+                <Th colKey="task"  widths={widths} setWidths={setWidths}>Task</Th>
+                <Th colKey="who"   widths={widths} setWidths={setWidths}>Assigned</Th>
+                <Th colKey="start" widths={widths} setWidths={setWidths}>Start</Th>
+                <Th colKey="end"   widths={widths} setWidths={setWidths}>End</Th>
+                <Th colKey="wt"    widths={widths} setWidths={setWidths} className="text-center">Wt</Th>
+                <Th colKey="pri"   widths={widths} setWidths={setWidths}>Priority</Th>
+                <Th colKey="act"   widths={widths} setWidths={setWidths} last />
+              </tr>
+            </thead>
+            <tbody>
+              {project.task_groups.map((grp, gi) => (
+                <Fragment key={grp.group}>
+                  {/* Group band */}
+                  <tr>
+                    <td colSpan={9} className="px-1.5 py-1 bg-gray-50 border-b border-t border-gray-300">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-gray-400 w-5 text-right shrink-0">{gi + 1}</span>
+                        <span className="font-semibold text-gray-700 text-xs truncate">{grp.group || 'General'}</span>
+                        <span className="text-[11px] text-gray-400 shrink-0">{grp.done_count}/{grp.task_count} done</span>
+                        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                          <div className="w-16 bg-gray-200 rounded-full h-1">
+                            <div className="bg-green-500 h-1 rounded-full" style={{ width: `${grp.completion}%` }} />
                           </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => toggleComments(task.id)}
-                        className="relative text-gray-300 hover:text-primary-500 transition"
-                        title={task.comment_count > 0 ? `${task.comment_count} comment(s)` : 'Comments'}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        {task.comment_count > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-400 rounded-full" />}
-                      </button>
-                      {isManager && editingTask !== task.id && (
-                        <button onClick={() => handleDeleteTask(task.id, task.title)}
-                          className="text-gray-300 hover:text-red-500 transition text-sm" title="Delete task">✕</button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 2: meta info (or edit fields when editing) */}
-                  {editingTask === task.id ? (
-                    <div className="flex flex-wrap items-center gap-2 pl-8 mt-1">
-                      <select value={editValues.assigned_to}
-                        onChange={e => setEditValues(p => ({ ...p, assigned_to: e.target.value }))}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none">
-                        <option value="">Unassigned</option>
-                        {users.map(u => <option key={u.id} value={u.id}>{u.first_name || u.email}</option>)}
-                      </select>
-                      <input type="date" value={editValues.start_date}
-                        onChange={e => setEditValues(p => ({ ...p, start_date: e.target.value }))}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none" title="Start date" />
-                      <input type="date" value={editValues.end_date}
-                        onChange={e => setEditValues(p => ({ ...p, end_date: e.target.value }))}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none" title="End date" />
-                      <input type="number" min="1" max="10" value={editValues.weightage}
-                        onChange={e => setEditValues(p => ({ ...p, weightage: e.target.value }))}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 focus:outline-none w-14 text-center" title="Weightage (1–10)" />
-                      <button onClick={saveEditing} className="text-xs text-white bg-primary-600 px-2 py-0.5 rounded-lg hover:bg-primary-700">Save</button>
-                      <button onClick={cancelEditing} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-8 mt-0.5">
-                      <span onClick={() => startEditing(task)}
-                        className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full cursor-pointer hover:bg-primary-100 hover:text-primary-600">
-                        {task.assigned_to_name ? task.assigned_to_name.split(' ')[0] : 'Unassigned'}
-                      </span>
-                      {(task.start_date || task.end_date) && (
-                        <span className="text-xs text-gray-400">{task.start_date || '…'} → {task.end_date || '…'}</span>
-                      )}
-                      <span className="text-xs text-gray-400" title="Weightage">×{task.weightage ?? 1}</span>
-                      <span className={`text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
-                    </div>
-                  )}
-
-                  {/* Comments panel */}
-                  {openComments.has(task.id) && (
-                    <div className="pl-8 pr-2 pb-3 mt-2 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Comments</span>
-                        <button onClick={() => toggleComments(task.id)} className="text-xs text-gray-400 hover:text-gray-600 transition">✕ Close</button>
-                      </div>
-                      {(comments[task.id] || []).length === 0 && (
-                        <p className="text-xs text-gray-400">No comments yet.</p>
-                      )}
-                      {(comments[task.id] || []).map(c => (
-                        <div key={c.id} className="flex items-start gap-2">
-                          <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0">
-                            {c.author_initials}
-                          </span>
-                          <div className="flex-1 bg-gray-50 rounded-lg px-3 py-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-gray-700">{c.author_name}</span>
-                              <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                            </div>
-                            <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{c.body}</p>
-                          </div>
-                          {(c.author === user?.id || isManager) && (
-                            <button onClick={() => deleteComment(task.id, c.id)}
-                              className="text-gray-300 hover:text-red-400 text-xs mt-1 shrink-0">✕</button>
-                          )}
+                          <span className="text-[11px] text-gray-400 w-8 text-right">{grp.completion}%</span>
                         </div>
-                      ))}
-                      <form onSubmit={e => submitComment(e, task.id)} className="flex gap-2 mt-1">
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Task rows */}
+                  {grp.tasks.map((task, ti) => {
+                    const editing = editingTask === task.id
+                    const rowBg = editing ? 'bg-primary-50' : (STATUS_ROW_BG[task.status] || 'hover:bg-gray-50')
+                    return (
+                      <Fragment key={task.id}>
+                        <tr id={`task-${task.id}`} className={`transition ${rowBg}`}
+                          onKeyDown={editing ? (e => { if (e.key === 'Enter') saveEditing() }) : undefined}>
+                          <td className={`${CELL} text-right font-mono text-[11px] text-gray-400`}>{gi + 1}.{ti + 1}</td>
+                          <td className={`${CELL} overflow-visible`}>
+                            <StatusDropdown value={task.status} onChange={val => handleStatusChange(task.id, val)} />
+                          </td>
+
+                          {/* Task title */}
+                          <td className={CELL}>
+                            {editing ? (
+                              <input
+                                autoFocus
+                                value={editValues.title}
+                                onChange={e => setEditValues(p => ({ ...p, title: e.target.value }))}
+                                className={INPUT}
+                              />
+                            ) : (
+                              <span
+                                onClick={() => startEditing(task)}
+                                className={`cursor-pointer ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700 hover:text-primary-600'}`}
+                              >
+                                {task.title}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Assigned */}
+                          <td className={CELL}>
+                            {editing ? (
+                              <select value={editValues.assigned_to}
+                                onChange={e => setEditValues(p => ({ ...p, assigned_to: e.target.value }))}
+                                className={INPUT}>
+                                <option value="">Unassigned</option>
+                                {users.map(u => <option key={u.id} value={u.id}>{u.first_name || u.email}</option>)}
+                              </select>
+                            ) : (
+                              <span onClick={() => startEditing(task)}
+                                className={`cursor-pointer hover:text-primary-600 ${task.assigned_to_name ? 'text-gray-600' : 'text-gray-300'}`}>
+                                {task.assigned_to_name ? task.assigned_to_name.split(' ')[0] : 'Unassigned'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Start */}
+                          <td className={CELL}>
+                            {editing ? (
+                              <input type="date" value={editValues.start_date}
+                                onChange={e => setEditValues(p => ({ ...p, start_date: e.target.value }))}
+                                className={INPUT} />
+                            ) : (
+                              <span onClick={() => startEditing(task)} className="cursor-pointer text-gray-500 text-[11px]">
+                                {task.start_date || '—'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* End */}
+                          <td className={CELL}>
+                            {editing ? (
+                              <input type="date" value={editValues.end_date}
+                                onChange={e => setEditValues(p => ({ ...p, end_date: e.target.value }))}
+                                className={INPUT} />
+                            ) : (
+                              <span onClick={() => startEditing(task)} className="cursor-pointer text-gray-500 text-[11px]">
+                                {task.end_date || '—'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Weightage */}
+                          <td className={`${CELL} text-center`}>
+                            {editing ? (
+                              <input type="number" min="1" max="10" value={editValues.weightage}
+                                onChange={e => setEditValues(p => ({ ...p, weightage: e.target.value }))}
+                                className={`${INPUT} text-center`} title="Weightage (1–10)" />
+                            ) : (
+                              <span onClick={() => startEditing(task)} className="cursor-pointer text-gray-500 text-[11px]">
+                                {task.weightage ?? 1}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Priority */}
+                          <td className={`${CELL} font-medium ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</td>
+
+                          {/* Actions */}
+                          <td className={LAST}>
+                            {editing ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button onClick={saveEditing} title="Save (Enter)"
+                                  className="text-[11px] leading-none text-white bg-primary-600 hover:bg-primary-700 px-1.5 py-1 rounded">✓</button>
+                                <button onClick={cancelEditing} title="Cancel (Esc)"
+                                  className="text-[11px] leading-none text-gray-500 border border-gray-300 hover:bg-gray-100 px-1.5 py-1 rounded">✕</button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <a href={buildWhatsAppLink(project, task)} target="_blank" rel="noopener noreferrer"
+                                  className="text-gray-300 hover:text-green-500 transition"
+                                  title={`Send WhatsApp reminder${task.assigned_to_name ? ' to ' + task.assigned_to_name : ''}`}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.564 4.14 1.547 5.874L0 24l6.302-1.519A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 0 1-5.001-1.374l-.36-.214-3.733.9.942-3.64-.235-.374A9.787 9.787 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                                  </svg>
+                                </a>
+                                <button onClick={() => setPhotoModalTask(task)}
+                                  className="relative text-gray-300 hover:text-primary-500 transition"
+                                  title={`Photos${task.photo_count > 0 ? ` (${task.photo_count})` : ''}`}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                  </svg>
+                                  {task.photo_count > 0 && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full" />}
+                                </button>
+                                <button onClick={() => setDocModalTask(task)}
+                                  className="relative text-gray-300 hover:text-primary-500 transition"
+                                  title={`Files${task.doc_count > 0 ? ` (${task.doc_count})` : ''}`}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                  </svg>
+                                  {task.doc_count > 0 && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full" />}
+                                </button>
+                                <button onClick={() => toggleComments(task.id)}
+                                  className="relative text-gray-300 hover:text-primary-500 transition"
+                                  title={task.comment_count > 0 ? `${task.comment_count} comment(s)` : 'Comments'}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                  </svg>
+                                  {task.comment_count > 0 && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-blue-400 rounded-full" />}
+                                </button>
+                                {isManager && (
+                                  <button onClick={() => handleDeleteTask(task.id, task.title)}
+                                    className="text-gray-300 hover:text-red-500 transition text-[11px] leading-none" title="Delete task">✕</button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+
+                        {/* Comments panel */}
+                        {openComments.has(task.id) && (
+                          <tr>
+                            <td colSpan={9} className="px-2 py-1.5 bg-gray-50 border-b border-gray-200">
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Comments</span>
+                                  <button onClick={() => toggleComments(task.id)} className="text-[11px] text-gray-400 hover:text-gray-600 transition">✕ Close</button>
+                                </div>
+                                {(comments[task.id] || []).length === 0 && (
+                                  <p className="text-[11px] text-gray-400">No comments yet.</p>
+                                )}
+                                {(comments[task.id] || []).map(c => (
+                                  <div key={c.id} className="flex items-start gap-1.5">
+                                    <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                      {c.author_initials}
+                                    </span>
+                                    <div className="flex-1 bg-white border border-gray-200 px-2 py-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] font-semibold text-gray-700">{c.author_name}</span>
+                                        <span className="text-[11px] text-gray-400">{new Date(c.created_at).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                      </div>
+                                      <p className="text-xs text-gray-700 whitespace-pre-wrap">{c.body}</p>
+                                    </div>
+                                    {(c.author === user?.id || isManager) && (
+                                      <button onClick={() => deleteComment(task.id, c.id)}
+                                        className="text-gray-300 hover:text-red-400 text-[11px] shrink-0">✕</button>
+                                    )}
+                                  </div>
+                                ))}
+                                <form onSubmit={e => submitComment(e, task.id)} className="flex gap-1.5">
+                                  <input
+                                    value={commentDraft[task.id] || ''}
+                                    onChange={e => setCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))}
+                                    placeholder="Add a comment…"
+                                    className="flex-1 text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:border-primary-400"
+                                  />
+                                  <button type="submit"
+                                    disabled={commentSaving === task.id || !(commentDraft[task.id] || '').trim()}
+                                    className="text-[11px] bg-primary-600 text-white px-2 py-1 hover:bg-primary-700 disabled:opacity-40 transition">
+                                    {commentSaving === task.id ? '…' : 'Post'}
+                                  </button>
+                                </form>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+
+                  {/* Add task — an inline row, typed into the same columns */}
+                  {addingTaskTo === grp.group ? (
+                    <tr className="bg-primary-50"
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddTask(e, grp.group) }}>
+                      <td className={CELL} />
+                      <td className={CELL} />
+                      <td className={CELL}>
                         <input
-                          value={commentDraft[task.id] || ''}
-                          onChange={e => setCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))}
-                          placeholder="Add a comment…"
-                          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary-400"
+                          autoFocus
+                          placeholder="Task title"
+                          value={newTask[grp.group]?.title || ''}
+                          onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], title: e.target.value } })}
+                          className={INPUT}
                         />
-                        <button type="submit"
-                          disabled={commentSaving === task.id || !(commentDraft[task.id] || '').trim()}
-                          className="text-xs bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 disabled:opacity-40 transition">
-                          {commentSaving === task.id ? '…' : 'Post'}
+                      </td>
+                      <td className={CELL}>
+                        <select
+                          value={newTask[grp.group]?.assigned_to || ''}
+                          onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], assigned_to: e.target.value } })}
+                          className={INPUT}
+                        >
+                          <option value="">Unassigned</option>
+                          {users.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
+                        </select>
+                      </td>
+                      <td className={CELL}>
+                        <input type="date"
+                          value={newTask[grp.group]?.start_date || ''}
+                          onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], start_date: e.target.value } })}
+                          className={INPUT} />
+                      </td>
+                      <td className={CELL}>
+                        <input type="date"
+                          value={newTask[grp.group]?.end_date || ''}
+                          onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], end_date: e.target.value } })}
+                          className={INPUT} />
+                      </td>
+                      <td className={CELL} />
+                      <td className={CELL}>
+                        <select
+                          value={newTask[grp.group]?.priority || 'medium'}
+                          onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], priority: e.target.value } })}
+                          className={INPUT}
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                          <option value="urgent">Urgent</option>
+                        </select>
+                      </td>
+                      <td className={LAST}>
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={e => handleAddTask(e, grp.group)}
+                            className="text-[11px] leading-none text-white bg-primary-600 hover:bg-primary-700 px-1.5 py-1 rounded">Add</button>
+                          <button onClick={() => setAddingTaskTo(null)} title="Cancel (Esc)"
+                            className="text-[11px] leading-none text-gray-500 border border-gray-300 hover:bg-gray-100 px-1.5 py-1 rounded">✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <td colSpan={9} className="px-1.5 py-0.5 border-b border-gray-200">
+                        <button onClick={() => setAddingTaskTo(grp.group)}
+                          className="text-[11px] text-gray-400 hover:text-primary-600 transition">
+                          + Add task
                         </button>
-                      </form>
-                    </div>
+                      </td>
+                    </tr>
                   )}
-                </div>
+                </Fragment>
               ))}
-            </div>
 
-            {/* Add task */}
-            {addingTaskTo === grp.group ? (
-              <form onSubmit={e => handleAddTask(e, grp.group)} className="px-4 py-2 border-t border-gray-100 bg-gray-50 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    autoFocus required
-                    placeholder="Task title"
-                    value={newTask[grp.group]?.title || ''}
-                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], title: e.target.value } })}
-                    className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <select
-                    value={newTask[grp.group]?.priority || 'medium'}
-                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], priority: e.target.value } })}
-                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    value={newTask[grp.group]?.assigned_to || ''}
-                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], assigned_to: e.target.value } })}
-                    className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
-                  >
-                    <option value="">Unassigned</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
-                  </select>
-                  <input
-                    type="date"
-                    value={newTask[grp.group]?.due_date || ''}
-                    onChange={e => setNewTask({ ...newTask, [grp.group]: { ...newTask[grp.group], due_date: e.target.value } })}
-                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
-                  />
-                  <button type="submit" className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-primary-700">Add</button>
-                  <button type="button" onClick={() => setAddingTaskTo(null)} className="text-gray-400 text-sm px-2">Cancel</button>
-                </div>
-              </form>
-            ) : (
-              <button
-                onClick={() => setAddingTaskTo(grp.group)}
-                className="w-full text-left px-4 py-1.5 text-sm text-gray-400 hover:text-primary-600 hover:bg-gray-50 transition border-t border-gray-100"
-              >
-                + Add task
-              </button>
-            )}
-          </div>
-        ))}
+              {project.task_groups.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-2 py-4 text-center text-xs text-gray-400 border-b border-gray-200">
+                    No task groups yet — add one below.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        </>
+      ) : (
+        <TaskGantt project={project} editable={isManager} onChange={fetchProject} />
+      )}
 
-        {/* Add group */}
+      {/* Add group */}
+      <div className="mt-2">
         {addingGroup ? (
-          <form onSubmit={handleAddGroup} className="flex gap-2">
+          <form onSubmit={handleAddGroup} className="flex gap-1.5">
             <input
               autoFocus
               required
               placeholder="Group name, e.g. Phase 1 - Survey"
               value={newGroupName}
               onChange={e => setNewGroupName(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="flex-1 border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-primary-500"
             />
-            <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700">
+            <button type="submit" className="bg-primary-600 text-white px-3 py-1 text-xs font-medium hover:bg-primary-700">
               Add Group
             </button>
-            <button type="button" onClick={() => setAddingGroup(false)} className="text-gray-400 text-sm px-2">Cancel</button>
+            <button type="button" onClick={() => setAddingGroup(false)} className="text-gray-400 text-xs px-2">Cancel</button>
           </form>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <button
               onClick={() => setAddingGroup(true)}
-              className="flex-1 border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-primary-400 hover:text-primary-500 transition"
+              className="flex-1 border border-dashed border-gray-300 py-1.5 text-xs text-gray-400 hover:border-primary-400 hover:text-primary-500 transition"
             >
               + Add Group
             </button>
             {isManager && templates.length > 0 && (
               <button
                 onClick={() => setShowTemplatePicker(true)}
-                className="border-2 border-dashed border-purple-300 rounded-xl py-3 px-5 text-sm text-purple-400 hover:border-purple-500 hover:text-purple-600 transition whitespace-nowrap"
+                className="border border-dashed border-purple-300 py-1.5 px-4 text-xs text-purple-400 hover:border-purple-500 hover:text-purple-600 transition whitespace-nowrap"
               >
                 Use Template
               </button>
