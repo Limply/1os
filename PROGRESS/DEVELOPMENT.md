@@ -120,6 +120,19 @@ Permission system lives in `shared/permissions.py` (backend) and `frontend/src/u
 | `staff` | Dashboard, HR (view), Files |
 | `viewer` | Read-only across most modules |
 
+**Position-level tiering (2026-07-24)** — a second, independent access axis layered on top of `role`. Each `Position` carries an optional numeric `level`; if set and present in `LEVEL_PERMISSIONS` (`shared/permissions.py`), it **overrides** that position's own `permissions` JSONField (`User.resolved_permissions` in `services/auth/models.py`). Positions without a matching level fall back to their own `permissions` JSON. `role='admin'`/`'superadmin'` always short-circuits — level never applies to them.
+
+| Level | Position | Effective access |
+|---|---|---|
+| 1 | Construction Worker | `supervisor.app` only — supervisor mobile app restricted to Clock In tab |
+| 2 | Foreman | `supervisor.app`, `projects.view` — supervisor app: Home, Projects, Clock In |
+| 3 | Senior Supervisor | `dashboard.view`, `supervisor.app`, `projects.view`, `hr.view`, `files.view` — full supervisor app (adds Team, Reports) |
+| 6 | Manager | Full desktop app: projects edit, HR manage/approve-leave, operations, finance view, CRM edit, compliance, files, settings |
+| 7 | Advisor, Business Development | `dashboard.view`, `hr.view` |
+| 10 | Director | Everything except `admin.tenant` |
+
+Supervisor-app tab visibility itself is enforced client-side in `SupervisorLayout.jsx` (`TABS_BY_LEVEL`), keyed off `user.position_level` from the JWT — independent of the `LEVEL_PERMISSIONS` dict above, so both places need updating together if tiers change.
+
 **Backend — `shared/permissions.py`**
 - `P` class: 21 permission constants (`dashboard.view`, `projects.edit`, `hr.approve_leave`, `supervisor.app`, etc.)
 - `ROLE_DEFAULT_PERMISSIONS`: maps each role to its default permission list
@@ -410,6 +423,9 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 - [ ] Tests — minimum 1 happy + 1 error per endpoint
 - [ ] Standardise responses — `{success, data, message, errors}`
 - [x] Delete `services/core/` — empty, unused
+- [x] Fix Supervisor Clock-In for Level-1 accounts (2026-07-24) — added self-service `/hr/employees/me/` (loosened to `IsAuthenticated`), `/hr/work-schedules/mine/`, `/hr/attendance/mine/`; `ClockInWidget.jsx` now calls these instead of the `HRPermission`-gated list endpoints (`SUPERVISOR_CLOCKIN_BUG.md` — resolved)
+- [ ] Resolve `crm.Client` vs `organisation.Client` — build a real `crm.Client` model or remove the cross-service import and correct the docs (`DOC_COMPLIANCE_REVIEW.md`)
+- [ ] Sweep 20 silent `.catch(() => {})` sites + 5 `alert()` sites to the documented Error Display Rule pattern (`DOC_COMPLIANCE_REVIEW.md`)
 
 ### Frontend
 - [x] React + Vite scaffold, JWT auth flow, token refresh, logout
@@ -458,6 +474,9 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 | 3 | `SessionAuthentication` must NOT be in `DEFAULT_AUTHENTICATION_CLASSES` — if a Django admin session cookie exists in the browser, DRF enforces CSRF on all POST/PATCH/DELETE, causing 403. JWT-only auth in both dev and prod. Fixed June 2026. | 🔴 Do not re-add |
 | 4 | 6 real Astronic foremen still have `role=staff` in DB (yeasinsamir, mdmanikmollah3, rs7212128, arjundasarjundas802, sakibsheikh89111, sheikhrahat061750). 1 senior supervisor (liton.ast@gmail.com) also still `staff`. Needs manual role update. | 🟡 Update via Django admin |
 | 5 | Frontend permission guards (sidebar, route blocks) rely on `user.modules` JSONField. Modules list and new RBAC `P` permissions are independent — no sync yet. Long-term: derive sidebar visibility from `can()` calls directly, remove `modules` JSONField. | 🟢 Low — KIV |
+| 6 | **[FIXED 2026-07-24]** Supervisor Clock-In broken for Level-1 worker accounts — `Employee`/`WorkSchedule` GETs needed by `ClockInWidget` were gated by `HRPermission`, not the lighter `IsClockInAllowed` used on the clock-in/out actions themselves, so the button never enabled. See `SUPERVISOR_CLOCKIN_BUG.md` for the fix. | ✅ Resolved |
+| 7 | `crm.Client` doesn't exist — `crm/views.py`/`serializers.py` import `organisation.Client` directly (Decoupling Rule violation), contradicting this doc's own note that org.Client ≠ crm.Client. See `DOC_COMPLIANCE_REVIEW.md`. | 🟡 Decide: build crm.Client for real, or fix the docs |
+| 8 | Error Display Rule not followed in 11 frontend files (20 silent `.catch(() => {})` sites, incl. `ClockInWidget.jsx` — directly hid issue #6, now fixed there) + `alert()` used in 3 files. See `DOC_COMPLIANCE_REVIEW.md`. | 🟡 Mechanical fix, existing pattern; `ClockInWidget.jsx` done |
 
 ---
 

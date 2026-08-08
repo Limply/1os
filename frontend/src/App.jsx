@@ -53,6 +53,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/clock-in" element={<ClockIn />} />
+        <Route path="/staff/clock-in" element={<ClockIn />} />
         <Route path="/camera-test" element={<CameraTest />} />
         <Route path="/supervisor" element={<SupervisorLayout />}>
           <Route index element={<SupervisorHome />} />

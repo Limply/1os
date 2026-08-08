@@ -166,11 +166,53 @@ export default function SupervisorDailyReport() {
     })
   }
 
-  function handlePhoto(e) {
+  function stampTimestamp(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+
+        const text = new Date().toLocaleString('en-SG', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        })
+        const fontSize = Math.max(16, Math.round(canvas.width * 0.028))
+        ctx.font = `600 ${fontSize}px sans-serif`
+        const padX = fontSize * 0.6
+        const padY = fontSize * 0.5
+        const boxW = ctx.measureText(text).width + padX * 2
+        const boxH = fontSize + padY * 2
+        const x = canvas.width - boxW - fontSize * 0.6
+        const y = canvas.height - boxH - fontSize * 0.6
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+        ctx.fillRect(x, y, boxW, boxH)
+        ctx.fillStyle = '#FFFFFF'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(text, x + padX, y + boxH / 2)
+
+        URL.revokeObjectURL(url)
+        canvas.toBlob((blob) => {
+          if (!blob) return reject(new Error('Could not stamp photo'))
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }))
+        }, 'image/jpeg', 0.9)
+      }
+      img.onerror = reject
+      img.src = url
+    })
+  }
+
+  async function handlePhoto(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
+    const stamped = await stampTimestamp(file)
+    setPhotoFile(stamped)
+    setPhotoPreview(URL.createObjectURL(stamped))
   }
 
   async function handleSubmit() {
