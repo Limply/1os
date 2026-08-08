@@ -1,7 +1,7 @@
 # 1OS — Project Progress Log
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
-**Last Updated:** 2026-07-30
+**Last Updated:** 2026-08-08
 
 ---
 
@@ -314,6 +314,75 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 
 ---
 
+## What Was Built (Session 10, 2026-08-08)
+
+> Project **detail** page reworked into a spreadsheet-style grid plus a Gantt view.
+> Built and proven on **1Farm** first, then ported to 1OS — `ProjectDetail.jsx` had
+> never diverged between the two, so the port was a straight file copy, not a merge.
+> Both apps now carry near-identical `ProjectDetail.jsx` / `TaskGantt.jsx` (1OS keeps
+> `const foremen = users` from Session 9); keep them in step so future ports stay easy.
+
+### Project Detail — sheet view
+- Task list rebuilt from stacked per-group cards into **one spreadsheet grid** for the
+  whole project: columns `# / status / Task / Assigned / Start / End / Wt / Priority / actions`,
+  group names as full-width band rows so columns line up across every group
+- **~22px rows** (`text-xs`/`text-[11px]`, `px-1.5 py-0.5`), full grid lines, square
+  corners, sticky header, horizontal scroll under 880px. Tasks went from 2 lines to 1
+- **In-cell editing** — clicking a task/assignee/date/weight turns that column's cell
+  into an input in place. Enter saves from any cell in the row, Esc cancels
+- **Add-task is a row**, typed into the same columns, not a separate form below the group
+- **Esc backs out of anything open**, innermost first: template picker → edit-project
+  modal (suppressed mid-save) → row edit → add-task row → add-group form → comment panels
+- **Drag-resizable columns**; double-click a handle resets one column, `⇔ Reset cols`
+  (appears only once widths are customised) resets all. Widths persist in `localStorage`
+
+### Project Detail — Gantt view
+- `≡ Sheet` / `▤ Gantt` toggle in the page header; choice persists per browser
+- New `frontend/src/components/TaskGantt.jsx` — frozen 250px task pane, scrolling
+  timeline, two-tier header (month band over day/week columns), weekend shading,
+  today line, per-group rollup bars, status-coloured bars with legend
+- **Day / Week / Month** zoom + `Today` button; auto-centres on today on open
+- **Schedule from the chart** (managers only, `PROJECTS_EDIT`): drag the `⠿` handle
+  next to an unscheduled task onto the timeline, or drag across its empty track to draw
+  the span; drag a bar to move it, its edges to resize; `✕` clears dates; **Esc aborts
+  an in-flight drag**. Failures show as inline red text, never swallowed
+- Built this way because **no task in either DB had any dates** — a read-only Gantt
+  would have rendered empty. Scheduling is the first thing you do in it
+
+### ⚠️ `due_date` stays in sync with `end_date`
+The sheet's add-task row originally wrote only `due_date`; it now writes
+`start_date` + `end_date` so the Gantt has something to draw. **`due_date` is still
+written, mirroring `end_date`**, at every write site (`handleAddTask`, `saveEditing`,
+Gantt drag + clear). Do not "clean this up" — `due_date` is what drives:
+
+| Consumer | Query |
+|---|---|
+| `Calendar.jsx` | `t.due_date` → event date; no `due_date` ⇒ task falls into "unscheduled" |
+| `services/dashboard/views.py` | `due_date__lt=today`, `due_date__lte=today+7` (overdue / due this week) |
+| `services/notifications/views.py` | `due_date__in=[today, soon]` (due-soon alerts) |
+
+Frontend-only session — no models, no migrations, no `collectstatic`. On the **SE
+server** nginx serves `frontend/dist` directly for both 1OS and 1Farm, so shipping
+this change alone is `npm run build` with **no** service restart.
+
+> **On the SE server, prod was found 7 commits behind `origin/main`** during this
+> session (`/opt/1os` at `dbccf23`, main at `565c260`) — all of Sessions 8–9
+> (clock-in, health declaration, Team Attendance, Locations) is committed but **not
+> deployed there**, and it carries `hr` + `organisation` migrations. Bringing that
+> checkout up to date is therefore *not* a plain `npm run build`: back up the DB →
+> `git pull` → `pip install` → `migrate` → build → `collectstatic` → restart.
+> **Not done in this session** — only the two files above were placed on `/opt/1os`
+> and rebuilt.
+
+> **Note on this doc's Quick Reference (top of file):** the table and the 2026-07-30
+> correction describe the **Astronic server** (`:5173`/`:8001`/`:8002`,
+> `1os.astronic.com.sg`, `astronic_dev` vs `astronic`). The **SE server** is a
+> different deployment: `dev.sim-eng.com` → Vite `:6100` → Django `:6001`, prod
+> `1os.service` on `:6000`, nginx site `1os`. Ports/DB names are per-checkout `.env`.
+> Check which machine you're on before following the Quick Reference.
+
+---
+
 ## What's Next (Priority Order)
 
 ### Frontend
@@ -353,6 +422,9 @@ Set up a clean Django monolith at `/opt/1os/` following the architecture defined
 |---|---|
 | **[FIXED 2026-06-16] Photo upload fails on mobile browser** | nginx default `client_max_body_size` is 1MB; mobile camera photos are 3–8MB. Fix: added `client_max_body_size 20M;` to `/etc/nginx/sites-available/1os-prod` on the server. Desktop worked because gallery picks are smaller. |
 | **[CORRECTED 2026-07-30] Dev/prod DB separation** | Previously documented as sharing one `1os_db` — **not true**. Dev uses `astronic_dev`, prod uses `astronic`, confirmed via each checkout's `.env`. Consequence: migrations don't propagate between them automatically. Discovered because `0016_attendance_health_declared` was applied to dev but not prod — prod's `hr_attendance` table is missing the column, a live landmine for the next prod deploy/restart until `migrate` is run there. |
+| Project detail `localStorage` keys are named `farm.*` | Cosmetic. `farm.projectDetail.colWidths` / `.view` / `farm.gantt.unit` originated in 1Farm. No collision — `sim-eng.com` and `farm.sim-eng.com` have separate `localStorage`. Left as-is to keep the file in step with 1Farm for future ports |
+| **SE server prod is behind `origin/main`** | `/opt/1os` (SE server) was at `dbccf23` on 2026-08-08 while main was at `565c260` (Sessions 8–9 undeployed there, incl. `hr`/`organisation` migrations). Needs the full backup→pull→pip→migrate→build→collectstatic→restart run |
+| Quick Reference at top of this doc is Astronic-server-specific | Ports/domains/DBs there (`:5173`/`:8001`/`:8002`, `1os.astronic.com.sg`) do not match the SE server (`:6100`/`:6001`/`:6000`, `sim-eng.com`). Per-checkout `.env` decides. Doc should be split per server |
 | `services/core/` exists but has no purpose | Unused — can be deleted |
 | Django Admin has no models registered | Needs `admin.py` wiring |
 | Compliance module has no assigned dev | Needs owner assignment |
