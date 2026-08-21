@@ -22,11 +22,12 @@ class FileBrowserStorage(Storage):
     subfolder: folder within the 1os-api user's FileBrowser root (e.g. 'database', 'attendance').
     """
 
-    def __init__(self, subfolder='database'):
+    def __init__(self, subfolder='database', randomize_filename=True):
         self.base_url = config('FILEBROWSER_URL', 'http://localhost:8088').rstrip('/')
         self.username = config('FILEBROWSER_USER', '1os-api')
         self.password = config('FILEBROWSER_PASS', '')
         self.subfolder = subfolder
+        self.randomize_filename = randomize_filename
 
     def _login(self):
         global _cached_token, _cached_token_expiry
@@ -46,8 +47,11 @@ class FileBrowserStorage(Storage):
         return {'X-Auth': _cached_token}
 
     def _save(self, name, content):
-        ext = os.path.splitext(name)[1].lower()
-        filename = f"{uuid.uuid4().hex}{ext}"
+        if self.randomize_filename:
+            ext = os.path.splitext(name)[1].lower()
+            filename = f"{uuid.uuid4().hex}{ext}"
+        else:
+            filename = os.path.basename(name)
 
         def do_upload(headers):
             content.seek(0)

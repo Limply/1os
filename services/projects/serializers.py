@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from collections import defaultdict
-from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto, WSHPhotoAttachment
 
 
 class TaskPhotoSerializer(serializers.ModelSerializer):
@@ -186,6 +186,16 @@ class ProjectSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'project_no', 'progress', 'created_at', 'updated_at']
 
+    def validate(self, attrs):
+        if self.instance is None:
+            lat = attrs.get('site_lat')
+            lng = attrs.get('site_lng')
+            if lat is None or lng is None:
+                raise serializers.ValidationError(
+                    'Site Location (GPS coordinates) is required so field staff can clock in/out at this site.'
+                )
+        return attrs
+
     def get_quoted_amount(self, obj):
         from django.db.models import Sum
         from services.finance.models import Quotation
@@ -311,19 +321,32 @@ class DailyReportSerializer(serializers.ModelSerializer):
         return obj.project.project_no if obj.project else None
 
 
+class WSHPhotoAttachmentSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WSHPhotoAttachment
+        fields = ['id', 'wsh_photo', 'photo', 'photo_url', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def get_photo_url(self, obj):
+        return obj.photo.url if obj.photo else None
+
+
 class WSHPhotoSerializer(serializers.ModelSerializer):
     photo_url          = serializers.SerializerMethodField()
     submitted_by_name  = serializers.SerializerMethodField()
     project_name       = serializers.SerializerMethodField()
     project_no         = serializers.SerializerMethodField()
     observation_type_display = serializers.SerializerMethodField()
+    attachments        = WSHPhotoAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model  = WSHPhoto
         fields = [
             'id', 'project', 'project_name', 'project_no',
             'submitted_by', 'submitted_by_name',
-            'date', 'photo', 'photo_url', 'area',
+            'date', 'photo', 'photo_url', 'attachments', 'area',
             'observation_type', 'observation_type_display',
             'description', 'action_taken', 'created_at',
         ]

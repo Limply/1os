@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProjectViewSet, TaskViewSet, TaskPhotoViewSet, TaskDocumentViewSet, TaskCommentViewSet, ProjectCommentViewSet, DailyReportViewSet, WSHPhotoViewSet, task_templates
+from .views import ProjectViewSet, TaskViewSet, TaskPhotoViewSet, TaskDocumentViewSet, TaskCommentViewSet, ProjectCommentViewSet, DailyReportViewSet, WSHPhotoViewSet, WSHPhotoAttachmentViewSet, task_templates
 
 router = DefaultRouter()
 router.register('projects', ProjectViewSet, basename='project')
@@ -11,6 +11,7 @@ router.register('task-comments', TaskCommentViewSet, basename='task-comment')
 router.register('project-comments', ProjectCommentViewSet, basename='project-comment')
 router.register('daily-reports', DailyReportViewSet, basename='daily-report')
 router.register('wsh-photos',    WSHPhotoViewSet,    basename='wsh-photo')
+router.register('wsh-photo-attachments', WSHPhotoAttachmentViewSet, basename='wsh-photo-attachment')
 
 urlpatterns = [
     path('', include(router.urls)),

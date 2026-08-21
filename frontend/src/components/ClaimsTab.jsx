@@ -27,8 +27,25 @@ const blankItem = () => ({
   description: '',
   amount: '',
   project_no: '',
+  remark: '',
   files: [],
 })
+
+async function downloadClaimDocs(id) {
+  for (const kind of ['excel', 'pdf']) {
+    try {
+      const res = await api.get(`/hr/claims/${id}/${kind}/`, { responseType: 'blob' })
+      const href = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = href
+      a.download = `Claim_${id}.${kind === 'excel' ? 'xlsx' : 'pdf'}`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(href)
+    } catch {
+      // best-effort — submission itself already succeeded
+    }
+  }
+}
 
 export default function ClaimsTab() {
   const [claims, setClaims]       = useState([])
@@ -100,6 +117,7 @@ export default function ClaimsTab() {
           description: it.description.trim(),
           amount: it.amount,
           project_no: it.project_no || null,
+          remark: it.remark || null,
         })
         const item = itemRes.data
         for (const f of it.files) {
@@ -111,6 +129,7 @@ export default function ClaimsTab() {
       }
       if (submit) {
         await api.post(`/hr/claims/${claim.id}/submit/`)
+        downloadClaimDocs(claim.id)
       }
       resetForm()
       loadClaims()
@@ -126,8 +145,10 @@ export default function ClaimsTab() {
 
   function submitExisting(id) {
     setError('')
-    api.post(`/hr/claims/${id}/submit/`).then(() => loadClaims())
-      .catch(err => alert(err.response?.data?.detail || 'Failed to submit'))
+    api.post(`/hr/claims/${id}/submit/`).then(() => {
+      loadClaims()
+      downloadClaimDocs(id)
+    }).catch(err => alert(err.response?.data?.detail || 'Failed to submit'))
   }
 
   function deleteClaim(id) {
@@ -234,6 +255,9 @@ export default function ClaimsTab() {
                 <input type="text" placeholder="Description"
                   value={it.description} onChange={e => updateItem(i, { description: e.target.value })}
                   className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700" />
+                <input type="text" placeholder="Remark (optional)"
+                  value={it.remark} onChange={e => updateItem(i, { remark: e.target.value })}
+                  className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500" />
                 {/* Receipt attachments — one or more per item */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <label className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-800 cursor-pointer">
@@ -344,6 +368,7 @@ function ClaimDetail({ claim }) {
             <p className="text-gray-400">
               {it.expense_date} · {it.category}{it.project_no ? ` · ${it.project_no}` : ''}
             </p>
+            {it.remark && <p className="text-gray-400 italic">{it.remark}</p>}
             {Array.isArray(it.attachments) && it.attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-1">
                 {it.attachments.map(a => (

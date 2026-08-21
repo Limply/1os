@@ -62,10 +62,21 @@ function WSHDetail({ record, onClose }) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 32px' }}>
-          {/* Photo */}
-          {record.photo_url && (
-            <img src={record.photo_url} alt="wsh" style={{ width: '100%', borderRadius: 12, marginBottom: 14, objectFit: 'cover', maxHeight: 260 }} />
-          )}
+          {/* Photos */}
+          {(() => {
+            const photos = [record.photo_url, ...(record.attachments || []).map(a => a.photo_url)].filter(Boolean)
+            if (!photos.length) return null
+            return (
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 14 }}>
+                {photos.map((src, i) => (
+                  <img key={i} src={src} alt="wsh" style={{
+                    width: photos.length === 1 ? '100%' : 200, height: 260, borderRadius: 12,
+                    objectFit: 'cover', flexShrink: 0,
+                  }} />
+                ))}
+              </div>
+            )
+          })()}
 
           {/* Type badge */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -199,7 +210,15 @@ export default function SupervisorReports() {
                 }}>
                 {/* Thumbnail */}
                 {r.photo_url ? (
-                  <img src={r.photo_url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', flexShrink: 0 }} />
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <img src={r.photo_url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', display: 'block' }} />
+                    {r.attachments?.length > 0 && (
+                      <span style={{
+                        position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.65)',
+                        color: '#fff', fontSize: 9, fontWeight: 800, borderRadius: 6, padding: '1px 5px',
+                      }}>+{r.attachments.length}</span>
+                    )}
+                  </div>
                 ) : (
                   <div style={{ width: 72, height: 72, background: C.panel, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.border} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

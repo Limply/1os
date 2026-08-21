@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import { can, P } from '../utils/permissions'
+import CoordinatesInput from '../components/CoordinatesInput'
 
 const todayStr = () => {
   const d = new Date()
@@ -203,17 +204,6 @@ export default function Schedules() {
     setError('')
     setProjectPick('')
     setShowModal(true)
-  }
-
-  const useCurrentLocation = (setter) => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(pos => {
-      setter(f => ({
-        ...f,
-        location_lat: pos.coords.latitude.toFixed(7),
-        location_lng: pos.coords.longitude.toFixed(7),
-      }))
-    })
   }
 
   const handleSave = async () => {
@@ -629,21 +619,12 @@ export default function Schedules() {
                       onChange={e => setForm(f => ({ ...f, location_name: e.target.value }))}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-gray-500 uppercase">GPS Coordinates *</label>
-                      <button onClick={() => useCurrentLocation(setForm)}
-                        className="text-xs text-primary-600 hover:underline">📍 Use Current Location</button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input type="number" step="0.0000001" placeholder="Latitude" value={form.location_lat}
-                        onChange={e => setForm(f => ({ ...f, location_lat: e.target.value }))}
-                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
-                      <input type="number" step="0.0000001" placeholder="Longitude" value={form.location_lng}
-                        onChange={e => setForm(f => ({ ...f, location_lng: e.target.value }))}
-                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
-                    </div>
-                  </div>
+                  <CoordinatesInput
+                    label="GPS Coordinates *"
+                    lat={form.location_lat}
+                    lng={form.location_lng}
+                    onChange={({ lat, lng }) => setForm(f => ({ ...f, location_lat: lat, location_lng: lng }))}
+                  />
                   <div>
                     <label className="text-xs font-semibold text-gray-500 uppercase">Allowed Radius (meters)</label>
                     <input type="number" value={form.radius}
@@ -783,21 +764,12 @@ export default function Schedules() {
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400" />
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-gray-500 uppercase">GPS Coordinates *</label>
-                      <button onClick={() => useCurrentLocation(setDepForm)}
-                        className="text-xs text-primary-600 hover:underline">📍 Use Current</button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input type="number" step="0.0000001" placeholder="Latitude" value={depForm.location_lat}
-                        onChange={e => setDepForm(f => ({ ...f, location_lat: e.target.value }))}
-                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
-                      <input type="number" step="0.0000001" placeholder="Longitude" value={depForm.location_lng}
-                        onChange={e => setDepForm(f => ({ ...f, location_lng: e.target.value }))}
-                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400" />
-                    </div>
-                  </div>
+                  <CoordinatesInput
+                    label="GPS Coordinates *"
+                    lat={depForm.location_lat}
+                    lng={depForm.location_lng}
+                    onChange={({ lat, lng }) => setDepForm(f => ({ ...f, location_lat: lat, location_lng: lng }))}
+                  />
 
                   <div>
                     <label className="text-xs font-semibold text-gray-500 uppercase">Allowed Radius (meters)</label>

@@ -1,17 +1,24 @@
 import calendar
 import csv
 import io
+import re
 import openpyxl
 from django.utils import timezone
 from django.http import HttpResponse
-from datetime import datetime, time as time_type
+from datetime import datetime, time as time_type, timedelta
 from django.db.models import Q
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from shared.permissions import make_module_permission, user_can, P, LEVEL_PERMISSIONS
+from shared.permissions import make_module_permission, user_can, P
+
+MC_REPORT_RECIPIENTS = [
+    'alain@astronic.com.sg',
+    'admin@astronic.com.sg',
+    'lucus@astronic.com.sg',
+]
 
 HRPermission = make_module_permission(P.HR_VIEW, P.HR_MANAGE)
 # Claims are self-service: any employee with HR access manages their own claims
@@ -74,7 +81,7 @@ class EmployeeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         balances = LeaveBalance.objects.filter(employee=emp).select_related('leave_type')
         applications = LeaveApplication.objects.filter(employee=emp).select_related('leave_type').order_by('-created_at')[:5]
 
-        today = timezone.now().date()
+        today = get_business_date()
         attendance = Attendance.objects.filter(employee=emp, date=today).first()
 
         return Response({
@@ -116,6 +123,83 @@ class LeaveApplicationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             qs = qs.filter(status=status)
         return qs.order_by('-created_at')
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def report_mc(self, request):
+        """Self-service — staff reports an MC for today directly from the Clock In page."""
+        try:
+            employee = request.user.employee_profile
+        except Exception:
+            employee = None
+        if not employee:
+            return Response({'detail': 'No employee profile linked to this account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        photo = request.FILES.get('photo')
+        if not photo:
+            return Response({'detail': 'A photo is required to report MC.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        today = timezone.now().date()
+        already_reported = LeaveApplication.objects.filter(
+            employee=employee, leave_type__name='MC',
+            start_date__lte=today, end_date__gte=today,
+            status__in=['pending', 'approved'],
+        ).exists()
+        if already_reported:
+            return Response({'detail': 'MC already reported for today.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        mc_type, _ = LeaveType.objects.get_or_create(
+            name='MC', defaults={'days_per_year': 14, 'paid': True}
+        )
+
+        gps_lat = request.data.get('gps_lat')
+        gps_lng = request.data.get('gps_lng')
+        address = request.data.get('address')
+
+        leave = LeaveApplication(
+            employee=employee,
+            leave_type=mc_type,
+            start_date=today,
+            end_date=today,
+            days=1,
+            reason=request.data.get('reason', '') or 'Reported via Clock In page',
+            status='pending',
+        )
+        if gps_lat and gps_lng:
+            leave.gps = {'lat': float(gps_lat), 'lng': float(gps_lng)}
+        if address:
+            leave.address = address
+
+        ext = _os.path.splitext(photo.name)[1] or '.jpg'
+        photo.name = _attendance_photo_filename(timezone.now(), employee, address or 'MC', ext)
+        leave.photo = photo
+        leave.save()
+
+        # Reflect immediately on today's roster (Team Attendance reads Attendance, not LeaveApplication).
+        Attendance.objects.update_or_create(
+            employee=employee, date=today,
+            defaults={'status': 'leave', 'notes': 'MC reported via Clock In page'},
+        )
+
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            if getattr(settings, 'EMAIL_HOST', ''):
+                send_mail(
+                    subject=f'MC Reported — {employee.full_name}',
+                    message=(
+                        f"{employee.full_name} ({employee.emp_no}) has reported an MC for today, "
+                        f"{today.strftime('%d %b %Y')}.\n\n"
+                        f"This application is pending approval in 1OS (HR > Leave Applications).\n\n"
+                        f"-- Submitted via 1OS Clock In page"
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=MC_REPORT_RECIPIENTS,
+                    fail_silently=False,
+                )
+        except Exception:
+            pass
+
+        return Response(LeaveApplicationSerializer(leave).data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         if not user_can(request.user, P.HR_APPROVE_LEAVE):
@@ -141,15 +225,44 @@ class LeaveApplicationViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         return Response(LeaveApplicationSerializer(leave).data)
 
 
+def _filename_part(value):
+    """Sanitize a string for use as a segment in a dot-delimited filename."""
+    value = re.sub(r'\s+', '_', str(value).strip())
+    return re.sub(r'[^A-Za-z0-9_-]', '', value) or 'Unknown'
+
+
+def _attendance_photo_filename(dt, employee, site, ext):
+    """date.time.person.site — e.g. 30-07-2026.143205.Rahat_Sheikh.Site_A.jpg"""
+    local_dt = timezone.localtime(dt)
+    date_part = local_dt.strftime('%d-%m-%Y')
+    time_part = local_dt.strftime('%H%M%S')
+    person_part = _filename_part(employee.full_name)
+    site_part = _filename_part(site) if site else 'NoSite'
+    return f"{date_part}.{time_part}.{person_part}.{site_part}{ext}"
+
+
 def _requires_clock_in(employee):
-    """Whether an employee's position is one that clocks in via the supervisor app
-    (field/site staff), as opposed to office roles on fixed/flexible hours."""
-    position = employee.position
-    if not position:
-        return False
-    if position.level is not None and position.level in LEVEL_PERMISSIONS:
-        return P.SUPERVISOR_APP in LEVEL_PERMISSIONS[position.level]
-    return P.SUPERVISOR_APP in (position.permissions or [])
+    """Whether an employee is expected to clock in, as opposed to office roles
+    on fixed/flexible hours."""
+    return employee.can_clock_in
+
+
+# Employees who can use the clock-in flow themselves but shouldn't appear on the
+# Team Attendance roster — admin/management accounts that clock in only for
+# testing, not real field attendance tracking.
+TEAM_ROSTER_HIDE_EMP_NOS = {'AS007'}
+
+
+ATTENDANCE_RESET_HOUR = 4  # attendance "day" runs 4am-4am so overnight OT stays on the shift's start date
+PROJECT_CLOCK_IN_RADIUS = 200  # metres — geofence radius when clocking in against a project's site_lat/site_lng
+
+
+def get_business_date(dt=None):
+    """Attendance date for a given moment: before 4am counts as the previous day."""
+    local_dt = timezone.localtime(dt or timezone.now())
+    if local_dt.time() < time_type(ATTENDANCE_RESET_HOUR, 0):
+        local_dt -= timedelta(days=1)
+    return local_dt.date()
 
 
 class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
@@ -170,7 +283,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             employee = request.user.employee_profile
         except Exception:
             return Response({'results': []})
-        today = timezone.now().date()
+        today = get_business_date()
         qs = Attendance.objects.filter(employee=employee, date=today)
         return Response({'results': AttendanceSerializer(qs, many=True).data})
 
@@ -178,7 +291,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     def clock_in(self, request):
         try:
             employee = request.user.employee_profile
-            today = timezone.now().date()
+            today = get_business_date()
             today_str = today.strftime('%d-%m-%Y')
 
             # Schedule is optional — staff without one can still clock in (no geofence/late check to run)
@@ -193,12 +306,20 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             attendance_status = 'present'
             now = timezone.now()
 
+            project = None
+            if project_id:
+                from services.projects.models import Project
+                try:
+                    project = Project.objects.get(id=project_id)
+                except Project.DoesNotExist:
+                    project = None
+
             if schedule:
                 if gps_lat and gps_lng:
                     distance = haversine_distance(gps_lat, gps_lng, schedule['location_lat'], schedule['location_lng'])
                     radius = int(schedule.get('radius', 200))
                     if distance > radius:
-                        if not project_id:
+                        if not project:
                             return Response({
                                 'success': False,
                                 'message': f'You are {int(distance)}m away from {schedule["location_name"]}. Select a project to clock in remotely.'
@@ -208,6 +329,16 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 # Flag late if past shift_start
                 shift_start = datetime.strptime(schedule.get('shift_start', '00:00'), '%H:%M').time()
                 attendance_status = 'late' if timezone.localtime(now).time() > shift_start else 'present'
+
+            # Geofence check against the selected project/site — covers clocking in with no
+            # schedule at all, and clocking in remotely at a project instead of the scheduled site.
+            if project and gps_lat and gps_lng and project.site_lat is not None and project.site_lng is not None:
+                project_distance = haversine_distance(gps_lat, gps_lng, project.site_lat, project.site_lng)
+                if project_distance > PROJECT_CLOCK_IN_RADIUS:
+                    return Response({
+                        'success': False,
+                        'message': f'You are {int(project_distance)}m away from {project.name}. Move closer to the site to clock in.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
             record, created = Attendance.objects.get_or_create(
                 employee=employee,
@@ -226,12 +357,14 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             if address:
                 record.clock_in_address = address
 
-            if project_id and (outside_geofence or not schedule):
-                from services.projects.models import Project
-                try:
-                    record.project = Project.objects.get(id=project_id)
-                except Project.DoesNotExist:
-                    pass
+            if project and (outside_geofence or not schedule):
+                record.project = project
+
+            if record.clock_in_photo:
+                site = (schedule['location_name'] if schedule else None) or \
+                    (record.project.name if record.project else None) or address
+                ext = _os.path.splitext(record.clock_in_photo.name)[1] or '.jpg'
+                record.clock_in_photo.name = _attendance_photo_filename(now, employee, site, ext)
 
             record.save()
 
@@ -261,7 +394,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     def clock_out(self, request):
         try:
             employee = request.user.employee_profile
-            today = timezone.now().date()
+            today = get_business_date()
 
             record = Attendance.objects.get(employee=employee, date=today)
 
@@ -282,6 +415,12 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 delta = now - record.clock_in
                 hours = delta.total_seconds() / 3600
                 record.hours = round(hours, 2)
+
+            if record.clock_out_photo:
+                site = (record.project.name if record.project else None) or \
+                    record.clock_in_address or record.clock_out_address
+                ext = _os.path.splitext(record.clock_out_photo.name)[1] or '.jpg'
+                record.clock_out_photo.name = _attendance_photo_filename(now, employee, site, ext)
 
             record.save()
 
@@ -313,7 +452,7 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
         employees = Employee.objects.filter(is_active=True).select_related('department', 'position').order_by('first_name', 'last_name')
-        employees = [e for e in employees if _requires_clock_in(e)]
+        employees = [e for e in employees if _requires_clock_in(e) and e.emp_no not in TEAM_ROSTER_HIDE_EMP_NOS]
 
         month = request.query_params.get('month')
         if month:
@@ -328,6 +467,16 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             for r in Attendance.objects.filter(date__gte=start, date__lte=end):
                 by_emp.setdefault(r.employee_id, []).append(r)
 
+            month_leaves = list(LeaveApplication.objects.filter(
+                start_date__lte=end, end_date__gte=start, status__in=['pending', 'approved'],
+            ).select_related('leave_type'))
+
+            def leave_for(emp_id, date):
+                for la in month_leaves:
+                    if la.employee_id == emp_id and la.start_date <= date <= la.end_date:
+                        return la
+                return None
+
             results = []
             for emp in employees:
                 recs = by_emp.get(emp.id, [])
@@ -335,20 +484,38 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 for r in recs:
                     if r.status in counts:
                         counts[r.status] += 1
+                days = []
+                for r in recs:
+                    la = leave_for(emp.id, r.date) if r.status == 'leave' else None
+                    days.append({
+                        'date': r.date.isoformat(),
+                        'status': r.status,
+                        'clock_in': timezone.localtime(r.clock_in) if r.clock_in else None,
+                        'clock_out': timezone.localtime(r.clock_out) if r.clock_out else None,
+                        'clock_in_photo': r.clock_in_photo.url if r.clock_in_photo else None,
+                        'clock_out_photo': r.clock_out_photo.url if r.clock_out_photo else None,
+                        'leave_type_name': la.leave_type.name if la else None,
+                        'leave_status': la.status if la else None,
+                    })
                 results.append({
                     'employee_id': emp.id,
                     'employee_name': emp.full_name,
                     'department_name': emp.department.name if emp.department else None,
                     **counts,
                     'total_hours': round(sum(float(r.hours or 0) for r in recs), 2),
-                    'days': [{'date': r.date.isoformat(), 'status': r.status} for r in recs],
+                    'days': days,
                 })
             return Response({'month': month, 'results': results})
 
         date_str = request.query_params.get('date')
         now = timezone.localtime(timezone.now())
         date_obj = _parse_date(date_str) if date_str else now.date()
-        records = {r.employee_id: r for r in Attendance.objects.filter(date=date_obj)}
+        records = {r.employee_id: r for r in Attendance.objects.filter(date=date_obj).select_related('project')}
+        day_leaves = {
+            la.employee_id: la for la in LeaveApplication.objects.filter(
+                start_date__lte=date_obj, end_date__gte=date_obj, status__in=['pending', 'approved'],
+            ).select_related('leave_type')
+        }
         # No-show cutoff — after 9am with no clock-in, today counts as absent rather than pending.
         ABSENT_CUTOFF = time_type(9, 0)
         today_past_cutoff = date_obj == now.date() and now.time() >= ABSENT_CUTOFF
@@ -364,16 +531,22 @@ class AttendanceViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             else:
                 row_status = 'pending'
             summary[row_status] = summary.get(row_status, 0) + 1
+            la = day_leaves.get(emp.id) if row_status == 'leave' else None
             results.append({
                 'employee_id': emp.id,
                 'employee_name': emp.full_name,
                 'department_name': emp.department.name if emp.department else None,
                 'status': row_status,
+                'leave_type_name': la.leave_type.name if la else None,
+                'leave_status': la.status if la else None,
                 'clock_in': timezone.localtime(r.clock_in) if r and r.clock_in else None,
                 'clock_out': timezone.localtime(r.clock_out) if r and r.clock_out else None,
                 'hours': r.hours if r else None,
+                'location': (r.project.name if r and r.project else None) or (r.clock_in_address if r else None) or (r.clock_out_address if r else None),
                 'clock_in_photo': r.clock_in_photo.url if r and r.clock_in_photo else None,
                 'clock_out_photo': r.clock_out_photo.url if r and r.clock_out_photo else None,
+                'clock_in_gps': r.clock_in_gps if r else None,
+                'clock_out_gps': r.clock_out_gps if r else None,
             })
         return Response({'date': date_obj.isoformat(), 'summary': summary, 'results': results})
 
@@ -943,6 +1116,24 @@ class ClaimViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
         return self._review(request, 'rejected')
+
+    @action(detail=True, methods=['get'])
+    def excel(self, request, pk=None):
+        from . import claim_documents
+        claim = self.get_object()
+        buf = claim_documents.build_excel(claim, getattr(request.user, 'tenant', None))
+        resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f'attachment; filename="Claim_{claim.id}.xlsx"'
+        return resp
+
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        from . import claim_documents
+        claim = self.get_object()
+        buf = claim_documents.build_pdf(claim, getattr(request.user, 'tenant', None))
+        resp = HttpResponse(buf.read(), content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="Claim_{claim.id}.pdf"'
+        return resp
 
 
 class ClaimItemViewSet(viewsets.ModelViewSet):

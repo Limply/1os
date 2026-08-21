@@ -8,8 +8,9 @@ import * as XLSX from 'xlsx'
 import TaskPhotoModal from '../components/TaskPhotoModal'
 import TaskDocumentModal from '../components/TaskDocumentModal'
 import ProjectFiles from '../components/ProjectFiles'
+import CoordinatesInput from '../components/CoordinatesInput'
 import TaskGantt from '../components/TaskGantt'
-import { Circle, Clock, Eye, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Circle, Clock, Eye, CheckCircle2, AlertCircle, Send } from 'lucide-react'
 
 const STATUS_CONFIG = {
   todo:        { Icon: Circle,       color: '#9ca3af', label: 'To Do' },
@@ -178,6 +179,9 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [comments, setComments] = useState({})   // { taskId: [...] }
   const [commentDraft, setCommentDraft] = useState({}) // { taskId: string }
   const [commentSaving, setCommentSaving] = useState(null) // taskId being saved
+  const [commentMentions, setCommentMentions] = useState({}) // { taskId: [{ id, name }] }
+  const [mentionQuery, setMentionQuery] = useState(null) // { taskId, query, start }
+  const commentInputRefs = useRef({}) // taskId -> input DOM node
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const [templates, setTemplates] = useState([])
   const [applyingTemplate, setApplyingTemplate] = useState(false)
@@ -400,14 +404,57 @@ export default function ProjectDetail({ projectId, onBack }) {
     setOpenComments(next)
   }
 
+  function handleCommentInputChange(e, taskId) {
+    const value = e.target.value
+    const pos = e.target.selectionStart
+    setCommentDraft(prev => ({ ...prev, [taskId]: value }))
+    const uptoCursor = value.slice(0, pos)
+    const match = uptoCursor.match(/(?:^|\s)@(\w*)$/)
+    if (match) {
+      setMentionQuery({ taskId, query: match[1], start: pos - match[1].length })
+    } else if (mentionQuery?.taskId === taskId) {
+      setMentionQuery(null)
+    }
+  }
+
+  function insertMention(taskId, u) {
+    const name = `${u.first_name} ${u.last_name}`.trim() || u.email
+    const draft = commentDraft[taskId] || ''
+    const before = draft.slice(0, mentionQuery.start - 1)
+    const after = draft.slice(mentionQuery.start + mentionQuery.query.length)
+    setCommentDraft(prev => ({ ...prev, [taskId]: `${before}@${name} ${after}` }))
+    setCommentMentions(prev => ({
+      ...prev,
+      [taskId]: [...(prev[taskId] || []).filter(m => m.id !== u.id), { id: u.id, name }],
+    }))
+    setMentionQuery(null)
+    commentInputRefs.current[taskId]?.focus()
+  }
+
+  function renderCommentBody(text) {
+    const names = users.map(u => `${u.first_name} ${u.last_name}`.trim()).filter(Boolean)
+    if (!names.length) return text
+    const escaped = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const pattern = new RegExp(`@(${escaped.join('|')})`, 'g')
+    return text.split(pattern).map((part, i) =>
+      i % 2 === 1
+        ? <span key={i} className="text-primary-700 font-semibold">@{part}</span>
+        : part
+    )
+  }
+
   async function submitComment(e, taskId) {
     e.preventDefault()
     const body = (commentDraft[taskId] || '').trim()
     if (!body) return
     setCommentSaving(taskId)
-    const res = await api.post('/projects/task-comments/', { task: taskId, body })
+    const mentioned_ids = (commentMentions[taskId] || [])
+      .filter(m => body.includes(`@${m.name}`))
+      .map(m => m.id)
+    const res = await api.post('/projects/task-comments/', { task: taskId, body, mentioned_ids })
     setComments(prev => ({ ...prev, [taskId]: [...(prev[taskId] || []), res.data] }))
     setCommentDraft(prev => ({ ...prev, [taskId]: '' }))
+    setCommentMentions(prev => ({ ...prev, [taskId]: [] }))
     setCommentSaving(null)
     fetchProject() // refresh comment_count
   }
@@ -746,45 +793,87 @@ export default function ProjectDetail({ projectId, onBack }) {
                         {openComments.has(task.id) && (
                           <tr>
                             <td colSpan={9} className="px-2 py-1.5 bg-gray-50 border-b border-gray-200">
-                              <div className="space-y-1.5">
-                                <div className="flex items-center justify-between">
+                              <div className="rounded-md overflow-hidden border border-gray-200 max-w-md">
+                                <div className="flex items-center justify-between px-2 py-1 bg-white border-b border-gray-200">
                                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Comments</span>
-                                  <button onClick={() => toggleComments(task.id)} className="text-[11px] text-gray-400 hover:text-gray-600 transition">✕ Close</button>
+                                  <button onClick={() => toggleComments(task.id)}
+                                    className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition">✕</button>
                                 </div>
-                                {(comments[task.id] || []).length === 0 && (
-                                  <p className="text-[11px] text-gray-400">No comments yet.</p>
-                                )}
-                                {(comments[task.id] || []).map(c => (
-                                  <div key={c.id} className="flex items-start gap-1.5">
-                                    <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                      {c.author_initials}
-                                    </span>
-                                    <div className="flex-1 bg-white border border-gray-200 px-2 py-1">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[11px] font-semibold text-gray-700">{c.author_name}</span>
-                                        <span className="text-[11px] text-gray-400">{new Date(c.created_at).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                <div className="space-y-1.5 px-2 py-2 bg-[#efeae2] max-h-64 overflow-y-auto">
+                                  {(comments[task.id] || []).length === 0 && (
+                                    <p className="text-[11px] text-gray-400 text-center py-2">No comments yet.</p>
+                                  )}
+                                  {(comments[task.id] || []).map(c => {
+                                    const isMine = c.author === user?.id
+                                    return (
+                                      <div key={c.id} className={`flex items-end gap-1 group ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                        {(c.author === user?.id || isManager) && (
+                                          <button onClick={() => deleteComment(task.id, c.id)}
+                                            className={`shrink-0 text-gray-300 hover:text-red-400 text-[11px] opacity-0 group-hover:opacity-100 transition ${isMine ? 'order-1' : 'order-3'}`}>✕</button>
+                                        )}
+                                        {!isMine && (
+                                          <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                            {c.author_initials}
+                                          </span>
+                                        )}
+                                        <div className={`max-w-[75%] px-2 py-1 shadow-sm ${
+                                          isMine
+                                            ? 'bg-[#dcf8c6] rounded-lg rounded-br-sm order-2'
+                                            : 'bg-white rounded-lg rounded-bl-sm'
+                                        }`}>
+                                          {!isMine && (
+                                            <p className="text-[11px] font-semibold text-primary-700">{c.author_name}</p>
+                                          )}
+                                          <p className="text-xs text-gray-800 whitespace-pre-wrap break-words">{renderCommentBody(c.body)}</p>
+                                          <p className="text-[10px] text-gray-400 text-right mt-0.5">
+                                            {new Date(c.created_at).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' })}
+                                          </p>
+                                        </div>
                                       </div>
-                                      <p className="text-xs text-gray-700 whitespace-pre-wrap">{c.body}</p>
-                                    </div>
-                                    {(c.author === user?.id || isManager) && (
-                                      <button onClick={() => deleteComment(task.id, c.id)}
-                                        className="text-gray-300 hover:text-red-400 text-[11px] shrink-0">✕</button>
-                                    )}
-                                  </div>
-                                ))}
-                                <form onSubmit={e => submitComment(e, task.id)} className="flex gap-1.5">
+                                    )
+                                  })}
+                                </div>
+                                <form onSubmit={e => submitComment(e, task.id)} className="flex items-center gap-1.5 px-2 py-1.5 bg-white border-t border-gray-200">
                                   <input
+                                    ref={el => { commentInputRefs.current[task.id] = el }}
                                     value={commentDraft[task.id] || ''}
-                                    onChange={e => setCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))}
-                                    placeholder="Add a comment…"
-                                    className="flex-1 text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:border-primary-400"
+                                    onChange={e => handleCommentInputChange(e, task.id)}
+                                    onBlur={() => setMentionQuery(q => (q?.taskId === task.id ? null : q))}
+                                    placeholder="Type a message… (@ to mention)"
+                                    className="flex-1 text-xs bg-gray-100 rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-400"
                                   />
                                   <button type="submit"
                                     disabled={commentSaving === task.id || !(commentDraft[task.id] || '').trim()}
-                                    className="text-[11px] bg-primary-600 text-white px-2 py-1 hover:bg-primary-700 disabled:opacity-40 transition">
-                                    {commentSaving === task.id ? '…' : 'Post'}
+                                    className="w-6 h-6 shrink-0 rounded-full bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 disabled:opacity-40 transition">
+                                    <Send size={12} />
                                   </button>
                                 </form>
+                                {mentionQuery?.taskId === task.id && (() => {
+                                  const q = mentionQuery.query.toLowerCase()
+                                  const matches = users.filter(u =>
+                                    `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
+                                  ).slice(0, 6)
+                                  if (!matches.length) return null
+                                  const el = commentInputRefs.current[task.id]
+                                  const rect = el?.getBoundingClientRect()
+                                  if (!rect) return null
+                                  return (
+                                    <div
+                                      style={{ position: 'fixed', top: rect.top - matches.length * 26 - 4, left: rect.left, width: Math.max(rect.width, 160) }}
+                                      className="z-50 bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden">
+                                      {matches.map(u => (
+                                        <button key={u.id} type="button"
+                                          onMouseDown={e => { e.preventDefault(); insertMention(task.id, u) }}
+                                          className="w-full text-left px-2 py-1 text-xs hover:bg-primary-50 flex items-center gap-1.5">
+                                          <span className="w-4 h-4 rounded-full bg-primary-100 text-primary-700 text-[9px] font-bold flex items-center justify-center shrink-0">
+                                            {(u.first_name?.[0] || '') + (u.last_name?.[0] || '')}
+                                          </span>
+                                          {u.first_name} {u.last_name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             </td>
                           </tr>
@@ -1065,43 +1154,18 @@ export default function ProjectDetail({ projectId, onBack }) {
               </div>
               {/* Site Location */}
               <div className="border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Site Location</p>
-                  <button type="button"
-                    onClick={() => {
-                      if (!navigator.geolocation) return
-                      navigator.geolocation.getCurrentPosition(pos => {
-                        setEditProject(p => ({
-                          ...p,
-                          site_lat: pos.coords.latitude.toFixed(7),
-                          site_lng: pos.coords.longitude.toFixed(7),
-                        }))
-                      })
-                    }}
-                    className="text-xs text-primary-600 hover:text-primary-700 font-medium">
-                    📍 Use Current Location
-                  </button>
-                </div>
-                <div className="col-span-2 mb-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Site Location</p>
+                <div className="mb-3">
                   <label className="text-xs text-gray-400">Site Address</label>
                   <input value={editProject.site_address} onChange={e => setEditProject(p => ({ ...p, site_address: e.target.value }))}
                     placeholder="e.g. 123 Jurong East Street 13, Singapore 600123"
                     className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-400">Latitude</label>
-                    <input value={editProject.site_lat} onChange={e => setEditProject(p => ({ ...p, site_lat: e.target.value }))}
-                      placeholder="e.g. 1.3521000"
-                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400">Longitude</label>
-                    <input value={editProject.site_lng} onChange={e => setEditProject(p => ({ ...p, site_lng: e.target.value }))}
-                      placeholder="e.g. 103.8198000"
-                      className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                  </div>
-                </div>
+                <CoordinatesInput
+                  lat={editProject.site_lat}
+                  lng={editProject.site_lng}
+                  onChange={({ lat, lng }) => setEditProject(p => ({ ...p, site_lat: lat, site_lng: lng }))}
+                />
               </div>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">

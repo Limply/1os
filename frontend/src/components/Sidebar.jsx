@@ -15,6 +15,7 @@ const ALL_LINKS = [
     module: 'projects', to: '/projects', label: 'Projects',
     children: [
       { module: 'calendar', to: '/calendar', label: 'Project Calendar' },
+      { module: 'projects', to: '/wsh',      label: 'WSH Records' },
     ],
   },
   {

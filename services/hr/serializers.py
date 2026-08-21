@@ -86,6 +86,7 @@ class LeaveBalanceSerializer(serializers.ModelSerializer):
 class LeaveApplicationSerializer(serializers.ModelSerializer):
     leave_type_name = serializers.SerializerMethodField()
     employee_name = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = LeaveApplication
@@ -97,6 +98,9 @@ class LeaveApplicationSerializer(serializers.ModelSerializer):
 
     def get_employee_name(self, obj):
         return obj.employee.full_name if obj.employee else None
+
+    def get_photo_url(self, obj):
+        return obj.photo.url if obj.photo else None
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
@@ -238,7 +242,7 @@ class ClaimItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClaimItem
-        fields = ['id', 'claim', 'expense_date', 'category', 'description', 'amount', 'project_no', 'attachments', 'created_at']
+        fields = ['id', 'claim', 'expense_date', 'category', 'description', 'amount', 'project_no', 'remark', 'attachments', 'created_at']
         read_only_fields = ['id', 'attachments', 'created_at']
 
 

@@ -1,14 +1,15 @@
 import os
 import re
 from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from shared import nas
-from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto, _generate_project_no
-from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer, DailyReportSerializer, WSHPhotoSerializer
+from .models import Project, Task, TaskPhoto, TaskDocument, TaskComment, ProjectComment, DailyReport, WSHPhoto, WSHPhotoAttachment, _generate_project_no
+from .serializers import ProjectSerializer, ProjectListSerializer, TaskSerializer, TaskPhotoSerializer, TaskDocumentSerializer, TaskCommentSerializer, ProjectCommentSerializer, DailyReportSerializer, WSHPhotoSerializer, WSHPhotoAttachmentSerializer
 
 TEMPLATE_DIR = '/mnt/data/1os/database/task_template'
 from shared.permissions import user_can, P
@@ -214,6 +215,27 @@ class TaskDocumentViewSet(viewsets.ModelViewSet):
         )
 
 
+def _notify_comment_mentions(author, mentioned_ids, ref_type, ref_id, ref_label, body):
+    """Create in-app notifications for users @mentioned in a task/project comment."""
+    if not mentioned_ids:
+        return
+    from services.auth.models import User
+    from services.notifications.models import Notification
+    recipients = User.objects.filter(id__in=mentioned_ids).exclude(id=author.id)
+    for recipient in recipients:
+        Notification.objects.create(
+            recipient=recipient,
+            channel='in_app',
+            subject=f'{author.full_name} mentioned you',
+            message=f'{author.full_name} mentioned you on "{ref_label}": {body[:200]}',
+            trigger='comment_mention',
+            ref_type=ref_type,
+            ref_id=ref_id,
+            status='sent',
+            sent_at=timezone.now(),
+        )
+
+
 class TaskCommentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskCommentSerializer
@@ -228,8 +250,13 @@ class TaskCommentViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(
+        comment = serializer.save(
             author=self.request.user,
+        )
+        _notify_comment_mentions(
+            self.request.user,
+            self.request.data.get('mentioned_ids') or [],
+            'Task', comment.task_id, comment.task.title, comment.body,
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -287,7 +314,7 @@ class WSHPhotoViewSet(viewsets.ModelViewSet):
     pagination_class   = None
 
     def get_queryset(self):
-        qs = WSHPhoto.objects.select_related('project', 'submitted_by')
+        qs = WSHPhoto.objects.select_related('project', 'submitted_by').prefetch_related('attachments')
         project_id = self.request.query_params.get('project')
         if project_id:
             qs = qs.filter(project_id=project_id)
@@ -296,4 +323,20 @@ class WSHPhotoViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(submitted_by=self.request.user)
+        instance = serializer.save(submitted_by=self.request.user)
+        for extra_photo in self.request.FILES.getlist('extra_photos'):
+            WSHPhotoAttachment.objects.create(wsh_photo=instance, photo=extra_photo)
+
+
+class WSHPhotoAttachmentViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class   = WSHPhotoAttachmentSerializer
+    pagination_class   = None
+    http_method_names  = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        qs = WSHPhotoAttachment.objects.select_related('wsh_photo')
+        wsh_photo_id = self.request.query_params.get('wsh_photo')
+        if wsh_photo_id:
+            qs = qs.filter(wsh_photo_id=wsh_photo_id)
+        return qs

@@ -6,6 +6,7 @@ import ManpowerCalendar from '../components/ManpowerCalendar'
 import ManpowerSettings from '../components/ManpowerSettings'
 import { useManpowerSettings } from '../hooks/useManpowerSettings'
 import AuthImage from '../components/AuthImage'
+import StaffLocationsMap from '../components/StaffLocationsMap'
 
 
 
@@ -15,6 +16,17 @@ const STATUS_COLORS = {
   rejected:  'bg-red-100 text-red-700',
   cancelled: 'bg-gray-100 text-gray-500',
 }
+
+const DAILY_COLUMNS = [
+  { key: 'employee_name', label: 'Employee', width: 150 },
+  { key: 'photo', label: '📷', width: 48, sortable: false },
+  { key: 'status', label: 'Status', width: 120 },
+  { key: 'location', label: 'Location', width: 170 },
+  { key: 'department_name', label: 'Department', width: 130 },
+  { key: 'clock_in', label: 'Clock In', width: 85, numeric: true },
+  { key: 'clock_out', label: 'Clock Out', width: 85, numeric: true },
+  { key: 'hours', label: 'Hours', width: 70, numeric: true },
+]
 
 const ATTENDANCE_COLORS = {
   present:  'bg-green-100 text-green-700',
@@ -31,6 +43,27 @@ const HEAT_COLORS = {
   absent:   'bg-red-500',
   half_day: 'bg-primary-500',
   leave:    'bg-purple-500',
+}
+
+function attendanceLabel(status, leaveTypeName, leaveStatus) {
+  if (status === 'leave' && leaveTypeName) {
+    return `${leaveTypeName}${leaveStatus === 'pending' ? ' · pending' : ''}`
+  }
+  return status.replace('_', ' ')
+}
+
+const DAILY_CELL_RENDERERS = {
+  employee_name: r => r.employee_name,
+  department_name: r => r.department_name || '—',
+  location: r => r.location || '—',
+  clock_in: r => r.clock_in ? r.clock_in.slice(11, 16) : '—',
+  clock_out: r => r.clock_out ? r.clock_out.slice(11, 16) : '—',
+  hours: r => r.hours ? `${r.hours}h` : '—',
+  status: r => (
+    <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${ATTENDANCE_COLORS[r.status]}`}>
+      {attendanceLabel(r.status, r.leave_type_name, r.leave_status)}
+    </span>
+  ),
 }
 
 function todayStr() {
@@ -71,7 +104,7 @@ export default function HR() {
     'Attendance',
     'My Profile',
     'Courses',
-    ...(isManager ? ['Manpower', 'Team Attendance', 'Employees', 'Locations', 'Approvals'] : []),
+    ...(isManager ? ['Manpower', 'Team Attendance', 'Employees', 'Approvals'] : []),
   ]
   const [tab, setTab] = useState('My Leave')
 
@@ -89,6 +122,12 @@ export default function HR() {
   const [loading, setLoading] = useState(true)
   const [noProfile, setNoProfile] = useState(false)
 
+  // Employee edit (manager)
+  const [editEmployee, setEditEmployee] = useState(null)
+  const [empEditForm, setEmpEditForm] = useState({})
+  const [empSaving, setEmpSaving] = useState(false)
+  const [empEditMsg, setEmpEditMsg] = useState('')
+
   // Leave form
   const [applyForm, setApplyForm] = useState({ leave_type: '', start_date: '', end_date: '', days: '', reason: '' })
   const [applying, setApplying] = useState(false)
@@ -101,127 +140,96 @@ export default function HR() {
   // Employee search
   const [empSearch, setEmpSearch] = useState('')
 
-  // Locations (manager)
-  const SITE_TYPES = [
-    ['office', 'Office'], ['branch', 'Branch'], ['client_site', 'Client Site'], ['warehouse', 'Warehouse'],
-  ]
-  const emptySiteForm = { name: '', type: 'office', address: '', postal_code: '', lat: '', lng: '', radius: 200, contact_name: '', contact_phone: '', notes: '', project: '' }
-  const [sites, setSites] = useState([])
-  const [sitesLoading, setSitesLoading] = useState(false)
-  const [showSiteForm, setShowSiteForm] = useState(false)
-  const [editingSiteId, setEditingSiteId] = useState(null)
-  const [siteForm, setSiteForm] = useState(emptySiteForm)
-  const [siteSaving, setSiteSaving] = useState(false)
-  const [siteMsg, setSiteMsg] = useState('')
-  const [siteProjects, setSiteProjects] = useState([])
-  const [importingSites, setImportingSites] = useState(false)
-
   // Team attendance (manager)
-  const [teamView, setTeamView] = useState('daily') // 'daily' | 'monthly'
+  const [teamView, setTeamView] = useState('daily') // 'daily' | 'map' | 'monthly'
   const [teamDate, setTeamDate] = useState(todayStr())
   const [teamMonth, setTeamMonth] = useState(monthStr())
   const [teamDaily, setTeamDaily] = useState(null)
   const [teamMonthly, setTeamMonthly] = useState(null)
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamPhotos, setTeamPhotos] = useState(null) // row currently shown in the photo lightbox
+  const [dailySort, setDailySort] = useState({ key: 'employee_name', dir: 'asc' })
+  const [dailyColWidths, setDailyColWidths] = useState(() => Object.fromEntries(DAILY_COLUMNS.map(c => [c.key, c.width])))
+  const [dailyColOrder, setDailyColOrder] = useState(() => DAILY_COLUMNS.map(c => c.key))
+  const [draggedCol, setDraggedCol] = useState(null)
+  const [dragOverCol, setDragOverCol] = useState(null)
 
   useEffect(() => { fetchAll() }, [])
 
   useEffect(() => {
     if (tab !== 'Team Attendance' || !isManager) return
     setTeamLoading(true)
-    const params = teamView === 'daily' ? `date=${teamDate}` : `month=${teamMonth}`
+    const params = teamView === 'monthly' ? `month=${teamMonth}` : `date=${teamDate}`
     api.get(`/hr/attendance/team/?${params}`)
-      .then(res => { teamView === 'daily' ? setTeamDaily(res.data) : setTeamMonthly(res.data) })
+      .then(res => { teamView === 'monthly' ? setTeamMonthly(res.data) : setTeamDaily(res.data) })
       .finally(() => setTeamLoading(false))
   }, [tab, teamView, teamDate, teamMonth, isManager])
 
-  useEffect(() => {
-    if (tab !== 'Locations' || !isManager) return
-    fetchSites()
-    api.get('/projects/projects/?limit=999').then(res => setSiteProjects(res.data.results || res.data)).catch(() => {})
-  }, [tab, isManager])
-
-  function fetchSites() {
-    setSitesLoading(true)
-    api.get('/org/sites/')
-      .then(res => setSites(Array.isArray(res.data) ? res.data : res.data.results ?? []))
-      .finally(() => setSitesLoading(false))
+  function toggleDailySort(key) {
+    setDailySort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
   }
 
-  function openNewSite() {
-    setEditingSiteId(null)
-    setSiteForm(emptySiteForm)
-    setSiteMsg('')
-    setShowSiteForm(true)
-  }
-
-  function openEditSite(site) {
-    setEditingSiteId(site.id)
-    setSiteForm({
-      name: site.name ?? '', type: site.type ?? 'office', address: site.address ?? '',
-      postal_code: site.postal_code ?? '', lat: site.lat ?? '', lng: site.lng ?? '', radius: site.radius ?? 200,
-      contact_name: site.contact_name ?? '', contact_phone: site.contact_phone ?? '', notes: site.notes ?? '',
-      project: site.project ?? '',
-    })
-    setSiteMsg('')
-    setShowSiteForm(true)
-  }
-
-  function pickSiteProject(projectId) {
-    const proj = siteProjects.find(p => String(p.id) === String(projectId))
-    setSiteForm(p => ({
-      ...p,
-      project: projectId,
-      name: proj ? proj.name : p.name,
-      type: proj ? 'client_site' : p.type,
-      address: proj?.site_address || p.address,
-      lat: proj?.site_lat ?? p.lat,
-      lng: proj?.site_lng ?? p.lng,
-      contact_name: proj?.client_contact || p.contact_name,
-      contact_phone: proj?.client_phone || p.contact_phone,
-    }))
-  }
-
-  async function importSitesFromProjects() {
-    setImportingSites(true)
-    setSiteMsg('')
-    try {
-      const res = await api.post('/org/sites/import_from_projects/')
-      setSiteMsg(`Imported: ${res.data.created} new, ${res.data.updated} refreshed, ${res.data.skipped} skipped (no site info).`)
-      fetchSites()
-    } catch (err) {
-      setSiteMsg(err.response?.data?.detail || 'Could not import locations from projects.')
-    } finally {
-      setImportingSites(false)
-    }
-  }
-
-  async function saveSite(e) {
+  function startDailyColResize(e, key) {
     e.preventDefault()
-    setSiteSaving(true)
-    setSiteMsg('')
-    try {
-      const payload = { ...siteForm, lat: siteForm.lat || null, lng: siteForm.lng || null, project: siteForm.project || null }
-      if (editingSiteId) await api.patch(`/org/sites/${editingSiteId}/`, payload)
-      else await api.post('/org/sites/', payload)
-      setShowSiteForm(false)
-      fetchSites()
-    } catch (err) {
-      setSiteMsg(err.response?.data?.detail || 'Could not save location. Check the fields and try again.')
-    } finally {
-      setSiteSaving(false)
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = dailyColWidths[key]
+    const onMove = ev => {
+      setDailyColWidths(w => ({ ...w, [key]: Math.max(36, startWidth + (ev.clientX - startX)) }))
     }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
   }
 
-  async function deleteSite(site) {
-    if (!confirm(`Remove "${site.name}"?`)) return
-    try {
-      await api.delete(`/org/sites/${site.id}/`)
-      fetchSites()
-    } catch {
-      setSiteMsg('Could not remove this location.')
-    }
+  function sortDailyRows(rows, key, dir) {
+    const mul = dir === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      let av = a[key], bv = b[key]
+      if (key === 'hours') {
+        av = av || 0; bv = bv || 0
+        return (av - bv) * mul
+      }
+      if (key === 'clock_in' || key === 'clock_out') {
+        av = av || ''; bv = bv || ''
+        return av.localeCompare(bv) * mul
+      }
+      av = (av || '').toString().toLowerCase()
+      bv = (bv || '').toString().toLowerCase()
+      return av.localeCompare(bv) * mul
+    })
+  }
+
+  function handleColDragStart(e, key) {
+    setDraggedCol(key)
+    e.dataTransfer.effectAllowed = 'move'
+    try { e.dataTransfer.setData('text/plain', key) } catch { /* Safari requires setData to allow drag */ }
+  }
+
+  function handleColDragOver(e, key) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (key !== dragOverCol) setDragOverCol(key)
+  }
+
+  function handleColDrop(e, key) {
+    e.preventDefault()
+    setDragOverCol(null)
+    if (!draggedCol || draggedCol === key) { setDraggedCol(null); return }
+    setDailyColOrder(order => {
+      const next = order.filter(k => k !== draggedCol)
+      next.splice(next.indexOf(key), 0, draggedCol)
+      return next
+    })
+    setDraggedCol(null)
+  }
+
+  function handleColDragEnd() {
+    setDraggedCol(null)
+    setDragOverCol(null)
   }
 
   function shiftTeamDate(days) {
@@ -275,6 +283,35 @@ export default function HR() {
     setShowApplyForm(false)
     setApplying(false)
     fetchAll()
+  }
+
+  function openEditEmployee(e) {
+    setEditEmployee(e)
+    setEmpEditForm({
+      is_active: e.is_active,
+      can_clock_in: e.can_clock_in,
+      employment_type: e.employment_type,
+      end_date: e.end_date || '',
+    })
+    setEmpEditMsg('')
+  }
+
+  async function saveEmployee(e) {
+    e.preventDefault()
+    setEmpSaving(true)
+    setEmpEditMsg('')
+    try {
+      await api.patch(`/hr/employees/${editEmployee.id}/`, {
+        ...empEditForm,
+        end_date: empEditForm.end_date || null,
+      })
+      setEditEmployee(null)
+      fetchAll()
+    } catch (err) {
+      setEmpEditMsg(err.response?.data?.detail || 'Could not update this employee.')
+    } finally {
+      setEmpSaving(false)
+    }
   }
 
   async function handleDecision(leaveId, action) {
@@ -596,7 +633,7 @@ export default function HR() {
       {tab === 'Team Attendance' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            {teamView === 'daily' ? (
+            {teamView !== 'monthly' ? (
               <div className="flex items-center gap-2">
                 <button onClick={() => shiftTeamDate(-1)}
                   className="w-7 h-7 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">‹</button>
@@ -618,7 +655,7 @@ export default function HR() {
               </div>
             )}
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-              {['daily', 'monthly'].map(v => (
+              {['daily', 'map', 'monthly'].map(v => (
                 <button key={v} onClick={() => setTeamView(v)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md capitalize transition ${
                     teamView === v ? 'bg-primary-600 text-white' : 'text-gray-500'
@@ -632,48 +669,107 @@ export default function HR() {
           ) : teamView === 'daily' ? (
             <>
               {teamDaily && (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="flex gap-1.5">
                   {[
-                    ['present', 'Present'], ['late', 'Late'], ['absent', 'Absent'], ['leave', 'On Leave'],
-                  ].map(([key, label]) => (
-                    <div key={key} className="bg-white rounded-xl border border-gray-200 p-3">
-                      <p className="text-xl font-bold text-gray-800">{teamDaily.summary[key] || 0}</p>
-                      <p className="text-xs text-gray-400">{label}</p>
+                    ['present', 'Present', 'text-green-700'], ['late', 'Late', 'text-yellow-700'],
+                    ['absent', 'Absent', 'text-red-700'], ['leave', 'On Leave', 'text-purple-700'],
+                  ].map(([key, label, color]) => (
+                    <div key={key} className="flex-1 bg-white rounded-lg border border-gray-200 px-2.5 py-1.5 flex items-baseline gap-1.5">
+                      <span className={`text-base font-bold ${color}`}>{teamDaily.summary[key] || 0}</span>
+                      <span className="text-[11px] text-gray-400">{label}</span>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
                 {!teamDaily || teamDaily.results.length === 0 ? (
                   <p className="text-sm text-gray-400 p-4 text-center">No employees found</p>
-                ) : teamDaily.results.map(r => (
-                  <div key={r.employee_id}
-                    className={`px-4 py-3 flex items-center justify-between gap-2 border-l-2 ${
-                      r.status === 'late' ? 'border-l-yellow-400' : r.status === 'absent' ? 'border-l-red-400 bg-red-50/40' : 'border-l-transparent'
-                    }`}>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{r.employee_name}</p>
-                      <p className="text-xs text-gray-400 truncate">{r.department_name || '—'}</p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-gray-400">
-                        {r.clock_in ? r.clock_in.slice(11, 16) : '—'} – {r.clock_out ? r.clock_out.slice(11, 16) : '—'}
-                      </span>
-                      {r.hours && <span className="text-xs text-gray-400">{r.hours}h</span>}
-                      {(r.clock_in_photo || r.clock_out_photo) && (
-                        <button onClick={() => setTeamPhotos(r)} className="shrink-0">
-                          <AuthImage src={r.clock_in_photo || r.clock_out_photo} alt=""
-                            className="w-8 h-8 rounded-md object-cover border border-gray-200 hover:opacity-80 transition" />
-                        </button>
-                      )}
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ATTENDANCE_COLORS[r.status]}`}>
-                        {r.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                ) : (
+                  <table className="text-xs border-collapse" style={{ tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 40 }} />
+                      {dailyColOrder.map(key => <col key={key} style={{ width: dailyColWidths[key] }} />)}
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-gray-50 sticky top-0 z-10">
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">S/N</th>
+                        {dailyColOrder.map(key => {
+                          const c = DAILY_COLUMNS.find(dc => dc.key === key)
+                          const sortable = c.sortable !== false
+                          return (
+                            <th key={c.key}
+                              draggable
+                              onDragStart={e => handleColDragStart(e, c.key)}
+                              onDragOver={e => handleColDragOver(e, c.key)}
+                              onDrop={e => handleColDrop(e, c.key)}
+                              onDragEnd={handleColDragEnd}
+                              onClick={sortable ? () => toggleDailySort(c.key) : undefined}
+                              className={`relative px-2.5 py-1.5 text-left align-bottom font-semibold text-gray-600 border-b border-r border-gray-200 cursor-grab active:cursor-grabbing select-none hover:bg-gray-100 whitespace-normal break-words leading-tight transition ${
+                                sortable ? '' : 'text-center'
+                              } ${draggedCol === c.key ? 'opacity-40' : ''} ${
+                                dragOverCol === c.key && draggedCol !== c.key ? 'bg-primary-100 border-l-2 border-l-primary-500' : ''
+                              }`}
+                              title="Drag to reorder · click to sort">
+                              {c.label}
+                              {sortable && (
+                                <span className="inline-block w-3 text-gray-400">
+                                  {dailySort.key === c.key ? (dailySort.dir === 'asc' ? '▲' : '▼') : ''}
+                                </span>
+                              )}
+                              <span onMouseDown={e => startDailyColResize(e, c.key)} onClick={e => e.stopPropagation()} draggable={false}
+                                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary-400/70 z-20" />
+                            </th>
+                          )
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortDailyRows(teamDaily.results, dailySort.key, dailySort.dir).map((r, i) => {
+                        const rowBg = r.status === 'absent' ? 'bg-red-50' : (i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')
+                        return (
+                          <tr key={r.employee_id} className={`group ${rowBg} hover:bg-primary-50/50`}>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-400 tabular-nums align-top">{i + 1}</td>
+                            {dailyColOrder.map(key => {
+                              const c = DAILY_COLUMNS.find(dc => dc.key === key)
+                              const highlight = dragOverCol === c.key && draggedCol !== c.key ? 'bg-primary-50/40' : ''
+                              if (c.key === 'photo') {
+                                return (
+                                  <td key={c.key} className={`px-1 py-1 border-r border-b border-gray-100 text-center align-top ${highlight}`}>
+                                    {(r.clock_in_photo || r.clock_out_photo) ? (
+                                      <button onClick={() => setTeamPhotos(r)} className="shrink-0">
+                                        <AuthImage src={r.clock_in_photo || r.clock_out_photo} alt=""
+                                          className="w-6 h-6 rounded object-cover border border-gray-300 hover:opacity-80 hover:scale-110 transition" />
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-300 text-xs">—</span>
+                                    )}
+                                  </td>
+                                )
+                              }
+                              return (
+                                <td key={c.key}
+                                  className={`px-2.5 py-1 border-r border-b border-gray-100 text-gray-500 align-top ${
+                                    c.key === 'employee_name' ? 'font-medium text-gray-800' : ''
+                                  } ${highlight}`}
+                                  title={c.key === 'location' ? (r.location || '') : undefined}>
+                                  {c.numeric ? (
+                                    <span className="whitespace-nowrap tabular-nums">{DAILY_CELL_RENDERERS[c.key](r)}</span>
+                                  ) : (
+                                    <div className="line-clamp-2 break-words">{DAILY_CELL_RENDERERS[c.key](r)}</div>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </>
+          ) : teamView === 'map' ? (
+            <StaffLocationsMap results={teamDaily?.results} onPhotoClick={setTeamPhotos} />
           ) : (
             <>
               {teamMonthly && teamMonthly.results.length > 0 && (() => {
@@ -705,37 +801,73 @@ export default function HR() {
                 )
               })()}
 
-              <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
                 {!teamMonthly || teamMonthly.results.length === 0 ? (
                   <p className="text-sm text-gray-400 p-4 text-center">No employees found</p>
-                ) : teamMonthly.results.map(r => {
-                  const [y, m] = teamMonth.split('-').map(Number)
-                  const daysInMonth = new Date(y, m, 0).getDate()
-                  const byDate = Object.fromEntries(r.days.map(d => [d.date, d.status]))
-                  return (
-                    <div key={r.employee_id} className="px-4 py-3 flex items-center gap-3">
-                      <div className="min-w-0 w-32 shrink-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{r.employee_name}</p>
-                        <p className="text-xs text-gray-400 truncate">{r.department_name || '—'}</p>
-                      </div>
-                      <div className="flex gap-[2px] flex-1 min-w-0 overflow-hidden">
-                        {Array.from({ length: daysInMonth }, (_, i) => {
-                          const dateStr = `${teamMonth}-${String(i + 1).padStart(2, '0')}`
-                          const st = byDate[dateStr]
-                          return (
-                            <span key={i} title={`${dateStr}${st ? ': ' + st.replace('_', ' ') : ''}`}
-                              className={`h-4 w-[3px] rounded-sm ${st ? HEAT_COLORS[st] || 'bg-gray-200' : 'bg-gray-100'}`} />
-                          )
-                        })}
-                      </div>
-                      <div className="flex gap-2 text-xs text-gray-400 shrink-0 w-28 justify-end">
-                        <span><b className="text-gray-700">{r.present}</b>P</span>
-                        <span><b className="text-gray-700">{r.late}</b>L</span>
-                        <span><b className="text-gray-700">{r.absent}</b>A</span>
-                      </div>
-                    </div>
-                  )
-                })}
+                ) : (
+                  <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: 40 }} />
+                      <col style={{ width: 150 }} />
+                      <col style={{ width: 130 }} />
+                      <col />
+                      <col style={{ width: 56 }} />
+                      <col style={{ width: 56 }} />
+                      <col style={{ width: 56 }} />
+                      <col style={{ width: 64 }} />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-gray-50 sticky top-0 z-10">
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">S/N</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Employee</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Department</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Attendance</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Present</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Late</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Absent</th>
+                        <th className="px-2.5 py-1.5 text-left font-semibold text-gray-600 border-b border-r border-gray-200 whitespace-nowrap align-bottom">Hours</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamMonthly.results.map((r, i) => {
+                        const [y, m] = teamMonth.split('-').map(Number)
+                        const daysInMonth = new Date(y, m, 0).getDate()
+                        const byDate = Object.fromEntries(r.days.map(d => [d.date, d]))
+                        const rowBg = i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'
+                        return (
+                          <tr key={r.employee_id} className={`group ${rowBg} hover:bg-primary-50/50`}>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-400 tabular-nums align-top">{i + 1}</td>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-800 font-medium align-top">
+                              <div className="line-clamp-2 break-words">{r.employee_name}</div>
+                            </td>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-500 align-top">
+                              <div className="line-clamp-2 break-words">{r.department_name || '—'}</div>
+                            </td>
+                            <td className="px-1.5 py-1 border-r border-b border-gray-100 align-middle">
+                              <div className="flex gap-[2px] items-center h-4 min-w-0 overflow-hidden">
+                                {Array.from({ length: daysInMonth }, (_, di) => {
+                                  const dateStr = `${teamMonth}-${String(di + 1).padStart(2, '0')}`
+                                  const day = byDate[dateStr]
+                                  const st = day?.status
+                                  const hasPhoto = day && (day.clock_in_photo || day.clock_out_photo)
+                                  return (
+                                    <span key={di} title={`${dateStr}${st ? ': ' + attendanceLabel(st, day.leave_type_name, day.leave_status) : ''}${hasPhoto ? ' (click for photo)' : ''}`}
+                                      onClick={hasPhoto ? () => setTeamPhotos({ employee_name: r.employee_name, ...day }) : undefined}
+                                      className={`h-4 w-[3px] rounded-sm ${st ? HEAT_COLORS[st] || 'bg-gray-200' : 'bg-gray-100'} ${hasPhoto ? 'cursor-pointer hover:h-5 hover:-translate-y-0.5 transition-transform' : ''}`} />
+                                  )
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-500 align-top"><span className="tabular-nums">{r.present}</span></td>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-500 align-top"><span className="tabular-nums">{r.late}</span></td>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-500 align-top"><span className="tabular-nums">{r.absent}</span></td>
+                            <td className="px-2.5 py-1 border-r border-b border-gray-100 text-gray-500 align-top"><span className="tabular-nums">{(r.total_hours || 0).toFixed(1)}</span></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </>
           )}
@@ -756,7 +888,8 @@ export default function HR() {
             {filteredEmployees.length === 0 ? (
               <p className="text-sm text-gray-400 p-4 text-center">No employees found</p>
             ) : filteredEmployees.map(e => (
-              <div key={e.id} className="px-4 py-3 flex items-center justify-between">
+              <button key={e.id} onClick={() => openEditEmployee(e)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-sm font-bold flex-shrink-0">
                     {e.first_name?.[0]}{e.last_name?.[0]}
@@ -774,147 +907,7 @@ export default function HR() {
                     {e.employment_type}
                   </span>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── LOCATIONS (manager+) ──────────────────── */}
-      {tab === 'Locations' && (
-        <div className="space-y-3">
-          {siteMsg && (
-            <div className={`rounded-xl px-4 py-2 text-sm border ${
-              siteMsg.startsWith('Imported:') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
-            }`}>{siteMsg}</div>
-          )}
-
-          {!showSiteForm ? (
-            <div className="flex gap-2">
-              <button onClick={openNewSite}
-                className="flex-1 bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition">
-                + Add Location
               </button>
-              <button onClick={importSitesFromProjects} disabled={importingSites}
-                className="flex-1 bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition">
-                {importingSites ? 'Importing…' : 'Import from Projects'}
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={saveSite} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-              <p className="font-semibold text-gray-700 text-sm">{editingSiteId ? 'Edit Location' : 'New Location'}</p>
-              <div>
-                <label className="text-xs text-gray-400">Project (optional — auto-fills fields below)</label>
-                <select value={siteForm.project}
-                  onChange={e => pickSiteProject(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
-                  <option value="">— No project —</option>
-                  {siteProjects.map(p => (
-                    <option key={p.id} value={p.id}>{p.project_no ? `${p.project_no} — ` : ''}{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Name</label>
-                <input required value={siteForm.name}
-                  onChange={e => setSiteForm(p => ({ ...p, name: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Type</label>
-                <select value={siteForm.type}
-                  onChange={e => setSiteForm(p => ({ ...p, type: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
-                  {SITE_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Address</label>
-                <input value={siteForm.address}
-                  onChange={e => setSiteForm(p => ({ ...p, address: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-gray-400">Postal Code</label>
-                  <input value={siteForm.postal_code}
-                    onChange={e => setSiteForm(p => ({ ...p, postal_code: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400">GPS Latitude</label>
-                  <input type="number" step="any" value={siteForm.lat}
-                    onChange={e => setSiteForm(p => ({ ...p, lat: e.target.value }))}
-                    placeholder="1.3772153"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400">GPS Longitude</label>
-                  <input type="number" step="any" value={siteForm.lng}
-                    onChange={e => setSiteForm(p => ({ ...p, lng: e.target.value }))}
-                    placeholder="103.8707002"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Geofence Radius (metres) — used for clock-in site matching</label>
-                <input type="number" min="10" step="10" value={siteForm.radius}
-                  onChange={e => setSiteForm(p => ({ ...p, radius: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-gray-400">Contact Name</label>
-                  <input value={siteForm.contact_name}
-                    onChange={e => setSiteForm(p => ({ ...p, contact_name: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400">Contact Phone</label>
-                  <input value={siteForm.contact_phone}
-                    onChange={e => setSiteForm(p => ({ ...p, contact_phone: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
-                </div>
-              </div>
-              <textarea placeholder="Notes (optional)" value={siteForm.notes}
-                onChange={e => setSiteForm(p => ({ ...p, notes: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500 resize-none" rows={2} />
-              <div className="flex gap-2">
-                <button type="submit" disabled={siteSaving}
-                  className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
-                  {siteSaving ? 'Saving…' : 'Save'}
-                </button>
-                <button type="button" onClick={() => setShowSiteForm(false)}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
-              </div>
-            </form>
-          )}
-
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-            {sitesLoading ? (
-              <p className="text-sm text-gray-400 p-4 text-center">Loading…</p>
-            ) : sites.length === 0 ? (
-              <p className="text-sm text-gray-400 p-4 text-center">No locations yet</p>
-            ) : sites.map(s => (
-              <div key={s.id} className="px-4 py-3 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{s.name}</p>
-                  <p className="text-xs text-gray-400">{s.address || '—'}</p>
-                  <p className="text-xs text-gray-400">
-                    {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(7)}, ${parseFloat(s.lng).toFixed(7)}` : 'No GPS set'}
-                  </p>
-                  {s.project_name && (
-                    <p className="text-xs text-primary-500 mt-0.5">↳ from project: {s.project_name}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
-                    {s.type?.replace('_', ' ')}
-                  </span>
-                  <button onClick={() => openEditSite(s)} className="text-xs text-primary-600 hover:underline">Edit</button>
-                  <button onClick={() => deleteSite(s)} className="text-xs text-red-500 hover:underline">Remove</button>
-                </div>
-              </div>
             ))}
           </div>
         </div>
@@ -958,6 +951,72 @@ export default function HR() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── EDIT EMPLOYEE (manager+) ──────────────── */}
+      {editEmployee && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+          onClick={() => setEditEmployee(null)}>
+          <form onSubmit={saveEmployee} onClick={e => e.stopPropagation()}
+            className="bg-white rounded-xl p-4 max-w-sm w-full space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="font-semibold text-gray-800 text-sm">
+                {editEmployee.first_name} {editEmployee.last_name} · {editEmployee.emp_no}
+              </p>
+              <button type="button" onClick={() => setEditEmployee(null)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+
+            <label className="flex items-center justify-between text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2">
+              Active
+              <input type="checkbox" checked={empEditForm.is_active}
+                onChange={e => setEmpEditForm(p => ({ ...p, is_active: e.target.checked }))}
+                className="w-4 h-4" />
+            </label>
+            {!empEditForm.is_active && (
+              <p className="text-xs text-amber-600 -mt-2">
+                Inactive employees drop off the attendance roster and employee list.
+              </p>
+            )}
+
+            <label className="flex items-center justify-between text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2">
+              Can Clock In
+              <input type="checkbox" checked={empEditForm.can_clock_in}
+                onChange={e => setEmpEditForm(p => ({ ...p, can_clock_in: e.target.checked }))}
+                className="w-4 h-4" />
+            </label>
+
+            <div>
+              <label className="text-xs text-gray-400">Employment Type</label>
+              <select value={empEditForm.employment_type}
+                onChange={e => setEmpEditForm(p => ({ ...p, employment_type: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500">
+                <option value="fulltime">Full Time</option>
+                <option value="parttime">Part Time</option>
+                <option value="contract">Contract</option>
+                <option value="intern">Intern</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400">End Date (leave blank if still employed)</label>
+              <input type="date" value={empEditForm.end_date}
+                onChange={e => setEmpEditForm(p => ({ ...p, end_date: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
+            </div>
+
+            {empEditMsg && <p className="text-xs text-red-500">{empEditMsg}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <button type="submit" disabled={empSaving}
+                className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
+                {empSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" onClick={() => setEditEmployee(null)}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+            </div>
+          </form>
         </div>
       )}
 

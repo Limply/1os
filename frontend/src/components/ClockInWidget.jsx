@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ClipboardList, AlertTriangle, Loader2, Check, X } from 'lucide-react'
+import { ClipboardList, AlertTriangle, Loader2, Check, X, CheckCircle2 } from 'lucide-react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 
@@ -37,6 +37,7 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
   const [gpsError, setGpsError] = useState('')
   const [healthDeclared, setHealthDeclared] = useState(false)
   const [clockedIn, setClockedIn] = useState(false)
+  const [clockInConfirm, setClockInConfirm] = useState(false)
   const [todayRecord, setTodayRecord] = useState(null)
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState('')
@@ -131,8 +132,14 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
     const now = new Date()
     const project = projects.find(p => String(p.id) === String(selectedProject))
     const siteName = matchedSite || project?.name || gpsCoords?.address || ''
+    const dd = String(now.getDate()).padStart(2, '0')
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const yyyy = now.getFullYear()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const min = String(now.getMinutes()).padStart(2, '0')
+    const ss = String(now.getSeconds()).padStart(2, '0')
     const lines = [
-      now.toLocaleString(),
+      `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`,
       siteName,
       gpsCoords ? `${gpsCoords.lat.toFixed(5)}, ${gpsCoords.lng.toFixed(5)}` : '',
       !clockedIn ? 'I am healthy ✓' : '',
@@ -212,6 +219,11 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
       const res = await api.post(`/hr/attendance/${action}/`, formData)
       if (res.data.success) {
         setClockedIn(action === 'clock_in')
+        if (action === 'clock_in') {
+          setClockInConfirm(true)
+        } else {
+          setClockInConfirm(false)
+        }
         const msg = action === 'clock_in'
           ? `Clock In accepted at ${new Date().toLocaleTimeString()}\nRemember to clock out later!`
           : `Clock Out accepted at ${new Date().toLocaleTimeString()}\nTotal: ${res.data.hours_worked}h\nHave a great day!`
@@ -237,6 +249,21 @@ export default function ClockInWidget({ employee: empProp = null, compact = fals
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
+
+      {/* Big clock-in confirmation — workers tend to clock in again when unsure it worked */}
+      {clockInConfirm && (
+        <div className="relative bg-green-600 text-white rounded-2xl p-5 text-center shadow-lg">
+          <button onClick={() => setClockInConfirm(false)}
+            aria-label="Dismiss"
+            className="absolute top-2 right-2 text-green-100 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+          <CheckCircle2 className="w-10 h-10 mx-auto mb-2" />
+          <p className="text-xl font-bold">You're clocked in!</p>
+          <p className="text-sm text-green-50 mt-1">No need to clock in again.</p>
+          <p className="text-sm text-green-50 mt-2">Clocked in by mistake? Wait 3 minutes, then use Clock Out to fix it.</p>
+        </div>
+      )}
 
       {/* Schedule info */}
       {schedule ? (

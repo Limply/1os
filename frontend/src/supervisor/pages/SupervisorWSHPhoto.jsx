@@ -72,8 +72,8 @@ export default function SupervisorWSHPhoto() {
   const [loading,           setLoading]           = useState(true)
   const [saving,            setSaving]            = useState(false)
   const [saved,             setSaved]             = useState(null)
-  const [photoFile,         setPhotoFile]         = useState(null)
-  const [photoPreview,      setPhotoPreview]      = useState(null)
+  const [photoFiles,        setPhotoFiles]        = useState([])
+  const [photoPreviews,     setPhotoPreviews]     = useState([])
 
   const [form, setForm] = useState({
     date:             today,
@@ -113,14 +113,20 @@ export default function SupervisorWSHPhoto() {
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
 
   function handlePhoto(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setPhotoFiles(prev => [...prev, ...files])
+    setPhotoPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+    e.target.value = ''
+  }
+
+  function removePhoto(index) {
+    setPhotoFiles(prev => prev.filter((_, i) => i !== index))
+    setPhotoPreviews(prev => prev.filter((_, i) => i !== index))
   }
 
   async function handleSubmit() {
-    if (!selectedProjectId || !photoFile) return
+    if (!selectedProjectId || !photoFiles.length) return
     setSaving(true)
     try {
       const fd = new FormData()
@@ -130,7 +136,8 @@ export default function SupervisorWSHPhoto() {
       fd.append('observation_type', form.observation_type)
       fd.append('description',      form.description)
       fd.append('action_taken',     form.action_taken)
-      fd.append('photo',            photoFile)
+      fd.append('photo',            photoFiles[0])
+      photoFiles.slice(1).forEach(f => fd.append('extra_photos', f))
 
       const res = await api.post('/projects/wsh-photos/', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -152,9 +159,9 @@ export default function SupervisorWSHPhoto() {
   const waLink = `https://wa.me/?text=${encodeURIComponent(waText)}`
 
   async function shareAll() {
-    if (photoFile && navigator.canShare?.({ files: [photoFile] })) {
+    if (photoFiles.length && navigator.canShare?.({ files: photoFiles })) {
       try {
-        await navigator.share({ files: [photoFile], text: waText })
+        await navigator.share({ files: photoFiles, text: waText })
         return
       } catch (e) {
         if (e.name === 'AbortError') return
@@ -183,8 +190,8 @@ export default function SupervisorWSHPhoto() {
     const savedWaLink = `https://wa.me/?text=${encodeURIComponent(savedWaText)}`
 
     async function shareSuccess() {
-      if (photoFile && navigator.canShare?.({ files: [photoFile] })) {
-        try { await navigator.share({ files: [photoFile], text: savedWaText }); return }
+      if (photoFiles.length && navigator.canShare?.({ files: photoFiles })) {
+        try { await navigator.share({ files: photoFiles, text: savedWaText }); return }
         catch (e) { if (e.name === 'AbortError') return }
       }
       window.open(savedWaLink, '_blank')
@@ -199,8 +206,15 @@ export default function SupervisorWSHPhoto() {
           <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{form.project_label} · {saved.date}</div>
         </div>
 
-        {photoPreview && (
-          <img src={photoPreview} alt="wsh" style={{ width: '100%', borderRadius: 14, marginBottom: 16, objectFit: 'cover', maxHeight: 240 }} />
+        {photoPreviews.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 16 }}>
+            {photoPreviews.map((src, i) => (
+              <img key={i} src={src} alt="wsh" style={{
+                width: photoPreviews.length === 1 ? '100%' : 140, height: 180, borderRadius: 14,
+                objectFit: 'cover', flexShrink: 0,
+              }} />
+            ))}
+          </div>
         )}
 
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
@@ -218,10 +232,10 @@ export default function SupervisorWSHPhoto() {
             width: '100%', marginBottom: 8, cursor: 'pointer',
           }}>
           {waIcon}
-          Send via WhatsApp {photoFile ? '(photo + report)' : ''}
+          Send via WhatsApp {photoFiles.length ? `(${photoFiles.length} photo${photoFiles.length > 1 ? 's' : ''} + report)` : ''}
         </button>
 
-        <button onClick={() => { setSaved(null); setPhotoFile(null); setPhotoPreview(null); setForm(f => ({ ...f, description: '', action_taken: '' })) }}
+        <button onClick={() => { setSaved(null); setPhotoFiles([]); setPhotoPreviews([]); setForm(f => ({ ...f, description: '', action_taken: '' })) }}
           style={{ display: 'block', width: '100%', textAlign: 'center', color: C.muted, fontSize: 12, padding: '10px 0', cursor: 'pointer' }}>
           Record another observation
         </button>
@@ -256,37 +270,52 @@ export default function SupervisorWSHPhoto() {
 
       <div style={{ padding: '16px 16px 0' }}>
 
-        {/* Photo — required */}
-        <input ref={photoRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhoto} />
-        <div style={{ position: 'relative', marginBottom: 16 }}>
-          <div onClick={() => photoRef.current?.click()}
-            style={{
-              background: C.card,
-              border: `2px ${photoPreview ? 'solid' : 'dashed'} ${photoPreview ? C.green : C.red}`,
-              borderRadius: 14, overflow: 'hidden', cursor: 'pointer', minHeight: 160,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            {photoPreview
-              ? <img src={photoPreview} alt="wsh" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', display: 'block' }} />
-              : (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 10px' }}>
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                    <circle cx="12" cy="13" r="4"/>
-                  </svg>
-                  <div style={{ fontSize: 13, color: C.red, fontWeight: 800 }}>Tap to take photo</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Required for WSH record</div>
-                </div>
-              )
-            }
-          </div>
-          {photoPreview && (
-            <button onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
+        {/* Photos — at least one required, more can be added */}
+        <input ref={photoRef} type="file" accept="image/*" capture="environment" multiple style={{ display: 'none' }} onChange={handlePhoto} />
+        <div style={{ marginBottom: 16 }}>
+          {photoPreviews.length === 0 ? (
+            <div onClick={() => photoRef.current?.click()}
               style={{
-                position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)',
-                color: '#fff', borderRadius: '50%', width: 28, height: 28,
-                fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              }}>✕</button>
+                background: C.card, border: `2px dashed ${C.red}`,
+                borderRadius: 14, overflow: 'hidden', cursor: 'pointer', minHeight: 160,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+              <div style={{ textAlign: 'center', padding: 24 }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 10px' }}>
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+                <div style={{ fontSize: 13, color: C.red, fontWeight: 800 }}>Tap to take photo</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Required for WSH record — you can add more than one</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+              {photoPreviews.map((src, i) => (
+                <div key={i} style={{ position: 'relative', flexShrink: 0 }}>
+                  <img src={src} alt="wsh" style={{ width: 120, height: 160, borderRadius: 12, objectFit: 'cover', display: 'block', border: `2px solid ${i === 0 ? C.green : C.border}` }} />
+                  {i === 0 && (
+                    <span style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.6)', color: C.green, fontSize: 9, fontWeight: 800, borderRadius: 6, padding: '2px 6px' }}>MAIN</span>
+                  )}
+                  <button onClick={() => removePhoto(i)}
+                    style={{
+                      position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)',
+                      color: '#fff', borderRadius: '50%', width: 24, height: 24,
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    }}>✕</button>
+                </div>
+              ))}
+              <button onClick={() => photoRef.current?.click()}
+                style={{
+                  width: 120, height: 160, borderRadius: 12, flexShrink: 0,
+                  background: C.card, border: `2px dashed ${C.border}`, color: C.muted,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                }}>
+                <span style={{ fontSize: 22 }}>+</span>
+                Add photo
+              </button>
+            </div>
           )}
         </div>
 
@@ -354,17 +383,17 @@ export default function SupervisorWSHPhoto() {
         </div>
 
         {/* Submit */}
-        <button onClick={handleSubmit} disabled={saving || !photoFile || !selectedProjectId}
+        <button onClick={handleSubmit} disabled={saving || !photoFiles.length || !selectedProjectId}
           style={{
-            width: '100%', background: !photoFile ? C.card : C.yellow,
-            color: !photoFile ? C.muted : '#0D1720',
-            border: !photoFile ? `1px solid ${C.border}` : 'none',
+            width: '100%', background: !photoFiles.length ? C.card : C.yellow,
+            color: !photoFiles.length ? C.muted : '#0D1720',
+            border: !photoFiles.length ? `1px solid ${C.border}` : 'none',
             borderRadius: 14, padding: '14px 20px', fontWeight: 900, fontSize: 15,
             opacity: (saving || !selectedProjectId) ? 0.6 : 1,
-            cursor: (saving || !photoFile || !selectedProjectId) ? 'not-allowed' : 'pointer',
+            cursor: (saving || !photoFiles.length || !selectedProjectId) ? 'not-allowed' : 'pointer',
             marginBottom: 10,
           }}>
-          {saving ? 'Saving…' : !photoFile ? 'Take a Photo First' : 'Save WSH Record'}
+          {saving ? 'Saving…' : !photoFiles.length ? 'Take a Photo First' : `Save WSH Record${photoFiles.length > 1 ? ` (${photoFiles.length} photos)` : ''}`}
         </button>
 
         {/* WA preview */}

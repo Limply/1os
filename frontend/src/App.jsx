@@ -14,6 +14,7 @@ import Strategy from './pages/Strategy'
 import Placeholder from './pages/Placeholder'
 import Files from './pages/Files'
 import Projects from './pages/Projects'
+import WSHRecords from './pages/WSHRecords'
 import HR from './pages/HR'
 import Finance from './pages/Finance'
 import ProfitLoss from './pages/ProfitLoss'
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="/compliance" element={<ModuleGate module="compliance" title="Compliance"><Placeholder title="Compliance" /></ModuleGate>} />
           <Route path="/files"      element={<ModuleGate module="files" title="Files"><Files /></ModuleGate>} />
           <Route path="/calendar"   element={<ModuleGate module="projects" title="Project Calendar"><Calendar /></ModuleGate>} />
+          <Route path="/wsh"        element={<ModuleGate module="projects" title="WSH Records"><WSHRecords /></ModuleGate>} />
           <Route path="/settings"   element={<Settings />} />
           <Route path="/mock_up_page" element={<MockupPage />} />
         </Route>

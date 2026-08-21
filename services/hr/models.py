@@ -114,6 +114,9 @@ class LeaveApplication(BaseModel):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     remarks = models.TextField(blank=True, null=True)
+    photo = models.ImageField(storage=FileBrowserStorage(subfolder='leave', randomize_filename=False), null=True, blank=True)
+    gps = models.JSONField(null=True, blank=True, help_text='GPS coords at time of report: {"lat": x, "lng": y}')
+    address = models.CharField(max_length=500, blank=True, null=True)
 
     def __str__(self):
         return f"{self.employee} — {self.leave_type} ({self.start_date} to {self.end_date})"
@@ -137,8 +140,8 @@ class Attendance(BaseModel):
     overtime = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
     notes = models.TextField(blank=True, null=True)
-    clock_in_photo = models.ImageField(storage=FileBrowserStorage(subfolder='attendance'), null=True, blank=True)
-    clock_out_photo = models.ImageField(storage=FileBrowserStorage(subfolder='attendance'), null=True, blank=True)
+    clock_in_photo = models.ImageField(storage=FileBrowserStorage(subfolder='attendance', randomize_filename=False), null=True, blank=True)
+    clock_out_photo = models.ImageField(storage=FileBrowserStorage(subfolder='attendance', randomize_filename=False), null=True, blank=True)
     clock_in_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-in: {"lat": x, "lng": y}')
     clock_out_gps = models.JSONField(null=True, blank=True, help_text='GPS coords at clock-out: {"lat": x, "lng": y}')
     clock_in_address = models.CharField(max_length=500, blank=True, null=True)
@@ -384,6 +387,7 @@ class ClaimItem(BaseModel):
     description  = models.CharField(max_length=255)
     amount       = models.DecimalField(max_digits=12, decimal_places=2)
     project_no   = models.CharField(max_length=30, blank=True, null=True, help_text='Linked project number for record')
+    remark       = models.CharField(max_length=255, blank=True, null=True, help_text='Claimant note for this line item')
 
     class Meta:
         ordering = ['expense_date', 'created_at']

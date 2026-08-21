@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/axios'
 import { getUser } from '../api/auth'
 import ProjectDetail from './ProjectDetail'
+import CoordinatesInput from '../components/CoordinatesInput'
 
 const DEFAULT_WIDTHS = {
   no: 110, name: 260, client: 180, contact: 160, priority: 100, progress: 120, tasks: 70,
@@ -19,7 +20,7 @@ const ALL_COLS = [
   { key: 'start_date',      label: 'Start',       sortKey: 'start_date',      colKey: 'start',      defaultOn: false },
   { key: 'end_date',        label: 'End',         sortKey: 'end_date',        colKey: 'end',        defaultOn: false },
   { key: 'manager_name',    label: 'Manager',     sortKey: 'manager_name',    colKey: 'manager',    defaultOn: false },
-  { key: 'supervisor_name', label: 'Supervisor',  sortKey: 'supervisor_name', colKey: 'supervisor', defaultOn: false },
+  { key: 'supervisor_name', label: 'Supervisor',  sortKey: 'supervisor_name', colKey: 'supervisor', defaultOn: true  },
 ]
 const DEFAULT_COLS = ALL_COLS.filter(c => c.defaultOn).map(c => c.key)
 
@@ -49,29 +50,45 @@ const PRIORITY_COLORS = {
 const EMPTY_FORM = {
   name: '', status: 'planning', priority: 'medium',
   client_name: '', client_contact: '', client_email: '', client_phone: '', client_address: '',
+  site_address: '', site_lat: '', site_lng: '',
 }
+
+
+// --- Spreadsheet grid styling -------------------------------------------------
+// Same approach as the ProjectDetail task sheet: border-separate so the sticky
+// header keeps its borders, each cell draws only its right + bottom edge, which
+// collapses visually into one grid.
+const HEAD      = 'px-2 py-1.5 bg-gray-100 border-b border-r border-gray-300 text-[11px] font-semibold text-gray-500 uppercase tracking-wide select-none relative'
+const HEAD_LAST = 'px-2 py-1.5 bg-gray-100 border-b border-gray-300 text-[11px] font-semibold text-gray-500 uppercase tracking-wide select-none relative'
+const CELL = 'px-2 py-1.5 border-b border-r border-gray-200 truncate'
+const LAST = 'px-2 py-1.5 border-b border-gray-200 truncate'
 
 function SortIcon({ direction }) {
   if (!direction) return <span className="ml-1 text-gray-300">↕</span>
   return <span className="ml-1 text-primary-500">{direction === 'asc' ? '↑' : '↓'}</span>
 }
 
-function ResizableHeader({ label, colKey, sortKey, widths, setWidths, align = 'left', sort, onSort, sticky = false }) {
+function ResizableHeader({
+  label, colKey, sortKey, widths, setWidths, align = 'left', sort, onSort, sticky = false, last = false,
+  dragKey, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver,
+}) {
   const startX = useRef(null)
   const startW = useRef(null)
 
   function onMouseDown(e) {
     e.preventDefault()
+    e.stopPropagation()
     startX.current = e.clientX
     startW.current = widths[colKey]
-    const onMove = ev => {
-      const delta = ev.clientX - startX.current
-      setWidths(w => ({ ...w, [colKey]: Math.max(50, startW.current + delta) }))
-    }
+    const onMove = ev => setWidths(w => ({ ...w, [colKey]: Math.max(50, startW.current + ev.clientX - startX.current) }))
     const onUp = () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
     }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }
@@ -80,18 +97,27 @@ function ResizableHeader({ label, colKey, sortKey, widths, setWidths, align = 'l
   const direction = isActive ? sort.dir : null
 
   return (
-    <th style={{ width: widths[colKey], minWidth: widths[colKey], position: sticky ? 'sticky' : 'relative', left: sticky ? 0 : undefined, zIndex: sticky ? 3 : undefined }}
-      className={`px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide select-none${sticky ? ' border-r border-gray-200' : ''}`}
+    <th
+      style={sticky ? { position: 'sticky', left: 0, zIndex: 3 } : undefined}
+      className={`${last ? HEAD_LAST : HEAD}${isDragOver ? ' bg-primary-100' : ''}`}
     >
       <span
-        className={`flex items-center cursor-pointer hover:text-gray-800 transition justify-${align === 'right' ? 'end' : 'start'} ${isActive ? 'text-primary-600' : ''}`}
+        draggable={!sticky}
+        onDragStart={() => onDragStart?.(dragKey)}
+        onDragOver={e => { if (!sticky) { e.preventDefault(); onDragOver?.(dragKey) } }}
+        onDrop={e => { e.preventDefault(); onDrop?.(dragKey) }}
+        onDragEnd={onDragEnd}
+        className={`flex items-center hover:text-gray-800 transition justify-${align === 'right' ? 'end' : 'start'} ${isActive ? 'text-primary-600' : ''} ${sticky ? 'cursor-pointer' : 'cursor-move'}`}
         onClick={() => sortKey && onSort(sortKey)}
+        title={sticky ? undefined : 'Drag to reorder'}
       >
         {label}
         {sortKey && <SortIcon direction={direction} />}
       </span>
       <div onMouseDown={onMouseDown}
-        className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary-300 opacity-0 hover:opacity-100 transition-opacity"
+        onDoubleClick={() => setWidths(w => ({ ...w, [colKey]: DEFAULT_WIDTHS[colKey] ?? 120 }))}
+        title="Drag to resize · double-click to reset"
+        className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary-400 transition-colors"
       />
     </th>
   )
@@ -104,6 +130,7 @@ export default function Projects() {
   const [showForm, setShowForm]         = useState(false)
   const [form, setForm]                 = useState(EMPTY_FORM)
   const [saving, setSaving]             = useState(false)
+  const [createError, setCreateError]   = useState('')
   const [widths, setWidths]             = useState(DEFAULT_WIDTHS)
   const [sort, setSort]                 = useState({ key: 'project_no', dir: 'desc' })
   const [collapsedGroups, setCollapsed] = useState(new Set(['completed', 'cancelled']))
@@ -111,8 +138,12 @@ export default function Projects() {
   const [clients, setClients]               = useState([])
   const [clientDropdown, setClientDropdown] = useState(false)
   const [visibleCols, setVisibleCols]       = useState(DEFAULT_COLS)
+  const [colOrder, setColOrder]             = useState(ALL_COLS.map(c => c.key))
+  const [dragOverKey, setDragOverKey]       = useState(null)
+  const [layoutLoaded, setLayoutLoaded]     = useState(false)
   const [showColPicker, setShowColPicker]   = useState(false)
   const colPickerRef                        = useRef(null)
+  const dragKeyRef                          = useRef(null)
 
   function handleSearch(val) {
     setSearch(val)
@@ -149,10 +180,33 @@ export default function Projects() {
     }).catch(() => {})
   }, [showForm])
 
+  // Load saved column layout (visibility, order, widths) once on mount.
   useEffect(() => {
-    const saved = getUser().preferences?.projects_columns
-    if (Array.isArray(saved) && saved.length > 0) setVisibleCols(saved)
+    const saved = getUser().preferences?.projects_layout
+    if (saved) {
+      if (Array.isArray(saved.visible) && saved.visible.length > 0) setVisibleCols(saved.visible)
+      if (Array.isArray(saved.order) && saved.order.length > 0) {
+        const allKeys = ALL_COLS.map(c => c.key)
+        const valid = saved.order.filter(k => allKeys.includes(k))
+        const missing = allKeys.filter(k => !valid.includes(k))
+        setColOrder([...valid, ...missing])
+      }
+      if (saved.widths && typeof saved.widths === 'object') setWidths(w => ({ ...w, ...saved.widths }))
+    }
+    setLayoutLoaded(true)
   }, [])
+
+  // Persist the layout (debounced so dragging/resizing doesn't spam the API) once loaded.
+  useEffect(() => {
+    if (!layoutLoaded) return
+    const t = setTimeout(() => {
+      const user = getUser()
+      const prefs = { ...(user.preferences || {}), projects_layout: { visible: visibleCols, order: colOrder, widths } }
+      localStorage.setItem('user', JSON.stringify({ ...user, preferences: prefs }))
+      api.patch('/auth/me/', { preferences: prefs }).catch(() => {})
+    }, 600)
+    return () => clearTimeout(t)
+  }, [visibleCols, colOrder, widths, layoutLoaded])
 
   useEffect(() => {
     function handleClick(e) {
@@ -162,19 +216,27 @@ export default function Projects() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  async function saveColPrefs(cols) {
-    const user = getUser()
-    const prefs = { ...(user.preferences || {}), projects_columns: cols }
-    localStorage.setItem('user', JSON.stringify({ ...user, preferences: prefs }))
-    try { await api.patch('/auth/me/', { preferences: prefs }) } catch {}
-  }
-
-  function toggleCol(key) {
-    setVisibleCols(prev => {
-      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-      saveColPrefs(next)
+  function handleColDragStart(key) { dragKeyRef.current = key }
+  function handleColDragOver(key) { if (dragKeyRef.current && dragKeyRef.current !== key) setDragOverKey(key) }
+  function handleColDrop(targetKey) {
+    const from = dragKeyRef.current
+    dragKeyRef.current = null
+    setDragOverKey(null)
+    if (!from || from === targetKey) return
+    setColOrder(prev => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(from)
+      const toIdx = next.indexOf(targetKey)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, from)
       return next
     })
+  }
+  function handleColDragEnd() { dragKeyRef.current = null; setDragOverKey(null) }
+
+  function toggleCol(key) {
+    setVisibleCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
   async function fetchProjects() {
@@ -188,12 +250,20 @@ export default function Projects() {
 
   async function handleCreate(e) {
     e.preventDefault()
+    setCreateError('')
+    if (!form.site_lat || !form.site_lng) {
+      setCreateError('Site Location (GPS coordinates) is required so field staff can clock in/out at this site.')
+      return
+    }
     setSaving(true)
     try {
       await api.post('/projects/projects/', form)
       setShowForm(false)
       setForm(EMPTY_FORM)
       fetchProjects()
+    } catch (err) {
+      const data = err.response?.data
+      setCreateError(data?.detail || data?.non_field_errors?.[0] || 'Could not create project. Check the fields and try again.')
     } finally {
       setSaving(false)
     }
@@ -246,7 +316,10 @@ export default function Projects() {
     return <ProjectDetail projectId={selected} onBack={() => { setSelected(null); fetchProjects() }} />
   }
 
-  const activeCols = ALL_COLS.filter(c => visibleCols.includes(c.key))
+  const activeCols = colOrder
+    .filter(k => visibleCols.includes(k))
+    .map(k => ALL_COLS.find(c => c.key === k))
+    .filter(Boolean)
   const tableWidth = widths.no + activeCols.reduce((sum, c) => sum + (widths[c.colKey] || 120), 0)
   const allCollapsed = grouped.every(g => collapsedGroups.has(g.status))
 
@@ -319,7 +392,7 @@ export default function Projects() {
               </div>
             )}
           </div>
-          <button onClick={() => setShowForm(true)}
+          <button onClick={() => { setCreateError(''); setShowForm(true) }}
             className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition">
             + New Project
           </button>
@@ -401,8 +474,35 @@ export default function Projects() {
                 </div>
               </div>
             </div>
+            <div className="col-span-2 border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Site Location *</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Site Address</label>
+                  <input
+                    value={form.site_address}
+                    onChange={e => setForm(p => ({ ...p, site_address: e.target.value }))}
+                    placeholder="e.g. 123 Jurong East Street 13, Singapore 600123"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <CoordinatesInput
+                  className="col-span-2"
+                  label="GPS Coordinates *"
+                  lat={form.site_lat}
+                  lng={form.site_lng}
+                  onChange={({ lat, lng }) => setForm(p => ({ ...p, site_lat: lat, site_lng: lng }))}
+                />
+                <p className="col-span-2 text-xs text-gray-400 -mt-2">Required so field staff can clock in/out at this site.</p>
+              </div>
+            </div>
+            {createError && (
+              <div className="col-span-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
+                {createError}
+              </div>
+            )}
             <div className="col-span-2 flex gap-2 justify-end">
-              <button type="button" onClick={() => setShowForm(false)}
+              <button type="button" onClick={() => { setCreateError(''); setShowForm(false) }}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
               <button type="submit" disabled={saving}
                 className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
@@ -428,13 +528,20 @@ export default function Projects() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-          <table className="text-sm" style={{ tableLayout: 'fixed', width: tableWidth }}>
-            <thead className="sticky top-0 z-10">
+        <div className="bg-white border border-gray-300 overflow-auto w-fit max-w-full" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+          <table className="border-separate border-spacing-0 text-xs" style={{ tableLayout: 'fixed', width: tableWidth }}>
+            <colgroup>
+              <col style={{ width: widths.no }} />
+              {activeCols.map(c => <col key={c.key} style={{ width: widths[c.colKey] || 120 }} />)}
+            </colgroup>
+            <thead className="sticky top-0 z-20">
               <tr>
                 <ResizableHeader label="Project No." colKey="no" sortKey="project_no" widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} sticky />
-                {activeCols.map(c => (
-                  <ResizableHeader key={c.key} label={c.label} colKey={c.colKey} sortKey={c.sortKey} align={c.align} widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} />
+                {activeCols.map((c, i) => (
+                  <ResizableHeader key={c.key} label={c.label} colKey={c.colKey} sortKey={c.sortKey} align={c.align}
+                    widths={widths} setWidths={setWidths} sort={sort} onSort={onSort} last={i === activeCols.length - 1}
+                    dragKey={c.key} onDragStart={handleColDragStart} onDragOver={handleColDragOver}
+                    onDrop={handleColDrop} onDragEnd={handleColDragEnd} isDragOver={dragOverKey === c.key} />
                 ))}
               </tr>
             </thead>
@@ -446,10 +553,10 @@ export default function Projects() {
                   <Fragment key={status}>
                     {/* Group header row */}
                     <tr
-                      className={`cursor-pointer select-none border-t border-gray-200 ${row}`}
+                      className={`cursor-pointer select-none border-b border-t border-gray-300 ${row}`}
                       onClick={() => toggleGroup(status)}
                     >
-                      <td colSpan={1 + activeCols.length} className={`px-4 py-2 ${text}`}>
+                      <td colSpan={1 + activeCols.length} className={`px-2 py-1.5 ${text}`}>
                         <div className="flex items-center gap-2">
                           <span className="text-xs w-4 opacity-60">{collapsed ? '▶' : '▼'}</span>
                           <span className={`w-2 h-2 rounded-full ${dot} shrink-0`} />
@@ -464,45 +571,39 @@ export default function Projects() {
                       <tr
                         key={p.id}
                         onClick={() => setSelected(p.id)}
-                        className="hover:bg-primary-50 cursor-pointer transition border-t border-gray-100"
+                        className="hover:bg-primary-50 cursor-pointer transition"
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-gray-500 bg-white border-r border-gray-100" style={{ position: 'sticky', left: 0, zIndex: 1 }}>{p.project_no}</td>
-                        {activeCols.map(c => {
+                        <td className={`${CELL} font-mono text-gray-500 bg-white`} style={{ position: 'sticky', left: 0, zIndex: 1 }}>{p.project_no}</td>
+                        {activeCols.map((c, i) => {
+                          const cls = i === activeCols.length - 1 ? LAST : CELL
                           switch (c.key) {
-                            case 'name': return (
-                              <td key="name" className="px-4 py-3">
-                                <div className="font-medium text-gray-800 truncate">{p.name}</div>
-                                {!visibleCols.includes('supervisor_name') && p.supervisor_name && (
-                                  <div className="text-xs text-gray-400">{p.supervisor_name}</div>
-                                )}
-                              </td>
-                            )
-                            case 'client_name': return <td key="client_name" className="px-4 py-3 text-gray-600 truncate">{p.client_name || '—'}</td>
-                            case 'client_contact': return <td key="client_contact" className="px-4 py-3 text-gray-500 truncate">{p.client_contact || '—'}</td>
-                            case 'priority': return <td key="priority" className={`px-4 py-3 font-medium ${PRIORITY_COLORS[p.priority]}`}>{p.priority}</td>
+                            case 'name': return <td key="name" className={`${cls} font-medium text-gray-800`}>{p.name}</td>
+                            case 'client_name': return <td key="client_name" className={`${cls} text-gray-600`}>{p.client_name || '—'}</td>
+                            case 'client_contact': return <td key="client_contact" className={`${cls} text-gray-500`}>{p.client_contact || '—'}</td>
+                            case 'priority': return <td key="priority" className={`${cls} font-medium ${PRIORITY_COLORS[p.priority]}`}>{p.priority}</td>
                             case 'progress': return (
-                              <td key="progress" className="px-4 py-3 text-right">
+                              <td key="progress" className={`${cls} text-right`}>
                                 <div className="flex items-center justify-end gap-2">
-                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5 shrink-0">
                                     <div className="bg-primary-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }} />
                                   </div>
-                                  <span className="text-xs text-gray-600 w-8">{p.progress}%</span>
+                                  <span className="text-[11px] text-gray-600 w-8">{p.progress}%</span>
                                 </div>
                               </td>
                             )
-                            case 'task_count': return <td key="task_count" className="px-4 py-3 text-right text-gray-500">{p.task_count}</td>
+                            case 'task_count': return <td key="task_count" className={`${cls} text-right text-gray-500`}>{p.task_count}</td>
                             case 'status': return (
-                              <td key="status" className="px-4 py-3">
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-600'}`}>
+                              <td key="status" className={cls}>
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-600'}`}>
                                   {STATUS_LABEL[p.status] || p.status}
                                 </span>
                               </td>
                             )
-                            case 'start_date': return <td key="start_date" className="px-4 py-3 text-gray-500 text-xs">{p.start_date || '—'}</td>
-                            case 'end_date': return <td key="end_date" className="px-4 py-3 text-gray-500 text-xs">{p.end_date || '—'}</td>
-                            case 'manager_name': return <td key="manager_name" className="px-4 py-3 text-gray-600 truncate">{p.manager_name || '—'}</td>
-                            case 'supervisor_name': return <td key="supervisor_name" className="px-4 py-3 text-gray-600 truncate">{p.supervisor_name || '—'}</td>
-                            default: return <td key={c.key} className="px-4 py-3 text-gray-500">{p[c.key] || '—'}</td>
+                            case 'start_date': return <td key="start_date" className={`${cls} text-gray-500 text-[11px]`}>{p.start_date || '—'}</td>
+                            case 'end_date': return <td key="end_date" className={`${cls} text-gray-500 text-[11px]`}>{p.end_date || '—'}</td>
+                            case 'manager_name': return <td key="manager_name" className={`${cls} text-gray-600`}>{p.manager_name || '—'}</td>
+                            case 'supervisor_name': return <td key="supervisor_name" className={`${cls} text-gray-600`}>{p.supervisor_name || '—'}</td>
+                            default: return <td key={c.key} className={`${cls} text-gray-500`}>{p[c.key] || '—'}</td>
                           }
                         })}
                       </tr>

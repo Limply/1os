@@ -262,3 +262,15 @@ class WSHPhoto(BaseModel):
 
     def __str__(self):
         return f"{self.project.project_no} — WSH — {self.date}"
+
+
+class WSHPhotoAttachment(BaseModel):
+    """Extra photos beyond the primary one on a WSHPhoto record (e.g. multiple angles of the same hazard)."""
+    wsh_photo = models.ForeignKey(WSHPhoto, on_delete=models.CASCADE, related_name='attachments')
+    photo = models.ImageField(upload_to='wsh/')
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.wsh_photo} — attachment {self.id}"

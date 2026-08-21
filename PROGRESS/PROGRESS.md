@@ -383,6 +383,89 @@ this change alone is `npm run build` with **no** service restart.
 
 ---
 
+## What Was Built (Session 11, 2026-08-18) — Clock-In/Out
+
+> **Status: uncommitted on `/opt/1os` (working directory changes, not yet committed or
+> deployed).** Logged ahead of an Operations review/UAT pass on the clock-in flow.
+> Migrations `0019`/`0020` are dated 2026-07-30 in their generated headers but were
+> never committed — this session is where they're first being recorded. Scope below
+> is clock-in/out only; this working tree also has unrelated in-flight changes
+> (Claims export, WSH multi-photo, Projects table UX) not covered here.
+
+### Self-service MC (medical certificate) report
+- New "Report MC for Today" button on the Clock In page (`ClockIn.jsx`) — opens a
+  camera+GPS capture modal (reuses the same watermark-photo pattern as clock-in/out),
+  then `POST /hr/leave-applications/report_mc/` (`services/hr/views.py`).
+- Creates a `pending` `LeaveApplication` (auto-creates the `MC` `LeaveType` if it
+  doesn't exist) **and** immediately reflects on today's roster by upserting an
+  `Attendance` row with `status='leave'` — so Team Attendance shows it same-day
+  without waiting for HR to approve the leave application.
+- Blocks duplicate reports for the same day (`already_reported` check against
+  existing pending/approved MC applications).
+- Emails `alain@astronic.com.sg`, `admin@astronic.com.sg`, `lucus@astronic.com.sg`
+  (`MC_REPORT_RECIPIENTS`, hardcoded in `views.py`) — best-effort, swallows send
+  failures so a broken mail config can't block the MC report itself.
+- New `LeaveApplication.photo` / `.gps` / `.address` fields (migration `0020`) —
+  mirrors the fields `Attendance` already had for clock-in/out photos.
+
+### Business-date cutoff for the attendance day
+- New `get_business_date()` (`services/hr/views.py`): before 4am counts as the
+  *previous* day's attendance, so an overnight shift's clock-in/out and OT stay
+  attributed to the shift's start date instead of splitting across midnight.
+  `ATTENDANCE_RESET_HOUR = 4`.
+- Replaces the previous plain `timezone.now().date()` in `clock_in`, `clock_out`,
+  `today`, and the employee `me` summary endpoint.
+
+### Project-level geofence for clock-in
+- New `PROJECT_CLOCK_IN_RADIUS = 200`m check: when a project is selected at
+  clock-in, GPS is checked against that project's `site_lat`/`site_lng` regardless
+  of whether a `WorkSchedule` exists — previously the project geofence was only
+  enforced as a fallback *inside* the schedule-exists branch. Runs for schedule-less
+  clock-ins too, closing a gap where picking a project remotely skipped location
+  verification entirely.
+- `_requires_clock_in()` simplified to read `Employee.can_clock_in` directly instead
+  of deriving it from `Position.level` → `LEVEL_PERMISSIONS` — the flag is now the
+  single source of truth. `Employee.can_clock_in` is editable inline from HR >
+  Employees (new `openEditEmployee`/`saveEmployee` in `HR.jsx`, alongside
+  `is_active`, `employment_type`, `end_date`).
+
+### Clock-in/out photo filenames now readable
+- `FileBrowserStorage` gained a `randomize_filename` flag (`shared/storage.py`,
+  default `True`); attendance/leave photos now pass `randomize_filename=False`
+  (migration `0019` for `Attendance`, `0020` for `LeaveApplication`).
+- Filenames are now `dd-mm-yyyy.HHMMSS.Person_Name.Site_Name.ext` instead of a random
+  UUID (`_attendance_photo_filename()` in `views.py`) — makes the FileBrowser
+  attendance folder scannable by a human without opening 1OS.
+
+### Team Attendance — leave status inline, new map view
+- Daily and monthly views now show which `LeaveType` (MC, AL, etc.) and approval
+  status a "leave" row corresponds to, instead of just the bare `leave` status
+  (`leave_for()` helper joins `LeaveApplication` onto the attendance rows).
+- Daily table gained a `location` column (project name, else clock-in/out address)
+  and GPS coordinates in the API response.
+- New **map view** (`teamView === 'map'`) using `StaffLocationsMap.jsx` (new,
+  Leaflet/`react-leaflet` — new deps in `package.json`) — plots today's roster as
+  coloured pins by status. **Read-only** — it's a viewer, not where locations get
+  created (see below).
+
+### HR > Locations tab removed (intentional)
+- The old **Locations** manager tab (full CRUD over `organisation.Site` — name,
+  type, GPS, radius, "Import from Projects", built in Session 9) has been deleted
+  from `HR.jsx` entirely, with no replacement UI. Confirmed intentional: Sites as an
+  independent registry are being dropped in favour of `Project.site_lat`/`site_lng`
+  directly — clock-in's project picker is now the one place a location comes from.
+- `Schedules.jsx`'s own GPS entry (separate from the old Locations tab, still
+  present) was refactored to a shared `CoordinatesInput.jsx` (new) — paste a Google
+  Maps link or `lat, lng` text instead of typing/using the browser geolocation
+  button, via `parseGoogleMapsLocation()`.
+- **Open question for the Operations review:** with Sites-as-a-registry gone, the
+  only two places a clock-in location gets set are (a) a `Project`'s `site_lat`/
+  `site_lng` and (b) a per-employee `WorkSchedule` in `Schedules.jsx`. No one has
+  been assigned ownership of keeping either populated day-to-day — worth confirming
+  who does this before staff are expected to rely on it for clock-in.
+
+---
+
 ## What's Next (Priority Order)
 
 ### Frontend
@@ -420,6 +503,7 @@ this change alone is `npm run build` with **no** service restart.
 
 | Issue | Status |
 |---|---|
+| **No owner for clock-in location upkeep** (found 2026-08-18, Session 11) | Since the HR > Locations tab was removed in favour of `Project.site_lat`/`site_lng` + per-employee `WorkSchedule`, nobody is assigned to keep either populated. Needs an owner/process before the Operations review — otherwise staff without a schedule or a project with GPS set can't be geofenced at clock-in. |
 | **[FIXED 2026-06-16] Photo upload fails on mobile browser** | nginx default `client_max_body_size` is 1MB; mobile camera photos are 3–8MB. Fix: added `client_max_body_size 20M;` to `/etc/nginx/sites-available/1os-prod` on the server. Desktop worked because gallery picks are smaller. |
 | **[CORRECTED 2026-07-30] Dev/prod DB separation** | Previously documented as sharing one `1os_db` — **not true**. Dev uses `astronic_dev`, prod uses `astronic`, confirmed via each checkout's `.env`. Consequence: migrations don't propagate between them automatically. Discovered because `0016_attendance_health_declared` was applied to dev but not prod — prod's `hr_attendance` table is missing the column, a live landmine for the next prod deploy/restart until `migrate` is run there. |
 | Project detail `localStorage` keys are named `farm.*` | Cosmetic. `farm.projectDetail.colWidths` / `.view` / `farm.gantt.unit` originated in 1Farm. No collision — `sim-eng.com` and `farm.sim-eng.com` have separate `localStorage`. Left as-is to keep the file in step with 1Farm for future ports |
