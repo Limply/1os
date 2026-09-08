@@ -165,7 +165,7 @@ export default function ProjectDetail({ projectId, onBack }) {
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
-  const foremen  = users
+  const foremen  = users.filter(u => u.role === 'superadmin' || u.position_title?.toLowerCase().includes('foreman') || u.position_title?.toLowerCase().includes('supervisor'))
   const managers = users.filter(u => u.role === 'superadmin' || u.permissions?.includes(P.PROJECTS_EDIT))
   const [newGroupName, setNewGroupName] = useState('')
   const [addingGroup, setAddingGroup] = useState(false)
