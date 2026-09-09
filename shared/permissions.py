@@ -63,11 +63,12 @@ ROLE_DEFAULT_PERMISSIONS = {
 # Level-based permissions for staff users (position.level → permission list).
 # Positions without a matching level fall back to position.permissions JSONField.
 LEVEL_PERMISSIONS = {
-    1:  [P.SUPERVISOR_APP],
-    3:  [P.SUPERVISOR_APP, P.PROJECTS_VIEW, P.HR_VIEW],
-    5:  [P.DASHBOARD_VIEW, P.SUPERVISOR_APP, P.PROJECTS_VIEW, P.HR_VIEW, P.FILES_VIEW],
-    7:  [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.HR_VIEW, P.CRM_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],
-    9:  [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.PROJECTS_EDIT, P.HR_VIEW, P.OPERATIONS_VIEW, P.CRM_VIEW, P.COMPLIANCE_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],
+    1:  [P.SUPERVISOR_APP],                                                                                                       # Construction Worker — clock-in only
+    2:  [P.SUPERVISOR_APP, P.PROJECTS_VIEW],                                                                                       # Foreman — supervisor app: Home/Projects/Clock In
+    3:  [P.DASHBOARD_VIEW, P.SUPERVISOR_APP, P.PROJECTS_VIEW, P.HR_VIEW, P.FILES_VIEW],                                            # Senior Supervisor — full supervisor app
+    6:  [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.PROJECTS_EDIT, P.HR_VIEW, P.HR_MANAGE, P.HR_APPROVE_LEAVE, P.OPERATIONS_VIEW,
+         P.OPERATIONS_EDIT, P.FINANCE_VIEW, P.CRM_VIEW, P.CRM_EDIT, P.COMPLIANCE_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],             # Manager — full desktop app
+    7:  [P.DASHBOARD_VIEW, P.HR_VIEW],                                                                                            # Advisor / Business Development
     10: [P.DASHBOARD_VIEW, P.PROJECTS_VIEW, P.PROJECTS_EDIT, P.HR_VIEW, P.HR_MANAGE, P.OPERATIONS_VIEW, P.OPERATIONS_EDIT, P.FINANCE_VIEW, P.CRM_VIEW, P.CRM_EDIT, P.COMPLIANCE_VIEW, P.FILES_VIEW, P.SETTINGS_VIEW],
 }
 

@@ -80,9 +80,14 @@ class Site(BaseModel):
     postal_code = models.CharField(max_length=10, blank=True, null=True)
     lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    radius = models.IntegerField(default=200, help_text='Geofence radius in metres (used for clock-in site matching)')
     contact_name = models.CharField(max_length=100, blank=True, null=True)
     contact_phone = models.CharField(max_length=20, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    project = models.ForeignKey(
+        'projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='sites',
+        help_text='Optional — project this site was populated from / is linked to'
+    )
 
     def __str__(self):
         return self.name

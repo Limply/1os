@@ -112,6 +112,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'project_no', 'name', 'status', 'priority',
             'client_name', 'client_contact', 'client_email', 'client_phone',
+            'site_address', 'site_lat', 'site_lng',
             'start_date', 'end_date', 'manager', 'manager_name',
             'supervisor', 'supervisor_name', 'progress', 'task_count',
             'quoted_amount', 'payment_received', 'expenses',

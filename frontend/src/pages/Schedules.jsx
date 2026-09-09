@@ -75,6 +75,8 @@ export default function Schedules() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [projects, setProjects] = useState([])
+  const [projectPick, setProjectPick] = useState('')
   const [importErrors, setImportErrors] = useState([])
   const [importMsg, setImportMsg] = useState('')
   const fileInputRef = useRef(null)
@@ -89,12 +91,24 @@ export default function Schedules() {
   const [depError, setDepError] = useState('')
   const [generating, setGenerating] = useState(null) // id being generated
   const [allEmployees, setAllEmployees] = useState([])
+  const [depProjectPick, setDepProjectPick] = useState('')
 
   useEffect(() => {
     const toList = d => Array.isArray(d) ? d : (d.results || [])
     api.get('/hr/employees/?limit=999&can_clock_in=true').then(res => setEmployees(toList(res.data)))
     api.get('/hr/employees/?limit=999').then(res => setAllEmployees(toList(res.data)))
+    api.get('/projects/projects/?limit=999').then(res => setProjects(toList(res.data)))
   }, [])
+
+  const applyProjectSite = (projectId, setter) => {
+    const p = projects.find(pr => String(pr.id) === String(projectId))
+    if (!p) return
+    if (!p.site_lat || !p.site_lng) {
+      alert(`"${p.name}" doesn't have a site location set yet — add one on the project first, or enter coordinates manually.`)
+      return
+    }
+    setter(f => ({ ...f, location_name: p.name, location_lat: p.site_lat, location_lng: p.site_lng }))
+  }
 
   // Fetch schedules
   useEffect(() => {
@@ -169,6 +183,7 @@ export default function Schedules() {
     setForm({ ...EMPTY_FORM, date: prefillDate || todayISO() })
     setEditingId(null)
     setError('')
+    setProjectPick('')
     setShowModal(true)
   }
 
@@ -186,6 +201,7 @@ export default function Schedules() {
     })
     setEditingId(s.id)
     setError('')
+    setProjectPick('')
     setShowModal(true)
   }
 
@@ -266,6 +282,7 @@ export default function Schedules() {
     setDepForm({ ...EMPTY_DEP })
     setEditingDepId(null)
     setDepError('')
+    setDepProjectPick('')
     setShowDepModal(true)
   }
 
@@ -285,6 +302,7 @@ export default function Schedules() {
     })
     setEditingDepId(dep.id)
     setDepError('')
+    setDepProjectPick('')
     setShowDepModal(true)
   }
 
@@ -593,6 +611,19 @@ export default function Schedules() {
                     </div>
                   </div>
                   <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase">Copy Site From Project</label>
+                    <select value={projectPick}
+                      onChange={e => { setProjectPick(e.target.value); applyProjectSite(e.target.value, setForm) }}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400">
+                      <option value="">— Or enter site details manually below —</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.project_no ? `${p.project_no} — ` : ''}{p.name}{(!p.site_lat || !p.site_lng) ? ' (no location set)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="text-xs font-semibold text-gray-500 uppercase">Location Name *</label>
                     <input type="text" placeholder="e.g. Raffles Place Site" value={form.location_name}
                       onChange={e => setForm(f => ({ ...f, location_name: e.target.value }))}
@@ -727,6 +758,20 @@ export default function Schedules() {
                       <option value="">Select employee...</option>
                       {allEmployees.map(e => (
                         <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase">Copy Site From Project</label>
+                    <select value={depProjectPick}
+                      onChange={e => { setDepProjectPick(e.target.value); applyProjectSite(e.target.value, setDepForm) }}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:border-primary-400">
+                      <option value="">— Or enter site details manually below —</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.project_no ? `${p.project_no} — ` : ''}{p.name}{(!p.site_lat || !p.site_lng) ? ' (no location set)' : ''}
+                        </option>
                       ))}
                     </select>
                   </div>

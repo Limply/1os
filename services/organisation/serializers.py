@@ -31,6 +31,8 @@ class PositionSerializer(serializers.ModelSerializer):
 
 
 class SiteSerializer(serializers.ModelSerializer):
+    project_name = serializers.CharField(source='project.name', read_only=True, default=None)
+
     class Meta:
         model = Site
         fields = '__all__'
