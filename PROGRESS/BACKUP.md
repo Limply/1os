@@ -17,7 +17,7 @@ server backs up its own DB**. Backups are never committed to git.
 ## Run a backup
 
 ```bash
-cd <repo>            # SE dev: /home/lucus/1os-dev   |   SE prod: /opt/1os
+cd /opt/1os          # the only 1OS install
 ./scripts/backup_db.sh
 ```
 
@@ -51,7 +51,7 @@ PGPASSWORD=<pw> pg_restore -h localhost -U <DB_USER> -d <DB_NAME> ~/backups/<DB_
 Daily 02:00 backup via cron:
 
 ```cron
-0 2 * * * cd /home/lucus/1os-dev && ./scripts/backup_db.sh >> ~/backups/backup.log 2>&1
+0 2 * * * cd /opt/1os && ./scripts/backup_db.sh >> ~/backups/backup.log 2>&1
 ```
 
 ## Backup history (manual log)

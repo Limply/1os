@@ -6,88 +6,100 @@
 ---
 
 ## Environments
-| | Dev | Prod |
-|---|---|---|
-| **Path** | `/home/lucus/1os-dev/` | `/opt/1os/` |
-| **Branch** | `dev` | `main` |
-| **Frontend** | Vite `:6100` (hot reload, proxies API to :6001) | Nginx `:80` serves `frontend/dist/` |
-| **Backend** | Django `runserver :6001` | Gunicorn `:8000` (internal, Nginx proxies) |
-| **Public URL** | `https://1os-dev.astronic.com.sg` | `https://1os.astronic.com.sg` |
-| **Start** | systemd `1os-django` + `1os-vite` | systemd `gunicorn-1os` + `nginx` |
 
-> **Always code in `/home/lucus/1os-dev/`** — never edit `/opt/1os/` directly.
+**Production only — there is no dev install.** (2026-09-09: the separate
+`/home/lucus/1os-dev` install and the `dev` branch were retired. Maintaining two
+installs against one shared database produced constant merge overhead for no
+isolation benefit — both always pointed at the live `1os_db`.)
+
+| | Prod (the only install) |
+|---|---|
+| **Path** | `/opt/1os/` |
+| **Branch** | `main` — the only branch |
+| **Frontend** | Nginx `:80` serves `/opt/1os/frontend/dist/` |
+| **Backend** | Gunicorn `:6000` (internal, Nginx proxies `/api/` and `/admin/`) |
+| **Public URL** | `https://1os.sim-eng.com` |
+| **Start** | systemd `1os.service` + `nginx` |
 
 ### Port Map
 | Port | Process | Purpose |
 |---|---|---|
-| `:80` | Nginx (prod) | Public — `1os.astronic.com.sg` via Cloudflare |
-| `:6001` | Django `runserver` (dev) | Internal — dev API backend |
-| `:6100` | Vite (dev) | Public — `1os-dev.astronic.com.sg` via Cloudflare |
-| `:8000` | Gunicorn (prod) | Internal — prod API, Nginx proxies here |
-| `:8080` | FileBrowser | Public — `files.astronic.com.sg` via Cloudflare |
+| `:80` | Nginx | Public — `1os.sim-eng.com` via Cloudflare Tunnel |
+| `:6000` | Gunicorn (1OS) | Internal — API, Nginx proxies here |
+| `:6002` | Gunicorn (1Farm) | Internal — separate app, own DB |
+| `:8080` | FileBrowser | Public — `files.sim-eng.com` / `se-files.sim-eng.com` |
 
 ### Cloudflare Tunnel
 | Hostname | Target |
 |---|---|
-| `1os.astronic.com.sg` | `localhost:80` (prod Nginx) |
-| `1os-dev.astronic.com.sg` | `localhost:6100` (dev Vite) |
-| `files.astronic.com.sg` | `localhost:8080` (FileBrowser) |
-| `ssh.sim-eng.com` | `localhost:22` |
-| `ssh-se1.sim-eng.com` | `localhost:22` |
+| `1os.sim-eng.com` | `localhost:80` (Nginx) |
+| `farm.sim-eng.com` | `localhost:80` (Nginx → 1Farm) |
+| `files.sim-eng.com` · `se-files.sim-eng.com` | `localhost:8080` (FileBrowser) |
+| `ssh.sim-eng.com` · `ssh-se1.sim-eng.com` | `localhost:22` |
 
-### Daily Dev Flow
+Config: `/etc/cloudflared/config.yml` (**not** `/root/.cloudflared/config.yml` —
+that file exists but the service does not use it). Validate an edit with
+`cloudflared --config /etc/cloudflared/config.yml tunnel ingress validate`.
+
+### Daily Flow — you are editing live
+There is no staging. Every change lands on the running system, so the build gates
+matter: **never restart until `manage.py check` and `npm run build` both pass.**
+A failed build leaves the previous `dist/` in place and the site keeps serving —
+a restarted-but-broken backend does not.
+
 ```bash
-cd /home/lucus/1os-dev
-./start_dev.sh          # starts Django :6001 + Vite :6100
+cd /opt/1os
+git pull origin main
+# make changes
 
-# make changes, Vite hot-reloads instantly
-git add <files>
-git commit -m "feat: ..."
-git push origin dev
-```
-
-### Deploy to Production
-```bash
-# 1. Merge dev → main and push
-git checkout main && git merge dev && git push origin main
-
-# 2. Pull in prod folder
-cd /opt/1os && git pull origin main
-
-# 3. Rebuild frontend
+# 1. Gate: both must pass before you restart anything
+./venv/bin/python manage.py check
+./venv/bin/python manage.py makemigrations --check --dry-run
 cd frontend && npm run build && cd ..
 
-# 4. Migrate + collect static
-source venv/bin/activate
-python manage.py migrate --noinput
-python manage.py collectstatic --noinput
+# 2. Back up before any schema change
+./scripts/backup_db.sh
 
-# 5. Restart Gunicorn
-sudo systemctl restart gunicorn-1os
+# 3. Apply
+./venv/bin/python manage.py migrate --noinput
+./venv/bin/python manage.py collectstatic --noinput
+sudo systemctl restart 1os
+
+# 4. Verify, then commit
+curl -s -o /dev/null -w "%{http_code}\n" https://1os.sim-eng.com/
+git add <files> && git commit -m "feat: ..." && git push origin main
 ```
+
+For anything larger than a small fix, work on a short-lived branch off `main`,
+verify with the same gates, then merge back and delete the branch. Don't
+recreate a long-running `dev`.
 
 ### systemd Services
 | Service | Command | Scope |
 |---|---|---|
-| `1os-django` | `sudo systemctl restart 1os-django` | Dev Django backend |
-| `1os-vite` | `sudo systemctl restart 1os-vite` | Dev Vite frontend |
-| `gunicorn-1os` | `sudo systemctl restart gunicorn-1os` | Prod Gunicorn |
-| `nginx` | `sudo systemctl restart nginx` | Prod Nginx |
+| `1os` | `sudo systemctl restart 1os` | Gunicorn `:6000` (no `--reload`) |
+| `nginx` | `sudo systemctl restart nginx` | Static + reverse proxy |
 | `cloudflared` | `sudo systemctl restart cloudflared` | Tunnel |
+| `1os-backup.timer` | — | Nightly DB dump, 01:30 |
+| `1os-healthcheck.timer` | — | Uptime probe |
+| `claude-rc` | `sudo systemctl restart claude-rc` | Claude Remote Control (`WorkingDirectory=/opt/1os`) |
 
 ---
 
 ## Architecture
 ### Stack
-| Layer | Dev | Prod |
-|---|---|---|
-| Web server | — | Nginx (static files + proxies `/api/`, `/admin/`) |
-| App server | Django `runserver` | Gunicorn (3 workers) |
-| Frontend | Vite HMR | Nginx serves `frontend/dist/` |
-| Admin static | Django staticfiles | Nginx serves `staticfiles/` at `/static/` |
-| Process mgmt | `start_dev.sh` | systemd |
-| DB | PostgreSQL `astronic` (shared dev/prod) | ← same |
-| Auth | JWT — 8h access / 7d refresh (simplejwt) | ← same |
+| Layer | Production |
+|---|---|
+| Web server | Nginx (static files + proxies `/api/`, `/admin/`) |
+| App server | Gunicorn (3 workers, no `--reload`) |
+| Frontend | Nginx serves `frontend/dist/` (built with `npm run build`) |
+| Admin static | Nginx serves `staticfiles/` at `/static/` |
+| Process mgmt | systemd (`1os.service`) |
+| DB | PostgreSQL `1os_db` |
+| Auth | JWT — 8h access / 7d refresh (simplejwt) |
+
+> `npm run dev` on `:6100` still works for a quick local look at a frontend change,
+> but it is not a deployed service and nothing depends on it.
 
 ### Decoupling Rule (Primary Rule)
 
@@ -171,7 +183,7 @@ See ADR at bottom of this file for full analysis.
 
 ### Directory Tree (actual)
 ```
-/home/lucus/1os-dev/
+/opt/1os/
 ├── project_config/
 │   ├── settings/
 │   │   ├── base.py
@@ -459,9 +471,9 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 ### DevOps
 - [x] Nginx + Gunicorn prod setup
 - [x] systemd services — `gunicorn-1os`, `nginx`, `cloudflared`
-- [x] Cloudflare Tunnel — `se-1os.sim-eng.com` (prod), `dev.sim-eng.com` (dev), `files`, `ssh`
+- [x] Cloudflare Tunnel — `1os.sim-eng.com`, `files`/`se-files`, `ssh`, `farm`
 - [x] GitHub repo — `github.com/Limply/1os` (private)
-- [x] Split dev/prod environments with separate paths and branches
+- [x] ~~Split dev/prod environments~~ — **reverted 2026-09-09**: consolidated to one install (`/opt/1os`) on one branch (`main`). Both always shared `1os_db`, so the split gave no isolation while doubling merge work.
 - [ ] Docker / docker-compose — deferred (see ADR below)
 
 ---
@@ -469,7 +481,7 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 ## Known Issues
 | # | Issue | Priority |
 |---|---|---|
-| 1 | DB name `astronic` is shared between dev and prod — a dev migration could break prod | 🟡 Consider separate dev DB |
+| 1 | ~~DB shared between dev and prod~~ — **moot since 2026-09-09**: there is no dev install. One install, one DB (`1os_db`). The flip side: every migration is a production migration, so `scripts/backup_db.sh` before `migrate` is now mandatory, not advisory | ✅ Resolved by consolidation |
 | 2 | Two `Client` models: `organisation.Client` (billing record, used by Finance) and `crm.Client` (sales pipeline). Different fields, different purpose — no merge needed, but confusing naming | 🟢 Low — document clearly |
 | 3 | `SessionAuthentication` must NOT be in `DEFAULT_AUTHENTICATION_CLASSES` — if a Django admin session cookie exists in the browser, DRF enforces CSRF on all POST/PATCH/DELETE, causing 403. JWT-only auth in both dev and prod. Fixed June 2026. | 🔴 Do not re-add |
 | 4 | 6 real Astronic foremen still have `role=staff` in DB (yeasinsamir, mdmanikmollah3, rs7212128, arjundasarjundas802, sakibsheikh89111, sheikhrahat061750). 1 senior supervisor (liton.ast@gmail.com) also still `staff`. Needs manual role update. | 🟡 Update via Django admin |
@@ -484,18 +496,15 @@ Cross-module links use loose string references (not FKs) to keep services decoup
 
 | Item | Value |
 |---|---|
-| Dev URL | `https://1os-dev.astronic.com.sg` or `http://192.168.1.27:6100` |
-| Prod URL | `https://1os.astronic.com.sg` |
-| Dev backend | `http://192.168.1.27:6001` |
-| Prod backend | `http://192.168.1.27:8000` (internal, Nginx proxies) |
-| FileBrowser | `https://files.astronic.com.sg` → `:8080` |
-| Django Admin | `https://1os.astronic.com.sg/admin/` |
-| Admin user | `admin@astronic.com.sg` / `Astronic.2468` |
-| DB | PostgreSQL `astronic`, user `astronic_user` (shared dev/prod) |
-| Code — dev | `/home/lucus/1os-dev/` (`dev` branch) |
-| Code — prod | `/opt/1os/` (`main` branch) |
-| Nginx config | `/etc/nginx/sites-available/1os-prod` |
-| Gunicorn service | `/etc/systemd/system/gunicorn-1os.service` |
+| URL | `https://1os.sim-eng.com` |
+| Backend | `http://127.0.0.1:6000` (internal, Nginx proxies) |
+| FileBrowser | `https://files.sim-eng.com` / `se-files.sim-eng.com` → `:8080` |
+| Django Admin | `https://1os.sim-eng.com/admin/` |
+| DB | PostgreSQL `1os_db`, user `astronic_user` |
+| Code | `/opt/1os/` (`main` branch — the only install, the only branch) |
+| Retired dev artifacts | `/home/lucus/1os-dev-archive/` (gitignored `TEMP/`, old `.env`, old unit files) |
+| Nginx config | `/etc/nginx/sites-available/1os` |
+| Gunicorn service | `/etc/systemd/system/1os.service` |
 | Cloudflare config | `/etc/cloudflared/config.yml` |
 | GitHub | `https://github.com/Limply/1os` (private) |
 

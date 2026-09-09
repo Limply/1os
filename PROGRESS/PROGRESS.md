@@ -1,4 +1,10 @@
 # 1OS — Project Progress Log
+
+> ⚠️ **Superseded 2026-09-09 — production-only.** The `/home/lucus/1os-dev` install, the
+> `dev.sim-eng.com` host and the `dev` branch are retired. Everything below that describes a
+> dev/prod split is history, kept for the record. Current setup: one install (`/opt/1os`),
+> one branch (`main`). See `DEVELOPMENT.md` → Environments.
+
 **Platform:** 1OS by Simply Engineering Pte Ltd
 **Pilot Tenant:** Astronic Services & Trading Pte Ltd
 **Last Updated:** 2026-08-08

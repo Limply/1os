@@ -15,7 +15,7 @@
 - **Single-tenant for now**: we run one tenant (Astronic). The tenant scaffolding
   (`BaseModel.tenant`, `TenantScopedMixin`) stays wired so multi-tenant is possible later, but
   **building/onboarding new tenants is out of scope** until further notice.
-- **No Docker**: dev runs the Django dev server + Vite directly; prod runs Gunicorn + Nginx via systemd.
+- **No Docker**: Gunicorn + Nginx via systemd. One install (`/opt/1os`), one branch (`main`), no staging.
 
 ---
 
@@ -75,7 +75,7 @@ Endpoints return **plain DRF output**, not a custom envelope:
 ## 2. Project Structure
 
 ```
-1os/  (dev: /home/lucus/1os-dev · prod: /opt/1os)
+1os/  (/opt/1os — the only install)
 ├── project_config/     # Django settings, root urls, wsgi
 ├── services/
 │   ├── auth/           # Tenant, User, JWT  (app label: accounts)
@@ -109,23 +109,31 @@ Endpoints return **plain DRF output**, not a custom envelope:
 | **Lucus** | Architecture, DevOps, review, `compliance`/`dashboard`/`shared` |
 
 **Rule:** one owner per service. Touching someone else's service → coordinate + get review.
-Everyone shares the one dev server and one DB; there are **no per-service ports**.
+Everyone shares the one install and one DB; there are **no per-service ports**.
 
 ---
 
 ## 4. Environments
 
-| | Dev | Prod |
-|---|---|---|
-| Path | `/home/lucus/1os-dev/` | `/opt/1os/` |
-| Branch | `dev` | `main` |
-| Backend | Django `:6001` (`--noreload`, `1os-dev-django.service`) | Gunicorn `:6000` (`1os.service`, 3 workers) |
-| Frontend | Vite `:6100` → `dev.sim-eng.com` | Nginx → `1os.sim-eng.com` |
-| DB | PostgreSQL `1os_db` | ← **same `1os_db`** |
-| Admin | `dev.sim-eng.com/admin/` | `1os.sim-eng.com/admin/` |
+**Production only.** The `/home/lucus/1os-dev` install, the `dev.sim-eng.com` host and
+the `dev` branch were retired on 2026-09-09 — they shared the live `1os_db` anyway, so
+they never isolated anything, and keeping two checkouts in sync cost more than it saved.
 
-> ⚠️ Dev and prod **share one DB** — editing on `dev.sim-eng.com` mutates live data. Be careful.
-> Dev runs `--noreload`: **restart `1os-dev-django.service` after backend edits** or it serves stale code.
+| | Prod (the only install) |
+|---|---|
+| Path | `/opt/1os/` |
+| Branch | `main` — the only branch |
+| Backend | Gunicorn `:6000` (`1os.service`, 3 workers, **no `--reload`**) |
+| Frontend | Nginx → `1os.sim-eng.com`, serves `frontend/dist/` |
+| DB | PostgreSQL `1os_db` |
+| Admin | `1os.sim-eng.com/admin/` |
+
+> ⚠️ **You are editing the live system.** There is no staging. Gunicorn runs without
+> `--reload`, so backend edits need `sudo systemctl restart 1os` to take effect — and
+> frontend edits need `npm run build` before they are served.
+> Run `manage.py check` **and** `npm run build` before restarting: a failed build leaves
+> the last good `dist/` serving, but a restarted broken backend takes the site down.
+> Back up (`./scripts/backup_db.sh`) before every `migrate`.
 > Per-server ports/hosts are **env-driven via `.env`** (committed, pull-safe).
 
 ---
@@ -133,18 +141,20 @@ Everyone shares the one dev server and one DB; there are **no per-service ports*
 ## 5. Git Workflow
 
 ```
-main     ← production (deploys from /opt/1os)
-dev      ← shared integration branch (deploys to dev.sim-eng.com)
-feature/<service>-<name>     e.g. feature/finance-payments
-fix/<service>-<name>         e.g. fix/hr-leave-balance
+main     ← the only long-lived branch; production runs from /opt/1os
+feature/<service>-<name>     e.g. feature/finance-payments   (short-lived)
+fix/<service>-<name>         e.g. fix/hr-leave-balance       (short-lived)
 ```
 
 ### Rules
-- Branch off `dev`; PR back into `dev`. **Don't commit straight to `main`.**
-- `dev` → `main` is the **deploy promotion** (lead/Lucus), fast-forward when clean.
+- Small fixes go straight to `main` — verify with the build gates first.
+- Anything larger: branch off `main`, merge back when the gates pass, then **delete the
+  branch**. Do not let a branch outlive the change it carries.
+- **Never recreate a long-running `dev`.** Two long-lived branches against one database
+  is what this setup was consolidated to escape.
 - **Conventional Commits**: `feat(finance): …`, `fix(hr): …`, `docs(progress): …`, `refactor(...)`, `chore(...)`.
-- **Back up the DB before any `migrate`** (`scripts/backup_db.sh`) — dev migrations hit the live DB.
-- Keep migrations linear so dev and prod histories stay compatible.
+- **Back up the DB before any `migrate`** (`scripts/backup_db.sh`) — every migration hits the live DB.
+- Keep migrations linear; never edit a migration that has already been applied.
 
 ---
 
@@ -205,9 +215,9 @@ SECRET_KEY=…
 DB_NAME=1os_db
 DB_HOST=localhost
 DB_PORT=5432
-ALLOWED_HOSTS=dev.sim-eng.com,localhost,127.0.0.1   # prod: 1os.sim-eng.com,…
-VITE_PORT=6100
-VITE_API_TARGET=http://127.0.0.1:6001
+ALLOWED_HOSTS=1os.sim-eng.com,localhost,127.0.0.1
+VITE_PORT=6100          # local `npm run dev` only; not a deployed service
+VITE_API_TARGET=http://127.0.0.1:6000
 FILEBROWSER_URL=http://localhost:8080
 ```
 
@@ -217,12 +227,12 @@ FILEBROWSER_URL=http://localhost:8080
 
 ## 9. Pre-Coding Checklist (per feature)
 
-- [ ] Pulled latest `dev`
-- [ ] Feature branch created (`feature/<service>-<name>`)
+- [ ] Pulled latest `main`
+- [ ] Short-lived branch created if the change is non-trivial (`feature/<service>-<name>`)
 - [ ] Endpoints agreed (PR description or `api-contract.yml`) if multi-endpoint
 - [ ] Cross-service links follow `DATA-MODEL.md` (ref vs FK✱)
 - [ ] DB backed up before any `migrate`
-- [ ] Tests for new endpoints; restart `1os-dev-django.service` after backend edits
+- [ ] `manage.py check` + `npm run build` both pass; `sudo systemctl restart 1os` after backend edits
 
 ---
 
