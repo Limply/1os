@@ -1,6 +1,7 @@
 # 1OS — Google Calendar Two-Way Sync — Plan
 
-**Status:** 📋 **Plan only — nothing built.** Written 2026-09-09 on the `dev` branch.
+**Status:** 📋 **Plan only — nothing built.** Written 2026-09-09; blockers §1 and §2 resolved
+same day (see below), so Phase 0 is done and Phase 1 is unblocked.
 **Scope decided:** two-way OAuth sync, generic pluggable plumbing, four 1OS event sources
 (`CalendarEvent`, work schedules/manpower, project & task dates).
 **Related:** `services/hr` (`CalendarEvent`, `WorkSchedule`, `StaffDeployment`), `services/projects`
@@ -11,46 +12,61 @@ Field Naming, Calendar Architecture).
 
 ## ⚠️ Read this before writing any code
 
-### 1. Dev and prod share one database — this will double-sync and corrupt real calendars
-Per `PROGRESS/` notes and both `.env` files, **`/home/lucus/1os-dev` and `/opt/1os` both point at
-`1os_db`.** A sync engine keeps its cursor state (`sync_token`, `dirty` flags, `EventLink` rows) *in
-that database*. If both installs run the sync loop:
+### 1. ~~Dev and prod share one database~~ — RESOLVED 2026-09-09
+The original blocker was that `/home/lucus/1os-dev` and `/opt/1os` both pointed at `1os_db`, so two
+sync loops would consume the same Google `syncToken` and double-push into real calendars. **The dev
+install was retired the same day** (see `DEVELOPMENT.md` → Environments). One install, one loop, no
+`GCAL_SYNC_ENABLED` split needed.
 
-- Two processes consume the same Google `syncToken` → one gets a `410 GONE`, forcing repeated full
-  resyncs.
-- Two processes push the same dirty row → **duplicate events in the user's real Google Calendar**.
-- A dev-side bug deletes events from a *live personal Google Calendar*. That is not recoverable from
-  the 1OS DB backup.
+**But it inverts into a different risk, and this one is worse for a sync engine.** There is now no
+staging at all, so the first time this code ever talks to Google it will be doing so *from
+production*, against somebody's real calendar. A DB restore does not undo a `events.delete` call.
+So the safety has to move into the code itself:
 
-**Mandatory guard (mirrors the existing `NAS_PROJECTS_ROOT` dev-sandbox pattern):**
+- **`--dry-run` is Phase 3's first deliverable, not an afterthought.** It logs every intended API
+  call and makes none. Every new source adapter gets exercised through it before it ever runs live.
+- **`GCAL_TEST_ACCOUNTS`** in `.env`: while a source is unproven, the sync command refuses to run for
+  any Google address not in that list. Connect one throwaway Google account, prove the round-trip,
+  then remove the guard. This replaces what a dev install would have given you.
+- **A kill switch that works without a deploy:** `SyncedCalendar.enabled=False` (per user, per source)
+  and `GoogleAccount.status='error'` both stop the loop immediately from the Django admin. Reach for
+  these before touching the timer.
+- **Push before pull, one source before five.** `CalendarEvent` push-only end-to-end, watched for a
+  few days, before any code path is allowed to delete a local row on Google's say-so.
 
-```ini
-# .env — prod only
-GCAL_SYNC_ENABLED=true
-# .env — dev: never point dev at live Google accounts
-GCAL_SYNC_ENABLED=false
+### 2. ~~OAuth consent screen type~~ — RESOLVED 2026-09-09: you have Google Workspace
+Confirmed by DNS, not by assumption:
+
+```
+$ dig +short MX astronic.com.sg
+10 ASPMX.L.GOOGLE.COM.   20 ALT1.ASPMX.L.GOOGLE.COM.   …
+$ dig +short TXT astronic.com.sg
+"v=spf1 include:_spf.google.com ~all"
 ```
 
-The management command must **exit immediately** when the flag is false, and the OAuth connect
-endpoint must return 400. Belt and braces: use a **separate Google Cloud project** with separate
-client credentials for dev, and connect only a throwaway Google account to it.
+`astronic.com.sg` receives mail through Google. **So the OAuth consent screen can be created as
+"Internal"**, which is the good outcome:
 
-### 2. OAuth consent screen type decides whether this is viable at all
-This is the single biggest external unknown, and it needs answering **before** Phase 1.
+- No Google verification, no brand review, no security assessment.
+- **Refresh tokens do not expire** — no weekly re-consent. (The 7-day expiry that would have killed
+  this project applies to External apps left in Testing.)
+- Sensitive-scope restrictions don't apply the same way, so plain
+  `https://www.googleapis.com/auth/calendar` is available.
 
-| Your Google setup | Consent screen | Consequence |
-|---|---|---|
-| Google Workspace domain (`astronic.com.sg` on Google) | **Internal** | No verification, no review, refresh tokens don't expire. Easy. |
-| No Workspace (you use Zoho Mail — likely this) | **External / Testing** | ⚠️ **Refresh tokens expire after 7 days.** Every user must re-consent weekly. Unusable in production. |
-| No Workspace, published | **External / In production** | Refresh tokens persist, but `auth/calendar` is a **sensitive scope** → Google verification (brand review, privacy-policy URL, possibly a security assessment). Weeks of lead time. |
+Two caveats before relying on it:
 
-**Mitigation if you have no Workspace:** request the narrower
-`https://www.googleapis.com/auth/calendar.app.created` scope, which grants access only to calendars
-this app itself creates. It is a much lighter verification path and fits the design below (1OS writes
-into its own dedicated "1OS" calendars, never touches the user's existing ones). Confirm current scope
-classification on Google's OAuth scopes page before committing — Google reclassifies these.
+1. **Internal only covers users inside the Workspace.** Anyone signing in with a personal `@gmail.com`
+   cannot use an Internal app. Fine if every 1OS user gets an `@astronic.com.sg` account; a blocker
+   for workers who would connect a personal Gmail. This is now the deciding question — see Open
+   Questions #2.
+2. **Still prefer the narrow scope where it works.** `calendar.app.created` limits 1OS to calendars it
+   created itself, which matches the design (§ Calendar layout) and means a bug cannot touch the
+   user's own events at all. Internal removes the *verification* reason to prefer it; the
+   *blast-radius* reason stands. Start with it, widen only if something genuinely needs it.
 
-**Action:** answer this before Phase 1. It changes the timeline from "a week" to "a month".
+> Note: an earlier `PROGRESS/` note recorded Zoho Mail for the email→quotation pipeline. That does not
+> contradict the MX above — either it refers to a different domain/mailbox or the plan changed. Google
+> is where `astronic.com.sg` mail actually lands today.
 
 ### 3. "Two-way" is only safe for one of the four sources
 You picked two-way. That is right for personal events and wrong for the other three, because the other
