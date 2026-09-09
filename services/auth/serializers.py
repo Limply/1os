@@ -1,3 +1,4 @@
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from .models import Tenant, User
 
@@ -54,12 +55,25 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    # Single-tenant per install, so the caller's tenant is the sensible default.
+    tenant = serializers.PrimaryKeyRelatedField(queryset=Tenant.objects.all(), required=False)
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'first_name', 'last_name', 'role', 'tenant']
+        fields = [
+            'id', 'email', 'password', 'first_name', 'last_name',
+            'role', 'tenant', 'modules', 'is_active',
+        ]
+        read_only_fields = ['id']
+
+    def validate_password(self, value):
+        validate_password(value)
+        return value
 
     def create(self, validated_data):
+        if not validated_data.get('tenant'):
+            request = self.context.get('request')
+            validated_data['tenant'] = getattr(request.user, 'tenant', None) if request else None
         return User.objects.create_user(**validated_data)
 
 

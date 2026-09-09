@@ -22,6 +22,7 @@ import Payments from './pages/Payments'
 import OrgChart from './pages/OrgChart'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
+import Users from './pages/Users'
 import CRM from './pages/CRM'
 import Operations from './pages/Operations'
 import Personal from './pages/Personal'
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="/calendar"   element={<ModuleGate module="projects" title="Project Calendar"><Calendar /></ModuleGate>} />
           <Route path="/wsh"        element={<ModuleGate module="projects" title="WSH Records"><WSHRecords /></ModuleGate>} />
           <Route path="/settings"   element={<Settings />} />
+          <Route path="/settings/users" element={<Users />} />
           <Route path="/mock_up_page" element={<MockupPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
