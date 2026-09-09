@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { THEMES, useTheme } from '../context/ThemeContext'
 import { getUser } from '../api/auth'
 import { can, P } from '../utils/permissions'
@@ -17,6 +18,7 @@ export default function Settings() {
   const user = getUser()
   const isAdmin = can(P.SETTINGS_EDIT)
   const isSuperAdmin = can(P.ADMIN_TENANT)  // reserved for superadmin only
+  const canManageUsers = can(P.ADMIN_USERS)
 
   const [pendingTheme, setPendingTheme] = useState(theme)
   const [pendingMode, setPendingMode]   = useState(darkMode)
@@ -301,6 +303,22 @@ export default function Settings() {
           >
             {modSaving ? 'Saving...' : 'Save Modules'}
           </button>
+        </div>
+      )}
+
+      {/* Users (admin.users only) */}
+      {canManageUsers && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Users</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Create sign-in accounts, set roles and module access, reset passwords.
+          </p>
+          <Link
+            to="/settings/users"
+            className="inline-block bg-primary-600 hover:bg-primary-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+          >
+            Manage Users
+          </Link>
         </div>
       )}
 

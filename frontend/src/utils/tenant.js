@@ -16,6 +16,23 @@ export const FEATURE_MODULES = [
   { key: 'files',      label: 'Files' },
 ]
 
+// Every module key that can be granted to an individual user (the Settings →
+// Users "Module Access" ticks). Finer-grained than FEATURE_MODULES because a
+// user can be given a sub-page without the whole module. Keep in sync with
+// ALL_MODULES in services/auth/admin.py.
+export const USER_MODULES = [
+  { key: 'dashboard',  label: 'Dashboard' },
+  { key: 'orgchart',   label: 'Org Chart' },
+  { key: 'projects',   label: 'Projects' },
+  { key: 'calendar',   label: 'Project Calendar' },
+  { key: 'hr',         label: 'HR' },
+  { key: 'schedules',  label: 'Schedules' },
+  { key: 'operations', label: 'Operations' },
+  { key: 'finance',    label: 'Finance' },
+  { key: 'compliance', label: 'Compliance' },
+  { key: 'files',      label: 'Files' },
+]
+
 // Single fetch of /api/auth/tenant-info/ shared across the app (logo, modules,
 // title, etc.). Cached for the app's lifetime so we don't refetch per component.
 let _cache = null
